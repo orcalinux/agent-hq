@@ -60,11 +60,16 @@ export function installDesktopBridge(): () => void {
   const offCommand = api.onCommand(handleCommand);
 
   let lastStatus = '';
+  let lastTheme = '';
   let lastMissionStatus = useAgentStore.getState().activeMission?.status;
   const notifiedPlans = new Set<string>();
   for (const m of useAgentStore.getState().managerChatMessages) if (m.plan?.status === 'proposed') notifiedPlans.add(m.id);
 
   const publish = (state: ReturnType<typeof useAgentStore.getState>) => {
+    if (state.themeMode !== lastTheme) {
+      lastTheme = state.themeMode;
+      api.setTheme(state.themeMode === 'light' ? 'light' : 'dark');
+    }
     const status = statusFrom(state);
     const key = JSON.stringify(status);
     if (key !== lastStatus) {

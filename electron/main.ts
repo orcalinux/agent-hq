@@ -14,7 +14,7 @@ import {
   Tray,
   type MenuItemConstructorOptions,
 } from 'electron';
-import type { DesktopCommand, DesktopStatus } from '../src/desktop/types';
+import { TITLE_BAR_HEIGHT, type DesktopCommand, type DesktopStatus } from '../src/desktop/types';
 import { startStandaloneServer, type StandaloneServer } from '../server/standalone';
 import { deepLinkFromArgv, parseDeepLink, PROTOCOL } from './deepLink';
 import { fitToDisplays, loadWindowState, MIN_SIZE, saveWindowState } from './windowState';
@@ -23,6 +23,10 @@ const PRODUCT = 'Agent HQ';
 const REPO_URL = 'https://github.com/orcalinux/agent-hq';
 /** A fixed port keeps the page origin, and so the saved UI state, the same between launches. */
 const PREFERRED_PORTS = [47821, 47822, 47823, 0];
+const TITLE_BAR = {
+  dark: { color: '#141518', symbolColor: '#a3a7ae' },
+  light: { color: '#ffffff', symbolColor: '#535862' },
+};
 
 if (process.env.AGENT_HQ_USER_DATA) app.setPath('userData', path.resolve(process.env.AGENT_HQ_USER_DATA));
 app.setName(PRODUCT);
@@ -39,6 +43,7 @@ let tray: Tray | null = null;
 let status: DesktopStatus = { busy: 0, label: 'Idle', running: false };
 let quitting = false;
 let toldAboutTray = false;
+let theme: 'dark' | 'light' = 'dark';
 let pendingLink: string | undefined = deepLinkFromArgv(process.argv);
 
 if (!app.requestSingleInstanceLock()) {
@@ -264,7 +269,10 @@ function createWindow(): BrowserWindow {
     icon: appIcon(),
     show: false,
     backgroundColor: '#0e0f11',
-    autoHideMenuBar: process.platform !== 'darwin',
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin'
+      ? { trafficLightPosition: { x: 14, y: Math.round((TITLE_BAR_HEIGHT - 14) / 2) } }
+      : { titleBarOverlay: { ...TITLE_BAR[theme], height: TITLE_BAR_HEIGHT } }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -346,6 +354,16 @@ function registerIpc(): void {
     });
     notification.on('click', () => showWindow());
     notification.show();
+  });
+  ipcMain.on('desktop:theme', (event, mode: unknown) => {
+    if (!fromApp(event) || (mode !== 'dark' && mode !== 'light')) return;
+    theme = mode;
+    if (process.platform !== 'darwin') mainWindow?.setTitleBarOverlay({ ...TITLE_BAR[theme], height: TITLE_BAR_HEIGHT });
+    mainWindow?.setBackgroundColor(mode === 'light' ? '#f5f6f8' : '#0e0f11');
+  });
+  ipcMain.on('desktop:menu', (event, at: { x?: unknown; y?: unknown }) => {
+    if (!fromApp(event) || !mainWindow) return;
+    Menu.getApplicationMenu()?.popup({ window: mainWindow, x: Number(at?.x) || 0, y: Number(at?.y) || TITLE_BAR_HEIGHT });
   });
 }
 

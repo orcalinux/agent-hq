@@ -4,6 +4,7 @@ import { StatusBar } from '@/components/shell/StatusBar';
 import { ActivityPanel } from '@/components/shell/ActivityPanel';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { ErrorBoundary } from '@/components/shell/ErrorBoundary';
+import { TitleBar } from '@/components/shell/TitleBar';
 import { useShortcuts } from '@/components/shell/useShortcuts';
 import { Spinner } from '@/components/ui/primitives';
 import { WorkspaceView } from '@/components/workspace/WorkspaceView';
@@ -31,6 +32,7 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col bg-canvas text-fg">
+      <TitleBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <main className="flex min-w-0 flex-1 flex-col" aria-label={activeView}>

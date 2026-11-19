@@ -51,6 +51,13 @@ test('desktop app starts its own server, loads the UI and talks to the shell', a
     await expect(page).toHaveTitle('Agent HQ');
     expect(page.url()).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
     await expect(page.getByRole('navigation').getByText('Workspace')).toBeVisible();
+    const titleBar = page.getByTestId('desktop-title-bar');
+    await expect(titleBar).toContainText('demo-app');
+    await expect(titleBar).toContainText('Idle');
+    if (process.platform !== 'darwin') await expect(titleBar.getByRole('button', { name: 'Application menu' })).toBeVisible();
+    await page.getByRole('button', { name: /Light theme/ }).click();
+    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBackgroundColor().toLowerCase())).toBe('#f5f6f8');
+    await page.getByRole('button', { name: /Dark theme/ }).click();
 
     const health = await page.evaluate(async () => (await fetch('/api/health')).json());
     expect(health.ok).toBe(true);

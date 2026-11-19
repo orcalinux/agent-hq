@@ -136,8 +136,11 @@ npm run desktop:dev    # the desktop app on the Vite dev server, with hot reload
 npm run dist:desktop   # build installers for this system into release/
 ```
 
+<p align="center"><img src="docs/screenshots/desktop.png" alt="Agent HQ desktop app on Linux with its custom title bar" width="900" /></p>
+
 The desktop app runs the same UI and server inside one window, so there is nothing to start first. It shares connections and settings with the browser version (`~/.config/agent-hq`).
 
+- **Custom title bar** in the app's design, with the project name, the live run status and an application menu; the native window buttons follow the light or dark theme.
 - **Tray icon** with the live run status ("2 agents working · 1/3 tasks"). Closing the window during a run keeps the run going in the tray.
 - **Notifications** when a plan is ready for review or a run finishes or fails while the window is in the background.
 - **Native menu**: open a project (`Ctrl+O`), switch views, command palette, zoom, full screen.
