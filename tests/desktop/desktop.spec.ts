@@ -71,14 +71,18 @@ test('desktop app starts its own server, loads the UI and talks to the shell', a
     const menu = await app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.items.map((i) => i.label) ?? []);
     expect(menu).toEqual(expect.arrayContaining(['File', 'View', 'Help']));
 
-    const external = await page.evaluate(() => {
-      const before = location.href;
-      window.open('https://example.com', '_blank');
-      return before;
+    await app.evaluate(({ shell }) => {
+      const opened: string[] = [];
+      (globalThis as unknown as { opened: string[] }).opened = opened;
+      shell.openExternal = async (url: string) => {
+        opened.push(url);
+      };
     });
-    await page.waitForTimeout(300);
+    const before = page.url();
+    await page.evaluate(() => window.open('https://example.com/docs', '_blank'));
+    await expect.poll(() => app.evaluate(() => (globalThis as unknown as { opened: string[] }).opened)).toEqual(['https://example.com/docs']);
     expect(app.windows().length).toBe(1);
-    expect(page.url()).toBe(external);
+    expect(page.url()).toBe(before);
 
     await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows()[0];
