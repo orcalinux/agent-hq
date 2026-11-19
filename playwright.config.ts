@@ -1,8 +1,12 @@
 import { defineConfig } from '@playwright/test';
+import fs from 'fs';
+import { E2E_CONFIG_DIR, E2E_PORT, E2E_WORKSPACE, resetFixtureWorkspace } from './tests/e2e/fixture';
 
-const CHROME_EXECUTABLE =
-  process.env.PLAYWRIGHT_CHROME_PATH ||
-  '/home/mahmoud/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell';
+resetFixtureWorkspace();
+const BASE_URL = `http://127.0.0.1:${E2E_PORT}`;
+
+const LOCAL_CHROME = '/home/mahmoud/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell';
+const CHROME_EXECUTABLE = process.env.PLAYWRIGHT_CHROME_PATH || (fs.existsSync(LOCAL_CHROME) ? LOCAL_CHROME : undefined);
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -15,7 +19,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list']],
   use: {
-    baseURL: process.env.AGENT_HQ_URL || 'http://127.0.0.1:5173',
+    baseURL: BASE_URL,
     headless: true,
     viewport: { width: 1440, height: 900 },
     launchOptions: {
@@ -25,9 +29,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run dev -- --port 5173 --host 127.0.0.1',
-    url: 'http://127.0.0.1:5173',
-    reuseExistingServer: true,
+    command: `npx vite --port ${E2E_PORT} --strictPort --host 127.0.0.1`,
+    url: BASE_URL,
+    reuseExistingServer: false,
+    env: { AGENT_HQ_WORKSPACE: E2E_WORKSPACE, AGENT_HQ_CONFIG_DIR: E2E_CONFIG_DIR },
     timeout: 30_000,
   },
 });
