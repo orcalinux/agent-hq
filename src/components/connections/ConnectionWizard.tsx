@@ -207,7 +207,14 @@ export function ConnectionWizard({ open, onClose, initialProvider }: Props) {
             </Field>
           ) : null}
           {method === 'local_endpoint' ? (
-            <Field label="Endpoint URL" hint="Ollama listens on http://127.0.0.1:11434 by default.">
+            <Field
+              label="Endpoint URL"
+              hint={
+                provider.id === 'magpie'
+                  ? 'Found from Magpie itself. Its gateway listens on http://127.0.0.1:3425 by default.'
+                  : provider.name + ' listens on ' + (provider.defaultEndpoint ?? 'its default address') + ' by default.'
+              }
+            >
               <Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} autoFocus />
             </Field>
           ) : null}

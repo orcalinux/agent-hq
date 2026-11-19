@@ -103,6 +103,16 @@ export const PROVIDERS: ProviderDescriptor[] = [
     docsUrl: 'https://github.com/ollama/ollama',
     notes: 'Runs models on this machine. No account or API cost. Install models with "ollama pull <model>".',
   },
+  {
+    id: 'magpie',
+    name: 'Magpie gateway',
+    methods: ['local_endpoint'],
+    envVars: ['MAGPIE_GATEWAY'],
+    defaultEndpoint: 'http://127.0.0.1:3425',
+    docsUrl: 'https://usemagpie.ai',
+    notes:
+      'Uses the models, routing groups, subscriptions and failover you set up in Magpie, through its local gateway. Agent HQ stores no keys for it; set MAGPIE_API_KEY only if your gateway requires a caller key.',
+  },
 ];
 
 export function providerDescriptor(id: ProviderId): ProviderDescriptor | undefined {
@@ -110,12 +120,65 @@ export function providerDescriptor(id: ProviderId): ProviderDescriptor | undefin
 }
 
 export function envKeyFor(id: ProviderId): string | undefined {
+  if (id === 'magpie') return undefined;
   const desc = providerDescriptor(id);
   for (const name of desc?.envVars ?? []) {
     const value = process.env[name];
     if (value && name !== 'OLLAMA_HOST') return value;
   }
   return undefined;
+}
+
+/** The Magpie gateway address: MAGPIE_GATEWAY, then the address Magpie itself recorded, then its default. */
+export function magpieEndpoint(): string {
+  const fromEnv = process.env.MAGPIE_GATEWAY?.trim();
+  if (fromEnv) return /^https?:\/\//.test(fromEnv) ? fromEnv : `http://${fromEnv}`;
+  try {
+    const file = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'magpie', 'gateway.json');
+    const addr = (JSON.parse(fs.readFileSync(file, 'utf8')) as { addr?: unknown }).addr;
+    if (typeof addr === 'string' && /^[\w.\-[\]:]+:\d+$/.test(addr)) return `http://${addr}`;
+  } catch {
+    // Magpie is not installed or has not started its gateway yet
+  }
+  return 'http://127.0.0.1:3425';
+}
+
+function magpieHeaders(): Record<string, string> {
+  const key = process.env.MAGPIE_API_KEY?.trim();
+  return key ? { authorization: `Bearer ${key}` } : {};
+}
+
+export interface MagpieModelEntry {
+  id?: unknown;
+  magpie_label?: unknown;
+  display_name?: unknown;
+  context_length?: unknown;
+  context_window?: unknown;
+  modalities?: { input?: unknown };
+  supported_parameters?: unknown;
+}
+
+/** Turns Magpie's /v1/models answer into Agent HQ models. Routing groups come first. */
+export function parseMagpieModels(data: { data?: MagpieModelEntry[] }, via: ConnectionMethod = 'local_endpoint'): ModelInfo[] {
+  const models: ModelInfo[] = [];
+  for (const m of data.data ?? []) {
+    if (typeof m.id !== 'string' || !m.id) continue;
+    const label = typeof m.magpie_label === 'string' ? m.magpie_label : typeof m.display_name === 'string' ? m.display_name : m.id;
+    const ctx = Number(m.context_length ?? m.context_window);
+    const capabilities = ['chat'];
+    if (Array.isArray(m.modalities?.input) && m.modalities.input.includes('image')) capabilities.push('vision');
+    if (Array.isArray(m.supported_parameters) && m.supported_parameters.includes('tools')) capabilities.push('tools');
+    models.push({
+      ref: `magpie:${m.id}`,
+      providerId: 'magpie',
+      id: m.id,
+      name: label,
+      via,
+      ...(Number.isFinite(ctx) && ctx > 0 ? { contextWindow: ctx } : {}),
+      capabilities,
+    });
+  }
+  return models.sort((a, b) => Number(!a.id.startsWith('group/')) - Number(!b.id.startsWith('group/')));
 }
 
 export function apiKeyFor(conn: StoredConnection): string | undefined {
@@ -456,6 +519,11 @@ export async function discoverModels(conn: StoredConnection): Promise<ModelInfo[
         })
       );
     }
+    case 'magpie': {
+      const base = (conn.endpointUrl || magpieEndpoint()).replace(/\/+$/, '');
+      const data = (await httpJson(`${base}/v1/models`, { headers: magpieHeaders(), timeoutMs: 5000 })) as { data?: MagpieModelEntry[] };
+      return parseMagpieModels(data, method);
+    }
     default:
       return [];
   }
@@ -656,15 +724,21 @@ export async function chat(req: ChatRequest): Promise<ChatResult> {
       break;
     }
     case 'openai':
-    case 'openrouter': {
-      if (!key) throw new Error('No API key available.');
-      const url =
-        connection.providerId === 'openai'
+    case 'openrouter':
+    case 'magpie': {
+      const isMagpie = connection.providerId === 'magpie';
+      if (!key && !isMagpie) throw new Error('No API key available.');
+      const url = isMagpie
+        ? `${(connection.endpointUrl || magpieEndpoint()).replace(/\/+$/, '')}/v1/chat/completions`
+        : connection.providerId === 'openai'
           ? 'https://api.openai.com/v1/chat/completions'
           : 'https://openrouter.ai/api/v1/chat/completions';
+      const headers: Record<string, string> = isMagpie
+        ? magpieHeaders()
+        : { authorization: `Bearer ${key}`, ...(connection.providerId === 'openrouter' ? { 'X-Title': 'Agent HQ' } : {}) };
       const body = await streamingPost(
         url,
-        { authorization: `Bearer ${key}`, ...(connection.providerId === 'openrouter' ? { 'X-Title': 'Agent HQ' } : {}) },
+        headers,
         {
           model,
           stream: true,
@@ -780,6 +854,9 @@ export async function verifyConnection(conn: StoredConnection, cwd: string): Pro
   const models = await discoverModels(conn);
   if (conn.providerId === 'ollama' && models.length === 0) {
     return { models, detail: 'Ollama is running but has no models installed. Run "ollama pull <model>".' };
+  }
+  if (conn.providerId === 'magpie' && models.length === 0) {
+    return { models, detail: 'Magpie is running but offers no models yet. Add a provider or a routing group in Magpie.' };
   }
   return { models, detail: `Verified · ${models.length} model${models.length === 1 ? '' : 's'} available` };
 }

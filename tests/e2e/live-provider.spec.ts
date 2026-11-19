@@ -2,12 +2,17 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetFixtureWorkspace } from './fixture';
 
 /**
- * Opt-in run against a real local model. Nothing is mocked: Sovereign, the agents and QA all
- * call Ollama through the Agent HQ server. Example:
- *   AGENT_HQ_E2E_LIVE_MODEL=qwen2.5:7b npm run test:e2e -- live-ollama
+ * Opt-in run against a real model. Nothing is mocked: Sovereign, the agents and QA all call the
+ * provider through the Agent HQ server. Examples:
+ *   AGENT_HQ_E2E_LIVE_MODEL=qwen2.5:7b npm run test:e2e -- live-provider
+ *   AGENT_HQ_E2E_LIVE_PROVIDER=magpie AGENT_HQ_E2E_LIVE_MODEL=claude/claude-haiku-4-5 npm run test:e2e -- live-provider
  */
 const MODEL = process.env.AGENT_HQ_E2E_LIVE_MODEL;
-const ENDPOINT = process.env.AGENT_HQ_E2E_OLLAMA || 'http://127.0.0.1:11434';
+const PROVIDER = process.env.AGENT_HQ_E2E_LIVE_PROVIDER === 'magpie' ? 'magpie' : 'ollama';
+const ENDPOINT =
+  PROVIDER === 'magpie'
+    ? process.env.AGENT_HQ_E2E_MAGPIE || 'http://127.0.0.1:3425'
+    : process.env.AGENT_HQ_E2E_OLLAMA || 'http://127.0.0.1:11434';
 const ROLES = ['Orchestrator (Sovereign)', 'Architect (Aegis)', 'Frontend (Pulse)', 'Backend (Titan)', 'QA and security (Sentinel)', 'Junior agents (Nova, Byte)'];
 
 interface Call {
@@ -36,7 +41,7 @@ function recordChat(page: Page): Call[] {
   return calls;
 }
 
-test.skip(!MODEL, 'Set AGENT_HQ_E2E_LIVE_MODEL to an installed Ollama model to run against a real provider.');
+test.skip(!MODEL, 'Set AGENT_HQ_E2E_LIVE_MODEL (and AGENT_HQ_E2E_LIVE_PROVIDER=magpie for Magpie) to run against a real provider.');
 test.setTimeout(20 * 60_000);
 test.use({ actionTimeout: 30_000 });
 
@@ -44,11 +49,12 @@ const modelOption = (name: string) => new RegExp(`^${name.replace(/[.*+?^${}()|[
 
 test('real provider: plan, approve and run end to end', async ({ page, request }) => {
   resetFixtureWorkspace();
-  const connect = await request.post('/api/connections/connect', { data: { providerId: 'ollama', method: 'local_endpoint', endpointUrl: ENDPOINT } });
+  const connect = await request.post('/api/connections/connect', { data: { providerId: PROVIDER, method: 'local_endpoint', endpointUrl: ENDPOINT } });
   const connected = await connect.json();
   expect(connected.ok, connected.error).toBe(true);
-  const ref = `ollama:${MODEL}`;
-  expect(connected.models.map((m: { ref: string }) => m.ref)).toContain(ref);
+  const ref = `${PROVIDER}:${MODEL}`;
+  const model = (connected.models as Array<{ ref: string; name: string }>).find((m) => m.ref === ref);
+  expect(model, `${ref} is offered by ${PROVIDER}`).toBeDefined();
 
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -59,7 +65,7 @@ test('real provider: plan, approve and run end to end', async ({ page, request }
   await page.getByRole('tab', { name: 'Role defaults' }).click();
   for (const role of ROLES) {
     await page.getByRole('button', { name: `Default model for ${role}`, exact: true }).click();
-    await page.getByRole('option', { name: modelOption(MODEL!) }).click();
+    await page.getByRole('option', { name: modelOption(model!.name) }).first().click();
   }
   await nav.getByRole('button', { name: 'Workspace', exact: true }).click();
 

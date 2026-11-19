@@ -5,7 +5,7 @@
  */
 export type AIModelId = string;
 
-export type AIProviderId = 'anthropic' | 'openai' | 'google' | 'openrouter' | 'ollama';
+export type AIProviderId = 'anthropic' | 'openai' | 'google' | 'openrouter' | 'ollama' | 'magpie';
 
 export type ConnectionMethod = 'api_key' | 'env_key' | 'cli' | 'local_endpoint';
 

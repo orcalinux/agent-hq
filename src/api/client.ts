@@ -50,6 +50,7 @@ export interface ConnectionsResponse {
 export interface DetectResponse {
   clis: CliDetection[];
   ollama: { reachable: boolean; endpoint: string; models?: number; error?: string };
+  magpie?: { reachable: boolean; endpoint: string; models?: number; error?: string };
 }
 
 export interface ConnectPayload {

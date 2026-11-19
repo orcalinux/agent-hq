@@ -20,6 +20,7 @@ import {
   detectCli,
   discoverModels,
   envKeyFor,
+  magpieEndpoint,
   ModelInfo,
   PROVIDERS,
   providerDescriptor,
@@ -125,7 +126,7 @@ function buildConnection(id: ProviderId, body: Record<string, unknown>): StoredC
   } else if (method === 'env_key') {
     if (!envKeyFor(id)) throw new HttpError(400, `None of ${desc.envVars.join(', ')} is set in the Agent HQ server environment.`);
   } else if (method === 'local_endpoint') {
-    const url = String(body.endpointUrl || desc.defaultEndpoint || '').trim();
+    const url = String(body.endpointUrl || (id === 'magpie' ? magpieEndpoint() : desc.defaultEndpoint) || '').trim();
     try {
       const parsed = new URL(url);
       if (!/^https?:$/.test(parsed.protocol)) throw new Error();
@@ -184,7 +185,7 @@ const routes: Record<string, Handler> = {
         envVars: p.envVars,
         envKeyPresent: Boolean(envKeyFor(p.id)),
         cliBinary: p.cliBinary,
-        defaultEndpoint: p.defaultEndpoint,
+        defaultEndpoint: p.id === 'magpie' ? magpieEndpoint() : p.defaultEndpoint,
         docsUrl: p.docsUrl,
         notes: p.notes,
         connection: publicConnection(p.id),
@@ -205,7 +206,19 @@ const routes: Record<string, Handler> = {
     } catch {
       ollama = { reachable: false, endpoint, error: 'Ollama is not running at this address.' };
     }
-    send(res, 200, { ok: true, clis, ollama });
+    const magpieBase = magpieEndpoint();
+    let magpie: { reachable: boolean; endpoint: string; models?: number; error?: string };
+    try {
+      const r = await fetch(`${magpieBase}/v1/models`, {
+        signal: AbortSignal.timeout(2500),
+        headers: process.env.MAGPIE_API_KEY ? { authorization: `Bearer ${process.env.MAGPIE_API_KEY}` } : undefined,
+      });
+      const data = (await r.json()) as { data?: unknown[] };
+      magpie = { reachable: r.ok, endpoint: magpieBase, models: data.data?.length ?? 0 };
+    } catch {
+      magpie = { reachable: false, endpoint: magpieBase, error: 'The Magpie gateway is not running at this address.' };
+    }
+    send(res, 200, { ok: true, clis, ollama, magpie });
   },
 
   'POST /api/connections/test': async (req, res) => {

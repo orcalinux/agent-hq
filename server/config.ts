@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-export type ProviderId = 'anthropic' | 'openai' | 'google' | 'openrouter' | 'ollama';
+export type ProviderId = 'anthropic' | 'openai' | 'google' | 'openrouter' | 'ollama' | 'magpie';
 export type ConnectionMethod = 'api_key' | 'env_key' | 'cli' | 'local_endpoint';
 
 export interface StoredConnection {
@@ -69,6 +69,11 @@ export function getWorkspaceRoot(): string {
   if (fromEnv) return path.resolve(fromEnv);
   const stored = loadConfig().workspaceRoot;
   if (stored && fs.existsSync(stored) && fs.statSync(stored).isDirectory()) return stored;
+  const fallback = process.env.AGENT_HQ_FALLBACK_WORKSPACE;
+  if (fallback) {
+    fs.mkdirSync(fallback, { recursive: true });
+    return path.resolve(fallback);
+  }
   return REPO_ROOT;
 }
 

@@ -140,6 +140,19 @@ export function LocalTools() {
                 </span>
               </td>
             </tr>
+            <tr className="border-t border-line">
+              <td className="px-3 py-1.5 font-mono">magpie</td>
+              <td className="px-3 py-1.5" colSpan={3}>
+                <span className="flex items-center gap-1.5">
+                  <StatusDot tone={detection?.magpie?.reachable ? 'success' : 'neutral'} />
+                  {detection
+                    ? detection.magpie?.reachable
+                      ? 'Gateway at ' + detection.magpie.endpoint + ' · ' + (detection.magpie.models ?? 0) + ' models and routing groups'
+                      : 'Gateway not reachable' + (detection.magpie ? ' at ' + detection.magpie.endpoint : '')
+                    : 'Detecting…'}
+                </span>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
