@@ -20,12 +20,15 @@ import {
   detectCli,
   discoverModels,
   envKeyFor,
+  findOnPath,
   magpieEndpoint,
   ModelInfo,
   PROVIDERS,
   providerDescriptor,
   verifyConnection,
 } from './providers';
+import { INSTALL_GUIDES, installCommandFor } from './installers';
+import { buildTerminalLaunch } from './terminal';
 import { deleteFile, gitStatus, readFile, scanTree, writeFile } from './workspace';
 
 const MAX_BODY = 8 * 1024 * 1024;
@@ -218,7 +221,34 @@ const routes: Record<string, Handler> = {
     } catch {
       magpie = { reachable: false, endpoint: magpieBase, error: 'The Magpie gateway is not running at this address.' };
     }
-    send(res, 200, { ok: true, clis, ollama, magpie });
+    const installs = Object.fromEntries(
+      Object.values(INSTALL_GUIDES).map((g) => [g.id, { name: g.name, command: installCommandFor(g.id, process.platform), url: g.url }])
+    );
+    send(res, 200, { ok: true, clis, ollama, magpie, installs });
+  },
+
+  'POST /api/workspace/open-terminal': async (req, res) => {
+    const body = await readJson(req);
+    const root = getWorkspaceRoot();
+    let command: string | undefined;
+    if (body.install !== undefined) {
+      const id = String(body.install);
+      command = installCommandFor(id, process.platform) ?? undefined;
+      if (!command) throw new HttpError(400, 'There is no terminal install command for this tool on this system. Use its download page.');
+    }
+    const launch = buildTerminalLaunch({
+      platform: process.platform as 'linux' | 'darwin' | 'win32',
+      dir: root,
+      shell: process.env.SHELL,
+      command,
+      preferred: process.env.TERMINAL,
+      isAvailable: (bin) => Boolean(findOnPath(bin)),
+    });
+    if (!launch) throw new HttpError(501, 'No terminal emulator was found. Set the TERMINAL environment variable to yours.');
+    const child = spawn(launch.command, launch.args, { cwd: launch.cwd, detached: true, stdio: 'ignore' });
+    child.on('error', () => undefined);
+    child.unref();
+    send(res, 200, { ok: true, terminal: launch.command, cwd: root, command: command ?? null });
   },
 
   'POST /api/connections/test': async (req, res) => {

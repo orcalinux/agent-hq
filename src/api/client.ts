@@ -51,6 +51,7 @@ export interface DetectResponse {
   clis: CliDetection[];
   ollama: { reachable: boolean; endpoint: string; models?: number; error?: string };
   magpie?: { reachable: boolean; endpoint: string; models?: number; error?: string };
+  installs?: Record<string, { name: string; command: string | null; url: string }>;
 }
 
 export interface ConnectPayload {
@@ -76,6 +77,8 @@ export const api = {
   disconnect: (providerId: AIProviderId) => call<{ ok: boolean }>('POST', '/api/connections/disconnect', { providerId }),
   refresh: (providerId: AIProviderId) => call<TestResult>('POST', '/api/connections/refresh', { providerId }),
 
+  /** Opens the user's own terminal in the workspace; `install` runs that tool's official install command in it. */
+  openTerminal: (install?: string) => call<{ terminal: string; cwd: string; command: string | null }>('POST', '/api/workspace/open-terminal', install ? { install } : {}),
   workspace: () => call<{ root: string; name: string; lockedByEnv: boolean; recent: string[] }>('GET', '/api/workspace'),
   setWorkspaceRoot: (path: string) => call<{ root: string; name: string }>('POST', '/api/workspace/root', { path }),
   createProject: (p: { parent: string; name: string; gitInit: boolean; description?: string }) =>

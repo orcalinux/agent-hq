@@ -1,4 +1,5 @@
 import { isBusy } from '@/components/ui/helpers';
+import { api } from '@/api/client';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import type { ViewMode } from '@/types';
@@ -43,6 +44,9 @@ function handleCommand(command: DesktopCommand): void {
       break;
     case 'toggle-theme':
       store.toggleThemeMode();
+      break;
+    case 'open-terminal':
+      void api.openTerminal().catch(() => undefined);
       break;
   }
 }

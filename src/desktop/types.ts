@@ -4,7 +4,8 @@ export type DesktopCommand =
   | { type: 'navigate'; view: ViewMode }
   | { type: 'open-project'; path: string }
   | { type: 'command-palette' }
-  | { type: 'toggle-theme' };
+  | { type: 'toggle-theme' }
+  | { type: 'open-terminal' };
 
 export interface DesktopStatus {
   /** Agents working right now. */

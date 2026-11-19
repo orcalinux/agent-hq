@@ -51,6 +51,9 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
 - **Reviewed work.** Juniors get an N+1 senior review, and Sentinel QA can send work back once for rework.
 - **You choose how much to trust the agents.** By default edits arrive as diffs in the **Changes** tab and are only written when you apply them. **Auto-apply** writes QA-approved changes for you, and **Full access** also skips plan approval. Every auto-applied file can be undone.
 - **Local and bring-your-own-model.** Claude Code, Codex, Gemini, Ollama and the Magpie gateway, with automatic failover when a provider runs out of credit.
+- **Looks right on your system.** The theme is **System** by default (light or dark, following your OS live) and can be pinned to Light or Dark. The sidebar glides open and shut, and the editor has modern file tabs with an unsaved dot.
+- **Installs the missing pieces for you.** In **Connections → Local tools**, every missing tool (Claude Code, Codex, Gemini CLI, Ollama, Magpie) has an **Install** button that opens your own terminal in the project and runs the official command, plus **Copy** and **Docs**.
+- **Your terminal, your shell.** **Open in system terminal** (bottom panel, command palette, or `Ctrl+Shift+T` in the desktop menu) opens your preferred terminal emulator in the current project with your `$SHELL`.
 - **A real desktop app.** `.deb`, `.rpm`, AppImage, Windows and macOS installers, with a tray icon that shows the run, notifications, `agenthq://` links and auto-update.
 
 <table>
@@ -67,7 +70,11 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
     <td width="50%"><img src="docs/screenshots/settings.png" alt="Settings with the agent permission modes" /><br /><sub><b>Settings</b>: Ask, Auto-apply or Full access</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/screenshots/workspace-light.png" alt="Workspace in the light theme" /><br /><sub><b>Light theme</b></sub></td>
+    <td width="50%"><img src="docs/screenshots/workspace-light.png" alt="Workspace in the light theme" /><br /><sub><b>Light theme</b>: follows your system by default</sub></td>
+    <td width="50%"><img src="docs/screenshots/workspace-collapsed.png" alt="Workspace with the sidebar collapsed to icons" /><br /><sub><b>Collapsed sidebar</b>: smooth slide to icons, editor tabs with unsaved dots</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/office-day.png" alt="The office in daylight with sunbeams, glass room signs and a live minimap" /><br /><sub><b>Office</b>: daylight, live minimap, glass HUD and speech bubbles; it fades to night with the theme</sub></td>
   </tr>
 </table>
 
@@ -105,10 +112,10 @@ Turning on a more permissive mode asks for confirmation first. Auto mode never w
 
 | Area | What you get |
 | --- | --- |
-| **Workspace** | File explorer, multi-tab editor, diff view, terminal (allow-listed commands, no shell), agent logs, problems, and the orchestrator chat. Resizable panels, code and chat layouts. |
+| **Workspace** | File explorer, multi-tab editor, one-click open in your system terminal, diff view, terminal (allow-listed commands, no shell), agent logs, problems, and the orchestrator chat. Resizable panels, code and chat layouts. |
 | **Orchestrator** | Ask, Plan and Build modes. Plans list tasks, assigned agents and models; you can edit, remove or reassign before approving. Runs execute in dependency waves, up to 3 tasks at once and never two at once for the same agent. Each task receives the current contents of the files attached to the request and of the workspace files its description names, so agents edit existing code instead of rewriting it. |
 | **Adaptive team** | Sovereign can design the team for the project, including new agents, or you can restrict it to your own agents. |
-| **Agents** | Graph, Office and List views. The graph supports zoom, pan, dragging nodes and reset. The Office is a floor plan; monitors light up while an agent works. Change models, add agents, onboard juniors. |
+| **Agents** | Graph, Office and List views. The graph supports zoom, pan, dragging nodes and reset. The Office is a live floor plan with a glass HUD, minimap, daylight that fades to night, animated avatars and speech bubbles; monitors light up while an agent works. Change models, add agents, onboard juniors. |
 | **Custom specialties** | Create or edit any agent with a free-text role/specialty (IoT, embedded firmware, robotics, or any domain) and domain instructions. Sovereign sees these when assigning tasks, and the agent receives them on every task. Workflow categories preserve routing and model defaults. Junior agents also support custom study tracks. |
 | **Connections & Models** | Detects installed CLIs, connects providers, discovers real models, and sets default models per role. |
 | **Failover** | If a provider runs out of credit during a run, affected agents are rerouted to another connected provider and the switch is logged. |
@@ -192,7 +199,7 @@ To publish a release, bump `version` in `package.json` and push a tag such as `v
 
 `npm run test:e2e` starts its own server on `127.0.0.1:5180` (override with `AGENT_HQ_E2E_PORT`) against a throwaway project in the system temp folder, with a separate config folder, so it never touches your projects or connections. The model provider is replaced by scripted responses, so no account is needed. The suite covers every view, the terminal allowlist, and a full plan → approve → run → QA → apply flow, including parallel tasks and file context.
 
-To run the same flow against a real model with nothing mocked, pass an installed Ollama model: `AGENT_HQ_E2E_LIVE_MODEL=qwen2.5:7b npm run test:e2e -- live-provider` (set `AGENT_HQ_E2E_OLLAMA` if Ollama is not on `127.0.0.1:11434`), or a Magpie model: `AGENT_HQ_E2E_LIVE_PROVIDER=magpie AGENT_HQ_E2E_LIVE_MODEL=claude/claude-haiku-4-5 npm run test:e2e -- live-provider`. Without the variable the live test is skipped. Ollama answers parallel requests one at a time unless `OLLAMA_NUM_PARALLEL` is raised.
+To run the same flow against a real model with nothing mocked, pass an installed Ollama model: `AGENT_HQ_E2E_LIVE_MODEL=qwen2.5:7b npm run test:e2e -- live-provider` (set `AGENT_HQ_E2E_OLLAMA` if Ollama is not on `127.0.0.1:11434`), or a Magpie model: `AGENT_HQ_E2E_LIVE_PROVIDER=magpie AGENT_HQ_E2E_LIVE_MODEL=claude/claude-haiku-5-5 npm run test:e2e -- live-provider`. Without the variable the live test is skipped. Ollama answers parallel requests one at a time unless `OLLAMA_NUM_PARALLEL` is raised.
 
 `npm run test:desktop` builds the desktop app and drives it with Playwright: its own server, the preload bridge (with no Node access in the page), menus, external links opening outside the app, remembered window size, and hiding to the tray during a run. It uses throwaway folders for the project, config and app data.
 

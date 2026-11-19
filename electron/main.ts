@@ -7,6 +7,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  nativeTheme,
   Notification,
   screen,
   session,
@@ -24,8 +25,8 @@ const REPO_URL = 'https://github.com/orcalinux/agent-hq';
 /** A fixed port keeps the page origin, and so the saved UI state, the same between launches. */
 const PREFERRED_PORTS = [47821, 47822, 47823, 0];
 const TITLE_BAR = {
-  dark: { color: '#141518', symbolColor: '#a3a7ae' },
-  light: { color: '#ffffff', symbolColor: '#535862' },
+  dark: { color: '#18181b', symbolColor: '#a6a6b0' },
+  light: { color: '#ffffff', symbolColor: '#52525c' },
 };
 
 if (process.env.AGENT_HQ_USER_DATA) app.setPath('userData', path.resolve(process.env.AGENT_HQ_USER_DATA));
@@ -44,6 +45,7 @@ let status: DesktopStatus = { busy: 0, label: 'Idle', running: false };
 let quitting = false;
 let toldAboutTray = false;
 let theme: 'dark' | 'light' = 'dark';
+const CANVAS = { dark: '#131316', light: '#f6f6f8' };
 let pendingLink: string | undefined = deepLinkFromArgv(process.argv);
 
 if (!app.requestSingleInstanceLock()) {
@@ -166,7 +168,8 @@ function buildMenu(): void {
         { label: 'Reports', accelerator: 'Alt+4', registerAccelerator: false, click: go('reports') },
         { type: 'separator' },
         { label: 'Command Palette', accelerator: 'CmdOrCtrl+K', registerAccelerator: false, click: () => send({ type: 'command-palette' }) },
-        { label: 'Toggle Light/Dark', click: () => send({ type: 'toggle-theme' }) },
+        { label: 'Switch Theme (System, Light, Dark)', click: () => send({ type: 'toggle-theme' }) },
+        { label: 'Open Project in Terminal', accelerator: 'CmdOrCtrl+Shift+T', registerAccelerator: false, click: () => send({ type: 'open-terminal' }) },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
@@ -259,6 +262,7 @@ function openExternal(url: string): void {
 
 function createWindow(): BrowserWindow {
   const saved = fitToDisplays(loadWindowState(stateFile()), screen.getAllDisplays().map((d) => d.workArea));
+  theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
   const win = new BrowserWindow({
     ...(saved.x !== undefined && saved.y !== undefined ? { x: saved.x, y: saved.y } : {}),
     width: saved.width,
@@ -268,7 +272,7 @@ function createWindow(): BrowserWindow {
     title: PRODUCT,
     icon: appIcon(),
     show: false,
-    backgroundColor: '#0e0f11',
+    backgroundColor: CANVAS[theme],
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin'
       ? { trafficLightPosition: { x: 14, y: Math.round((TITLE_BAR_HEIGHT - 14) / 2) } }
@@ -359,7 +363,7 @@ function registerIpc(): void {
     if (!fromApp(event) || (mode !== 'dark' && mode !== 'light')) return;
     theme = mode;
     if (process.platform !== 'darwin') mainWindow?.setTitleBarOverlay({ ...TITLE_BAR[theme], height: TITLE_BAR_HEIGHT });
-    mainWindow?.setBackgroundColor(mode === 'light' ? '#f5f6f8' : '#0e0f11');
+    mainWindow?.setBackgroundColor(CANVAS[theme]);
   });
   ipcMain.on('desktop:menu', (event, at: { x?: unknown; y?: unknown }) => {
     if (!fromApp(event) || !mainWindow) return;

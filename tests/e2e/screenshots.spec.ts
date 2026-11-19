@@ -45,6 +45,10 @@ test('capture README screenshots', async ({ page }) => {
   await page.getByRole('tab', { name: 'Office' }).click();
   await page.waitForTimeout(900);
   await shot(page, 'office');
+  await page.getByRole('radio', { name: 'Day' }).click();
+  await page.waitForTimeout(1200);
+  await shot(page, 'office-day');
+  await page.getByRole('radio', { name: 'Auto' }).click();
   await page.getByRole('tab', { name: 'Graph' }).click();
 
   await go('Workspace');
@@ -68,4 +72,7 @@ test('capture README screenshots', async ({ page }) => {
   await go('Workspace');
   await page.waitForTimeout(400);
   await shot(page, 'workspace-light');
+  await page.getByRole('button', { name: /Collapse/ }).click();
+  await page.waitForTimeout(600);
+  await shot(page, 'workspace-collapsed');
 });

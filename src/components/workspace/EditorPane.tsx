@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { Code2, Columns2, RotateCcw, Save, X } from 'lucide-react';
+import { Check, Code2, Columns2, RotateCcw, Save, X } from 'lucide-react';
 import { isDirty, useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { Badge, Button, EmptyState, IconButton, Spinner } from '@/components/ui/primitives';
 import { Kbd } from '@/components/ui/primitives';
@@ -8,6 +8,18 @@ import { cn } from '@/utils/cn';
 import { useState } from 'react';
 
 const LINE_HEIGHT = 18;
+const SAVE_SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘S' : 'Ctrl+S';
+
+function fileDot(name: string): string {
+  const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
+  if (['ts', 'tsx'].includes(ext)) return 'bg-[#4f9dff]';
+  if (['js', 'jsx', 'mjs', 'cjs'].includes(ext)) return 'bg-[#f5c542]';
+  if (['json', 'yml', 'yaml', 'toml'].includes(ext)) return 'bg-[#e8a35c]';
+  if (['md', 'mdx', 'txt'].includes(ext)) return 'bg-[#8bd3a8]';
+  if (['css', 'scss', 'html'].includes(ext)) return 'bg-[#e86fa5]';
+  if (['py', 'rs', 'go'].includes(ext)) return 'bg-[#9b8cff]';
+  return 'bg-fg-subtle';
+}
 const HIGHLIGHT_LIMIT_LINES = 4000;
 
 const HighlightedLines = memo(function HighlightedLines({ content, language }: { content: string; language: string }) {
@@ -127,16 +139,34 @@ export function EditorPane() {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div role="tablist" aria-label="Open files" className="flex h-8 shrink-0 items-stretch overflow-x-auto border-b border-line bg-surface">
+      <div role="tablist" aria-label="Open files" className="ahq-tabs flex h-10 shrink-0 items-end gap-1 overflow-x-auto border-b border-line bg-surface px-2 pt-1.5">
         {openTabs.map((p) => {
           const active = p === activePath;
+          const unsaved = isDirty(buffers[p]);
+          const name = p.split('/').pop() ?? p;
           return (
-            <div key={p} className={cn('group flex shrink-0 items-center gap-1.5 border-r border-line pl-3 pr-1 text-[12.5px]', active ? 'bg-canvas text-fg' : 'text-fg-muted hover:bg-surface-2')}>
-              <button type="button" role="tab" aria-selected={active} onClick={() => setActive(p)} className="max-w-48 truncate" title={p}>
-                {p.split('/').pop()}
+            <div
+              key={p}
+              className={cn(
+                'ahq-tab group relative flex h-8 shrink-0 items-center gap-2 rounded-t-lg border border-b-0 pl-2.5 pr-1 text-[12.5px] transition-[background-color,color,border-color] duration-200',
+                active ? 'border-line bg-canvas text-fg' : 'border-transparent text-fg-muted hover:bg-surface-2 hover:text-fg'
+              )}
+            >
+              <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full transition-colors', fileDot(name))} />
+              <button type="button" role="tab" aria-selected={active} onClick={() => setActive(p)} className="max-w-44 truncate outline-none" title={p}>
+                {name}
               </button>
-              {isDirty(buffers[p]) ? <span className="text-accent" aria-label="unsaved changes">●</span> : null}
-              <IconButton icon={X} label={`Close ${p}`} size="sm" className="opacity-60 group-hover:opacity-100" onClick={() => closeTab(p)} />
+              <button
+                type="button"
+                aria-label={`Close ${p}`}
+                title={unsaved ? 'Unsaved changes. Close' : 'Close'}
+                onClick={() => closeTab(p)}
+                className="relative flex h-5 w-5 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
+              >
+                <span aria-label={unsaved ? 'unsaved changes' : undefined} className={cn('absolute h-1.5 w-1.5 rounded-full bg-accent transition-all duration-150', unsaved ? 'scale-100 opacity-100 group-hover:scale-0 group-hover:opacity-0' : 'scale-0 opacity-0')} />
+                <X className={cn('h-3 w-3 transition-all duration-150', unsaved ? 'scale-50 opacity-0 group-hover:scale-100 group-hover:opacity-100' : active ? 'opacity-70' : 'opacity-0 group-hover:opacity-70')} />
+              </button>
+              <span aria-hidden className={cn('absolute inset-x-2 -bottom-px h-0.5 origin-center rounded-full bg-gradient-to-r from-accent to-accent-2 transition-transform duration-300 [transition-timing-function:cubic-bezier(.32,.72,0,1)]', active ? 'scale-x-100' : 'scale-x-0')} />
             </div>
           );
         })}
@@ -152,9 +182,13 @@ export function EditorPane() {
               <IconButton icon={Columns2} label="Diff" size="sm" active={mode === 'diff'} onClick={() => setEditorMode('diff')} />
             </div>
             {target && target.path === activePath ? <Button size="sm" variant="ghost" onClick={() => showDiff(null)}>Clear proposal</Button> : null}
+            <span aria-live="polite" className={cn('flex items-center gap-1 text-[11.5px] transition-colors', dirty ? 'text-warning' : 'text-fg-subtle')}>
+              {dirty ? <span className="h-1.5 w-1.5 rounded-full bg-warning" /> : <Check className="h-3 w-3" />}
+              {dirty ? 'Unsaved' : 'Saved'}
+            </span>
             <Button size="sm" icon={RotateCcw} disabled={!dirty} onClick={() => revertFile(activePath)}>Revert</Button>
-            <Button size="sm" variant="primary" icon={Save} disabled={!dirty || buffer.binary} onClick={() => void save()}>
-              Save <Kbd>Ctrl S</Kbd>
+            <Button size="sm" variant="primary" icon={Save} disabled={!dirty || buffer.binary} onClick={() => void save()} title={`Save (${SAVE_SHORTCUT})`} aria-keyshortcuts="Control+S Meta+S">
+              Save
             </Button>
           </div>
           {buffer.loading ? (

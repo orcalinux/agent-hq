@@ -290,6 +290,8 @@ export interface MissionState {
 }
 
 export type ThemeMode = 'dark' | 'light';
+/** What the user picked; `system` follows the operating system's light or dark setting. */
+export type ThemePreference = ThemeMode | 'system';
 
 export type OrchestratorMode = 'ask' | 'plan' | 'build';
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Play, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Play, SquareTerminal, Trash2, X } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useAgentStore, formatClock } from '@/store/useAgentStore';
 import { useLayoutStore, type BottomTab } from '@/store/useLayoutStore';
@@ -239,7 +239,10 @@ export function BottomPanel() {
             { id: 'changes', label: 'Changes', count: pendingChanges },
           ]}
         />
-        <IconButton icon={X} label="Hide panel" size="sm" onClick={() => toggle('bottomVisible')} />
+        <div className="flex items-center gap-0.5">
+          <IconButton icon={SquareTerminal} label="Open in system terminal" size="sm" onClick={() => void api.openTerminal().catch(() => undefined)} />
+          <IconButton icon={X} label="Hide panel" size="sm" onClick={() => toggle('bottomVisible')} />
+        </div>
       </div>
       <div className="min-h-0 flex-1">
         {tab === 'terminal' && <TerminalTab />}

@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
-import { Badge, Button, Field, Input, PageTitle, Section, Select } from '@/components/ui/primitives';
+import { Badge, Button, Field, Input, PageTitle, Section, Select, Tabs } from '@/components/ui/primitives';
+import type { ThemePreference } from '@/types';
 import { fmtDateTime } from '@/components/ui/helpers';
 import { SHORTCUTS } from '@/components/shell/useShortcuts';
 import { ApprovalModeCards } from '@/components/shell/ApprovalMode';
 
 export default function SettingsView() {
-  const theme = useAgentStore((s) => s.themeMode);
-  const setTheme = useAgentStore((s) => s.setThemeMode);
+  const themePreference = useAgentStore((s) => s.themePreference);
+  const setThemePreference = useAgentStore((s) => s.setThemePreference);
   const verification = useAgentStore((s) => s.verificationCommand);
   const setVerification = useAgentStore((s) => s.setVerificationCommand);
   const clearRunHistory = useAgentStore((s) => s.clearRunHistory);
@@ -75,10 +76,18 @@ export default function SettingsView() {
 
           <Section title="Appearance">
             <Field label="Theme">
-              <Select value={theme} onChange={(e) => setTheme(e.target.value as 'dark' | 'light')} className="w-40">
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-              </Select>
+              <Tabs<ThemePreference>
+                label="Theme"
+                value={themePreference}
+                onChange={setThemePreference}
+                className="w-fit"
+                items={[
+                  { id: 'system', label: 'System' },
+                  { id: 'light', label: 'Light' },
+                  { id: 'dark', label: 'Dark' },
+                ]}
+              />
+              <p className="text-[11.5px] text-fg-subtle">System follows your operating system and switches when it does.</p>
             </Field>
             <Button onClick={resetLayout}>Reset panel layout</Button>
           </Section>

@@ -37,6 +37,8 @@ import {
 } from './office/officeArt';
 
 const WALL = '#3b4048';
+const MINI_W = 168;
+const MINI_H = Math.round((168 * PLAN_H) / PLAN_W);
 const CORRIDOR = { x: 32, y: 262, w: 1136, h: 72 };
 const STATUS_DOT: Record<Tone, string> = { accent: '#5b9bff', success: '#22c55e', warning: '#f59e0b', danger: '#ef4444', neutral: '#9ca3af' };
 type LightMode = 'auto' | 'day' | 'night';
@@ -184,6 +186,7 @@ export function AgentOffice() {
     return s ? { x: s.x, y: s.y } : undefined;
   };
 
+  const working = list.filter((a) => isBusy(a.status)).length;
   const devRow = ROOMS.find((r) => r.id === 'Dev Bay')!.slots.some((s) => s.optional && bySlot.has(s));
   const incubatorRow = ROOMS.find((r) => r.id === 'Incubator Pod')!.slots.some((s) => s.optional && bySlot.has(s));
 
@@ -224,12 +227,19 @@ export function AgentOffice() {
                 <Scenery night={night} />
                 <OptionalDecor devRow={devRow} incubatorRow={incubatorRow} />
                 {desks}
-                {night ? <rect width={PLAN_W} height={PLAN_H} rx={16} fill="#050913" opacity={0.55} /> : null}
+                <rect width={PLAN_W} height={PLAN_H} rx={16} fill="#050913" style={{ opacity: night ? 0.55 : 0, transition: 'opacity 900ms ease' }} />
                 <g style={{ mixBlendMode: 'screen' }}>
                   {lamps}
                   {glows}
                 </g>
               </svg>
+
+              <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl transition-opacity duration-1000" style={{ opacity: night ? 0 : 1 }}>
+                <div className="ahq-beam absolute -top-10 left-[8%] h-[130%] w-24 bg-gradient-to-b from-amber-100/40 to-transparent blur-xl" />
+                <div className="ahq-beam absolute -top-10 left-[38%] h-[130%] w-16 bg-gradient-to-b from-amber-100/30 to-transparent blur-xl" style={{ animationDelay: '-5s' }} />
+                <div className="ahq-beam absolute -top-10 left-[72%] h-[130%] w-28 bg-gradient-to-b from-amber-100/35 to-transparent blur-xl" style={{ animationDelay: '-9s' }} />
+              </div>
+              <div aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl" style={{ boxShadow: 'inset 0 0 120px 10px rgba(0,0,0,0.28)' }} />
 
               {ROOMS.map((r) => {
                 const st = rooms.get(r.id);
@@ -238,12 +248,12 @@ export function AgentOffice() {
                     key={r.id}
                     title={r.purpose}
                     className={cn(
-                      'pointer-events-none absolute flex items-center gap-1.5 whitespace-nowrap rounded-[3px] border px-1.5 py-0.5 text-[10.5px] font-semibold shadow-sm',
-                      night ? 'border-white/10 bg-[#11151c]/90 text-white/90' : 'border-black/10 bg-white/90 text-neutral-800'
+                      'pointer-events-none absolute flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10.5px] font-semibold shadow-lg backdrop-blur-md transition-colors duration-700',
+                      night ? 'border-white/10 bg-[#11151c]/70 text-white/90' : 'border-black/10 bg-white/70 text-neutral-800'
                     )}
                     style={{ left: r.sign.x, top: r.sign.y }}
                   >
-                    <span className="h-2 w-2 rounded-sm" style={{ background: r.color }} />
+                    <span className="h-2 w-2 rounded-full" style={{ background: r.color, boxShadow: '0 0 8px ' + r.color }} />
                     {r.id}
                     {st?.members ? <span className={cn('font-normal', st.working ? 'text-emerald-500' : 'opacity-60')}>{st.working ? '· ' + st.working + ' working' : '· ' + st.members}</span> : null}
                   </div>
@@ -266,10 +276,11 @@ export function AgentOffice() {
                     {bubble ? (
                       <div
                         role="status"
-                        className="ahq-bubble pointer-events-none absolute left-0 z-20 w-max max-w-[160px] rounded-md border border-line-strong bg-surface-2 px-2 py-1 text-[11px] leading-snug text-fg shadow-md"
+                        className="ahq-bubble ahq-glass pointer-events-none absolute left-0 z-20 w-max max-w-[170px] rounded-xl px-2.5 py-1.5 text-[11px] leading-snug text-fg"
                         style={{ bottom: up ? 20 : 38, transform: 'translateX(-50%)' }}
                       >
                         <span className="line-clamp-2">{bubble}</span>
+                        <span className="ahq-typing mt-0.5 block text-fg-subtle" aria-hidden><i /><i /><i /></span>
                       </div>
                     ) : null}
                     <button
@@ -280,10 +291,13 @@ export function AgentOffice() {
                       title={agent.name + ' · ' + agent.title + (agent.currentTask ? '\n' + agent.currentTask : '')}
                       className={cn('absolute left-0 top-0 flex -translate-x-1/2 -translate-y-1/2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent', selected && 'ring-2 ring-accent')}
                     >
-                      <AgentAvatar agent={agent} size={30} />
+                      {isBusy(agent.status) ? <span aria-hidden className="ahq-halo absolute -inset-2 rounded-full blur-md" style={{ background: agent.accentColor }} /> : null}
+                      <span className={cn('relative flex', !isBusy(agent.status) && 'ahq-breathe')} style={{ animationDelay: (agent.name.length % 5) * -0.7 + 's' }}>
+                        <AgentAvatar agent={agent} size={30} />
+                      </span>
                     </button>
                     <span
-                      className="pointer-events-none absolute left-0 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded bg-black/70 px-1.5 py-px text-[10px] font-medium leading-tight text-white shadow"
+                      className="pointer-events-none absolute left-0 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-white/10 bg-black/55 px-2 py-px text-[10px] font-medium leading-tight text-white shadow-lg backdrop-blur-md"
                       style={up ? { top: 19 } : { bottom: 19 }}
                     >
                       <span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_DOT[statusTone(agent.status)] }} />
@@ -295,7 +309,34 @@ export function AgentOffice() {
             </div>
           )}
         </PanZoom>
-        <div className="absolute right-3 top-3 flex items-center gap-0.5 rounded-lg border border-line-strong bg-surface p-0.5 shadow-md" role="radiogroup" aria-label="Lighting">
+        <div className="ahq-glass pointer-events-none absolute left-3 top-3 flex items-center gap-2.5 rounded-xl px-3 py-1.5" aria-live="polite">
+          <span className="relative flex h-2 w-2">
+            <span className={cn('absolute inline-flex h-full w-full rounded-full bg-success opacity-60', working > 0 && 'animate-ping')} />
+            <span className={cn('relative inline-flex h-2 w-2 rounded-full', working > 0 ? 'bg-success' : 'bg-fg-subtle')} />
+          </span>
+          <div className="leading-tight">
+            <div className="text-[12px] font-semibold text-fg">Live office</div>
+            <div className="text-[11px] text-fg-muted">{working > 0 ? working + ' of ' + list.length + ' agents working' : list.length + ' agents standing by'}</div>
+          </div>
+        </div>
+        <div data-no-pan className="ahq-glass absolute bottom-3 right-3 hidden overflow-hidden rounded-xl p-1.5 sm:block" aria-label="Minimap" role="group">
+          <svg width={MINI_W} height={MINI_H} viewBox={'0 0 ' + PLAN_W + ' ' + PLAN_H}>
+            {ROOMS.map((r) => <rect key={r.id} x={r.rect.x} y={r.rect.y} width={r.rect.w} height={r.rect.h} rx={8} fill={r.color} fillOpacity={0.22} stroke={r.color} strokeOpacity={0.6} strokeWidth={5} />)}
+            {list.map((a) => {
+              const p = pointOf(a.id);
+              if (!p) return null;
+              const busy = isBusy(a.status);
+              return (
+                <g key={a.id} onClick={() => select(selectedId === a.id ? null : a.id)} style={{ cursor: 'pointer' }}>
+                  {busy ? <circle cx={p.x} cy={p.y} r={26} fill={a.accentColor} opacity={0.35} className="ahq-halo" style={{ transformOrigin: p.x + 'px ' + p.y + 'px' }} /> : null}
+                  <circle cx={p.x} cy={p.y} r={selectedId === a.id ? 20 : 14} fill={a.accentColor} stroke="#fff" strokeWidth={selectedId === a.id ? 6 : 0} />
+                  <title>{a.name}</title>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        <div className="ahq-glass absolute right-3 top-3 flex items-center gap-0.5 rounded-xl p-0.5" role="radiogroup" aria-label="Lighting">
           {(
             [
               ['auto', SunMoon, 'Follow theme'],
@@ -310,7 +351,7 @@ export function AgentOffice() {
               aria-checked={lightMode === mode}
               title={label}
               onClick={() => setLightMode(mode)}
-              className={cn('flex h-6 items-center gap-1 rounded px-1.5 text-[11px]', lightMode === mode ? 'bg-surface-3 text-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg')}
+              className={cn('flex h-6 items-center gap-1 rounded-lg px-2 text-[11px] transition-colors duration-200', lightMode === mode ? 'bg-surface-3 text-fg shadow-sm' : 'text-fg-muted hover:bg-surface-2 hover:text-fg')}
             >
               <Icon className="h-3.5 w-3.5" />
               {label === 'Follow theme' ? 'Auto' : label}

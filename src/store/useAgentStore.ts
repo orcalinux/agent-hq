@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   ApprovalMode,
+  ThemePreference,
   ActiveBeamEvent,
   ActivityEvent,
   AgentProfile,
@@ -70,6 +71,8 @@ export interface AgentStoreState {
 
   activeView: ViewMode;
   themeMode: ThemeMode;
+  /** The user's choice; `themeMode` is what it resolves to right now. */
+  themePreference: ThemePreference;
   isCommandPaletteOpen: boolean;
 
   orchestratorMode: OrchestratorMode;
@@ -102,6 +105,7 @@ export interface AgentStoreState {
   // UI
   setActiveView: (view: ViewMode) => void;
   setThemeMode: (mode: ThemeMode) => void;
+  setThemePreference: (preference: ThemePreference) => void;
   toggleThemeMode: () => void;
   selectAgent: (agentId: string | null) => void;
   selectTask: (taskId: string | null) => void;
@@ -167,6 +171,21 @@ function applyTheme(mode: ThemeMode) {
   }
 }
 
+const systemQuery = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null);
+
+export function resolveTheme(preference: ThemePreference): ThemeMode {
+  if (preference !== 'system') return preference;
+  const query = systemQuery();
+  return query && !query.matches ? 'light' : 'dark';
+}
+
+const THEME_CYCLE: ThemePreference[] = ['system', 'light', 'dark'];
+
+/** The sidebar button cycles System → Light → Dark. */
+export function nextThemePreference(preference: ThemePreference): ThemePreference {
+  return THEME_CYCLE[(THEME_CYCLE.indexOf(preference) + 1) % THEME_CYCLE.length];
+}
+
 export const useAgentStore = create<AgentStoreState>()(
   persist(
     (set, get) => {
@@ -181,7 +200,8 @@ export const useAgentStore = create<AgentStoreState>()(
         roleDefaults: DEFAULT_ROLE_MODELS,
 
         activeView: 'workspace',
-        themeMode: 'dark',
+        themeMode: resolveTheme('system'),
+        themePreference: 'system',
         isCommandPaletteOpen: false,
 
         orchestratorMode: 'ask',
@@ -213,11 +233,13 @@ export const useAgentStore = create<AgentStoreState>()(
 
         // ---------------------------------------------------------- UI
         setActiveView: (view) => set({ activeView: view }),
-        setThemeMode: (mode) => {
+        setThemeMode: (mode) => get().setThemePreference(mode),
+        setThemePreference: (preference) => {
+          const mode = resolveTheme(preference);
           applyTheme(mode);
-          set({ themeMode: mode });
+          set({ themePreference: preference, themeMode: mode });
         },
-        toggleThemeMode: () => get().setThemeMode(get().themeMode === 'dark' ? 'light' : 'dark'),
+        toggleThemeMode: () => get().setThemePreference(nextThemePreference(get().themePreference)),
         selectAgent: (agentId) => set({ selectedAgentId: agentId }),
         selectTask: (taskId) => set({ selectedTaskId: taskId }),
         setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
@@ -805,6 +827,7 @@ export const useAgentStore = create<AgentStoreState>()(
         ),
         roleDefaults: s.roleDefaults,
         themeMode: s.themeMode,
+        themePreference: s.themePreference,
         activeView: s.activeView,
         orchestratorMode: s.orchestratorMode,
         teamStrategy: s.teamStrategy,
@@ -826,8 +849,15 @@ export const useAgentStore = create<AgentStoreState>()(
       }),
       migrate: () => ({}) as AgentStoreState,
       onRehydrateStorage: () => (state) => {
-        if (state) applyTheme(state.themeMode);
+        if (!state) return;
+        const preference = state.themePreference ?? 'system';
+        state.setThemePreference(preference);
       },
     }
   )
 );
+
+systemQuery()?.addEventListener('change', () => {
+  const state = useAgentStore.getState();
+  if (state.themePreference === 'system') state.setThemePreference('system');
+});

@@ -257,7 +257,7 @@ function extraBinDirs(): string[] {
   ];
 }
 
-function findOnPath(binary: string): string | undefined {
+export function findOnPath(binary: string): string | undefined {
   if (!binary) return undefined;
   const dirs = (process.env.PATH || '').split(path.delimiter);
   for (const dir of [...dirs, ...extraBinDirs()]) {

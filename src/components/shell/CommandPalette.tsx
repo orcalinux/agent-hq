@@ -4,6 +4,7 @@ import { useLayoutStore } from '@/store/useLayoutStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { stopChat } from '@/engine/liveOrchestrator';
+import { api } from '@/api/client';
 import { cn } from '@/utils/cn';
 import { Kbd } from '@/components/ui/primitives';
 import type { ViewMode } from '@/types';
@@ -32,7 +33,8 @@ function buildCommands(): Command[] {
     { id: 'v-reports', group: 'Go to', label: 'Reports', hint: 'Alt+4', run: goto('reports') },
     { id: 'v-conn', group: 'Go to', label: 'Connections & Models', hint: 'Alt+5', run: goto('connections') },
     { id: 'v-settings', group: 'Go to', label: 'Settings', hint: 'Ctrl+,', run: goto('settings') },
-    { id: 'theme', group: 'View', label: 'Toggle light / dark theme', run: () => agent().toggleThemeMode() },
+    { id: 'theme', group: 'View', label: 'Switch theme (System, Light, Dark)', run: () => agent().toggleThemeMode() },
+    { id: 'terminal-open', group: 'View', label: 'Open project in system terminal', run: () => void api.openTerminal().catch(() => undefined) },
     { id: 'sidebar', group: 'View', label: 'Toggle sidebar', run: () => layout().toggle('sidebarCollapsed') },
     { id: 'explorer', group: 'View', label: 'Toggle explorer', hint: 'Ctrl+B', run: inWorkspace(() => layout().toggle('explorerVisible')) },
     { id: 'bottom', group: 'View', label: 'Toggle bottom panel', hint: 'Ctrl+J', run: inWorkspace(() => layout().toggle('bottomVisible')) },

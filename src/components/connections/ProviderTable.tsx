@@ -4,6 +4,7 @@ import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { CONNECTION_METHOD_LABEL, type AIProviderId, type ProviderState } from '@/types';
 import { Badge, Button, StatusDot } from '@/components/ui/primitives';
 import { fmtRelative } from '@/components/ui/helpers';
+import { InstallActions } from './InstallActions';
 
 function ProviderRow({ provider, onConnect }: { provider: ProviderState; onConnect: (id: AIProviderId) => void }) {
   const refresh = useConnectionsStore((s) => s.refresh);
@@ -109,6 +110,7 @@ export function LocalTools() {
               <th className="px-3 py-1.5 font-medium">Status</th>
               <th className="px-3 py-1.5 font-medium">Sign-in</th>
               <th className="px-3 py-1.5 font-medium">Used for</th>
+              <th className="px-3 py-1.5 font-medium">Install</th>
             </tr>
           </thead>
           <tbody>
@@ -125,6 +127,7 @@ export function LocalTools() {
                   {cli.detected ? (cli.auth?.checked ? (cli.auth.detail ?? (cli.auth.ok ? 'Signed in' : 'Not signed in')) : 'Verified when you connect') : '—'}
                 </td>
                 <td className="px-3 py-1.5 text-fg-muted">{cli.purpose}{!cli.executionSupported ? ' (not supported for model calls)' : ''}</td>
+                <td className="px-3 py-1.5">{!cli.detected && ['claude', 'codex', 'gemini'].includes(cli.binary) ? <InstallActions id={cli.binary} /> : <span className="text-fg-subtle">—</span>}</td>
               </tr>
             ))}
             <tr>
@@ -139,6 +142,7 @@ export function LocalTools() {
                     : 'Detecting…'}
                 </span>
               </td>
+              <td className="px-3 py-1.5">{detection && !detection.ollama.reachable && !detection.clis.find((c) => c.binary === 'ollama')?.detected ? <InstallActions id="ollama" /> : <span className="text-fg-subtle">—</span>}</td>
             </tr>
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono">magpie</td>
@@ -152,6 +156,7 @@ export function LocalTools() {
                     : 'Detecting…'}
                 </span>
               </td>
+              <td className="px-3 py-1.5">{detection && !detection.magpie?.reachable ? <InstallActions id="magpie" /> : <span className="text-fg-subtle">—</span>}</td>
             </tr>
           </tbody>
         </table>

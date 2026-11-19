@@ -77,7 +77,18 @@ export async function mockProvider(page: Page, delayMs = 700, opts: { magpie?: b
     route.fulfill({
       json: {
         ok: true,
-        clis: [],
+        clis: [
+          { binary: 'claude', detected: false, executionSupported: true, purpose: 'Claude Code CLI — model execution with its own sign-in' },
+          { binary: 'codex', detected: false, executionSupported: true, purpose: 'OpenAI Codex CLI — model execution with its own sign-in' },
+          { binary: 'gemini', detected: false, executionSupported: true, purpose: 'Gemini CLI — model execution with its own sign-in' },
+        ],
+        installs: {
+          claude: { name: 'Claude Code', command: 'npm i -g @anthropic-ai/claude-code', url: 'https://docs.claude.com/en/docs/claude-code/setup' },
+          codex: { name: 'Codex CLI', command: 'npm i -g @openai/codex', url: 'https://github.com/openai/codex' },
+          gemini: { name: 'Gemini CLI', command: 'npm i -g @google/gemini-cli', url: 'https://github.com/google-gemini/gemini-cli' },
+          ollama: { name: 'Ollama', command: 'curl -fsSL https://ollama.com/install.sh | sh', url: 'https://ollama.com/download' },
+          magpie: { name: 'Magpie', command: 'curl -fsSL https://usemagpie.ai/install.sh | sh', url: 'https://usemagpie.ai' },
+        },
         ollama: { reachable: false, endpoint: 'http://127.0.0.1:11434' },
         ...(opts.magpie ? { magpie: { reachable: true, endpoint: 'http://127.0.0.1:3425', models: MAGPIE_MODELS.length } } : {}),
       },

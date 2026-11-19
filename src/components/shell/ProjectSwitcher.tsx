@@ -6,6 +6,7 @@ import { useAgentStore } from '@/store/useAgentStore';
 import { Dialog } from '@/components/ui/Dialog';
 import { Badge, Button, Field, IconButton, Input, Spinner, Tabs, Textarea } from '@/components/ui/primitives';
 import { cn } from '@/utils/cn';
+import { SideLabel } from './SideLabel';
 
 type Listing = Awaited<ReturnType<typeof api.browse>>;
 
@@ -264,20 +265,18 @@ export function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
         type="button"
         onClick={() => setOpen(true)}
         title={root ? 'Project: ' + root + ' (click to switch)' : 'Choose a project'}
-        className={cn('flex w-full items-center gap-2 rounded-md border border-line bg-surface-2 px-2 py-1.5 text-left hover:border-line-strong hover:bg-surface-3', collapsed && 'justify-center border-transparent bg-transparent px-0')}
+        aria-label={collapsed ? 'Switch project' : undefined}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-lg border px-[11px] py-1.5 text-left transition-colors duration-300',
+          collapsed ? 'border-transparent bg-transparent hover:bg-surface-2' : 'border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3'
+        )}
       >
         <FolderGit2 className="h-4 w-4 shrink-0 text-accent" />
-        {collapsed ? (
-          <span className="sr-only">Switch project</span>
-        ) : (
-          <>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[12.5px] font-medium">{name || 'No project'}</span>
-              <span className="block truncate font-mono text-[10.5px] text-fg-subtle">{root ? root.replace(/^\/home\/[^/]+/, '~') : 'Choose a folder'}</span>
-            </span>
-            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
-          </>
-        )}
+        <SideLabel collapsed={collapsed} className="flex-1">
+          <span className="block truncate text-[12.5px] font-medium">{name || 'No project'}</span>
+          <span className="block truncate font-mono text-[10.5px] text-fg-subtle">{root ? root.replace(/^\/home\/[^/]+/, '~') : 'Choose a folder'}</span>
+        </SideLabel>
+        <ChevronsUpDown className={cn('h-3.5 w-3.5 shrink-0 text-fg-subtle transition-opacity duration-200', collapsed && 'opacity-0')} />
       </button>
       {open ? <ProjectDialog open onClose={() => setOpen(false)} /> : null}
     </>
