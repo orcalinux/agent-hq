@@ -1,260 +1,321 @@
-import { useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
+import { Moon, Sun, SunMoon } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
-import type { AgentProfile, RoomLocation } from '@/types';
-import { isBusy } from '@/components/ui/helpers';
+import type { AgentProfile } from '@/types';
+import { isBusy, statusTone, type Tone } from '@/components/ui/helpers';
 import { cn } from '@/utils/cn';
 import { FlowLayer } from './FlowLayer';
+import { PanZoom } from './PanZoom';
 import { useAgentFlows, useRecentAgentMessages, useReducedMotion } from './flows';
-import { AgentAvatar, VizSidebar, useElementSize } from './vizShared';
+import { AgentAvatar, VizSidebar } from './vizShared';
+import { DOORS, GLASS, INNER, PLAN_H, PLAN_W, ROOMS, WINDOWS, assignSeats, lightsFor, type RoomId, type Slot } from './office/officePlan';
+import {
+  BeanBag,
+  Bookshelf,
+  BreakRoomFixtures,
+  Camera,
+  Chair,
+  ConferenceTable,
+  Desk,
+  DoorSwing,
+  DraftingTable,
+  Extinguisher,
+  Laptop,
+  OfficeDefs,
+  Plant,
+  Printer,
+  RoundTable,
+  Rug,
+  ServerRack,
+  Sofa,
+  StandingDesk,
+  Stairs,
+  TestBench,
+  Whiteboard,
+  WindowPane,
+  deskDepth,
+} from './office/officeArt';
 
-const PLAN_W = 1000;
-const PLAN_H = 640;
-const MIN_W = 640;
-const MIN_H = 420;
+const WALL = '#3b4048';
+const CORRIDOR = { x: 32, y: 262, w: 1136, h: 72 };
+const STATUS_DOT: Record<Tone, string> = { accent: '#5b9bff', success: '#22c55e', warning: '#f59e0b', danger: '#ef4444', neutral: '#9ca3af' };
+type LightMode = 'auto' | 'day' | 'night';
 
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-interface RoomSpec {
-  id: RoomLocation;
-  purpose: string;
-  color: string;
-  rect: Rect;
-  door: Rect;
-}
-
-const ROOMS: RoomSpec[] = [
-  { id: 'Executive Suite', purpose: 'Planning & delegation', color: '#D97706', rect: { x: 300, y: 16, w: 400, h: 170 }, door: { x: 480, y: 181, w: 40, h: 10 } },
-  { id: 'Architecture Lab', purpose: 'Design & contracts', color: '#7C3AED', rect: { x: 16, y: 216, w: 264, h: 220 }, door: { x: 275, y: 296, w: 10, h: 40 } },
-  { id: 'Dev Bay', purpose: 'Implementation', color: '#2563EB', rect: { x: 300, y: 216, w: 400, h: 220 }, door: { x: 480, y: 211, w: 40, h: 10 } },
-  { id: 'QA Vault', purpose: 'Review, tests & security', color: '#059669', rect: { x: 720, y: 216, w: 264, h: 220 }, door: { x: 715, y: 296, w: 10, h: 40 } },
-  { id: 'Incubator Pod', purpose: 'Juniors with N+1 mentors', color: '#DB2777', rect: { x: 300, y: 466, w: 400, h: 158 }, door: { x: 480, y: 461, w: 40, h: 10 } },
-];
-
-const WOOD = 'color-mix(in srgb, #b4824a 60%, var(--surface-3))';
-
-function Plant({ x, y }: { x: number; y: number }) {
+const Scenery = memo(function Scenery({ night }: { night: boolean }) {
   return (
-    <g transform={'translate(' + x + ' ' + y + ')'}>
-      <circle r={11} style={{ fill: 'color-mix(in srgb, #16a34a 55%, var(--surface-3))' }} />
-      <circle r={6} cx={-2} cy={-1} style={{ fill: 'color-mix(in srgb, #16a34a 80%, var(--surface-3))' }} />
-      <circle r={3} cx={2} cy={2} style={{ fill: 'color-mix(in srgb, #16a34a 95%, var(--surface-3))' }} />
+    <g>
+      <rect width={PLAN_W} height={PLAN_H} rx={16} fill={night ? '#141920' : '#c4c7bf'} />
+      <rect x={0} y={282} width={24} height={32} fill={night ? '#232934' : '#dbd8d0'} />
+      <rect x={INNER.x} y={INNER.y} width={INNER.w} height={INNER.h} fill="url(#ahq-f-tile)" />
+      {ROOMS.map((r) => <rect key={r.id} x={r.rect.x} y={r.rect.y} width={r.rect.w} height={r.rect.h} fill={`url(#${r.floor})`} />)}
+      <rect x={INNER.x} y={INNER.y} width={INNER.w} height={INNER.h} filter="url(#ahq-grain)" opacity={0.5} style={{ mixBlendMode: 'multiply' }} />
+      {night ? null : (
+        <g>
+          <rect x={INNER.x} y={INNER.y} width={INNER.w} height={120} fill="url(#ahq-sun-down)" />
+          <rect x={INNER.x} y={INNER.y} width={110} height={INNER.h} fill="url(#ahq-sun-right)" />
+          <rect x={INNER.x} y={628} width={INNER.w} height={100} fill="url(#ahq-sun-up)" />
+        </g>
+      )}
+
+      <Rug x={70} y={287} w={1010} h={22} fill="#5a4a3d" border="#8a7358" />
+      <rect x={34} y={282} width={22} height={32} rx={2} fill="#2f2f2f" />
+      <Stairs x={1100} y={266} w={66} h={64} />
+      <Plant x={1084} y={277} s={0.75} />
+      <Plant x={1084} y={319} s={0.75} />
+
+      <Bookshelf x={44} y={36} w={192} />
+      <Rug x={48} y={180} w={184} h={74} fill="#6b2f2f" border="#c9a26b" />
+      <Sofa x={52} y={222} w={150} rot={180} frame="#3a2e2a" back="#4a3a34" seat="#5a4840" />
+      <g filter="url(#ahq-sh)">
+        <rect x={96} y={186} width={56} height={24} rx={3} fill="url(#ahq-walnut)" />
+      </g>
+      <Plant x={110} y={198} s={0.42} />
+      <ConferenceTable cx={312} cy={122} rx={58} ry={30} />
+      <rect x={402} y={94} width={5} height={56} rx={1} fill="#111" />
+      <Plant x={392} y={52} />
+      <Plant x={390} y={240} s={0.9} />
+
+      <Bookshelf x={430} y={36} w={100} />
+      <Whiteboard x={540} y={38} len={96} />
+      <DraftingTable x={648} y={50} />
+      <BeanBag x={696} y={198} color="#7c5cbf" />
+      <BeanBag x={662} y={216} color="#c2683b" />
+      <Plant x={726} y={244} s={0.9} />
+      <Plant x={430} y={244} s={0.8} />
+
+      {[44, 82, 120, 158, 196].map((y, i) => <ServerRack key={y} x={1104} y={y} seed={i} />)}
+      <TestBench x={862} y={210} w={190} h={40} />
+      <Camera x={752} y={42} rot={45} />
+      <Extinguisher x={1090} y={250} />
+      <Plant x={762} y={246} s={0.8} />
+
+      <Printer x={600} y={348} />
+      <StandingDesk x={556} y={450} />
+      <Whiteboard x={652} y={410} len={110} vertical />
+      <Rug x={48} y={624} w={250} h={92} fill="#2f4858" border="#9fb7c4" />
+      <Sofa x={60} y={688} w={160} rot={180} />
+      <Sofa x={236} y={640} w={44} h={40} rot={90} frame="#5b4636" back="#6e5643" seat="#86694f" pillow="#e2e8f0" />
+      <g filter="url(#ahq-sh)">
+        <rect x={100} y={646} width={70} height={26} rx={13} fill="url(#ahq-oak)" />
+      </g>
+      <Laptop x={124} y={659} rot={6} />
+      <Plant x={52} y={352} s={0.9} />
+      <Plant x={290} y={352} s={0.8} />
+      <Plant x={650} y={712} s={0.9} />
+
+      <Bookshelf x={1162} y={380} w={150} rot={90} />
+      <BreakRoomFixtures night={night} />
+
+      {ROOMS.map((r) => <rect key={r.id} x={r.rect.x} y={r.rect.y} width={r.rect.w} height={r.rect.h} fill="none" stroke={WALL} strokeWidth={8} />)}
+      <rect x={26} y={26} width={1148} height={708} rx={4} fill="none" stroke={WALL} strokeWidth={12} />
+      {GLASS.map(([x1, y1, x2, y2]) => (
+        <g key={x1}>
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={night ? '#3c5a70' : '#d3ecf8'} strokeWidth={4.5} />
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#59606a" strokeWidth={4.5} strokeDasharray="2 46" />
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#7fb6d6" strokeWidth={0.8} />
+        </g>
+      ))}
+      {WINDOWS.map((w) => <WindowPane key={w.x + '-' + w.y} r={w} night={night} />)}
+      {DOORS.map((d) => <DoorSwing key={d.x + '-' + d.y} door={d} />)}
     </g>
   );
-}
+});
 
-function Desk({ x, y, busy }: { x: number; y: number; busy: boolean }) {
+function OptionalDecor({ devRow, incubatorRow }: { devRow: boolean; incubatorRow: boolean }) {
   return (
-    <g transform={'translate(' + x + ' ' + y + ')'}>
-      <circle r={20} cy={4} className="fill-surface-3 stroke-line-strong" strokeWidth={1.5} />
-      <rect x={-48} y={-46} width={96} height={30} rx={5} style={{ fill: WOOD }} className="stroke-line-strong" strokeWidth={1.5} />
-      <rect x={-15} y={-43} width={30} height={16} rx={2.5} className="stroke-line-strong" strokeWidth={1} style={{ fill: busy ? 'var(--accent)' : 'var(--canvas)', opacity: busy ? 0.9 : 1 }} />
-      <rect x={-12} y={-24} width={24} height={5} rx={1.5} className="fill-surface-3 stroke-line-strong" strokeWidth={0.75} />
-      <circle cx={36} cy={-31} r={4} className="fill-surface stroke-line-strong" strokeWidth={1} />
-      <rect x={-40} y={-39} width={14} height={10} rx={1.5} className="fill-surface" opacity={0.85} />
+    <g>
+      {devRow ? null : (
+        <g>
+          {[392, 452, 512, 566].map((x) => <Chair key={'t' + x} x={x} y={640} rot={180} color="#6b7280" back="#4b5563" />)}
+          {[392, 452, 512, 566].map((x) => <Chair key={'b' + x} x={x} y={694} color="#6b7280" back="#4b5563" />)}
+          <g filter="url(#ahq-sh)">
+            <rect x={364} y={654} width={232} height={28} rx={3} fill="url(#ahq-oak)" />
+          </g>
+          <Laptop x={420} y={668} rot={4} />
+          <Laptop x={530} y={668} rot={176} />
+        </g>
+      )}
+      {incubatorRow ? null : (
+        <g>
+          <BeanBag x={760} y={512} color="#e0784f" />
+          <BeanBag x={802} y={524} color="#5b8def" />
+          <RoundTable x={960} y={508} r={14} chairs={3} />
+          <Plant x={1110} y={524} />
+        </g>
+      )}
     </g>
   );
-}
-
-function Furniture({ room }: { room: RoomSpec }) {
-  const r = room.rect;
-  switch (room.id) {
-    case 'Executive Suite':
-      return (
-        <g>
-          <rect x={r.x + 262} y={r.y + 38} width={96} height={44} rx={22} style={{ fill: WOOD }} className="stroke-line-strong" strokeWidth={1.5} />
-          {[0, 1, 2].map((i) => (
-            <g key={i}>
-              <circle cx={r.x + 286 + i * 24} cy={r.y + 28} r={7} className="fill-surface-3 stroke-line-strong" />
-              <circle cx={r.x + 286 + i * 24} cy={r.y + 92} r={7} className="fill-surface-3 stroke-line-strong" />
-            </g>
-          ))}
-          <rect x={r.x + 14} y={r.y + r.h - 22} width={90} height={10} rx={2} style={{ fill: WOOD }} className="stroke-line-strong" />
-          <Plant x={r.x + r.w - 20} y={r.y + r.h - 20} />
-        </g>
-      );
-    case 'Architecture Lab':
-      return (
-        <g>
-          <rect x={r.x + 6} y={r.y + 70} width={7} height={96} rx={2} className="fill-surface stroke-line-strong" />
-          <path d={'M' + (r.x + 8) + ' ' + (r.y + 84) + 'h3M' + (r.x + 8) + ' ' + (r.y + 100) + 'h3M' + (r.x + 8) + ' ' + (r.y + 118) + 'h3'} stroke={room.color} strokeWidth={2} strokeLinecap="round" />
-          <Plant x={r.x + r.w - 20} y={r.y + r.h - 20} />
-        </g>
-      );
-    case 'Dev Bay':
-      return (
-        <g>
-          <Plant x={r.x + 20} y={r.y + r.h - 20} />
-          <Plant x={r.x + r.w - 20} y={r.y + r.h - 20} />
-        </g>
-      );
-    case 'QA Vault':
-      return (
-        <g>
-          {[0, 1, 2].map((i) => (
-            <g key={i} transform={'translate(' + (r.x + r.w - 94 + i * 28) + ' ' + (r.y + 38) + ')'}>
-              <rect width={22} height={44} rx={3} className="fill-surface-3 stroke-line-strong" />
-              {[0, 1, 2, 3].map((j) => <circle key={j} cx={6} cy={8 + j * 9} r={1.6} style={{ fill: j % 2 ? 'var(--success)' : 'var(--line-strong)' }} />)}
-            </g>
-          ))}
-          <Plant x={r.x + 20} y={r.y + r.h - 20} />
-        </g>
-      );
-    default:
-      return (
-        <g>
-          <rect x={r.x + r.w - 118} y={r.y + 44} width={100} height={30} rx={9} style={{ fill: 'color-mix(in srgb, ' + room.color + ' 35%, var(--surface-3))' }} className="stroke-line-strong" />
-          <rect x={r.x + r.w - 114} y={r.y + 40} width={92} height={9} rx={4.5} style={{ fill: 'color-mix(in srgb, ' + room.color + ' 50%, var(--surface-3))' }} />
-          <Plant x={r.x + 20} y={r.y + r.h - 18} />
-        </g>
-      );
-  }
 }
 
 export function AgentOffice() {
   const agents = useAgentStore((s) => s.agents);
   const selectedId = useAgentStore((s) => s.selectedAgentId);
   const select = useAgentStore((s) => s.selectAgent);
+  const theme = useAgentStore((s) => s.themeMode);
   const flows = useAgentFlows();
   const messages = useRecentAgentMessages();
   const reduced = useReducedMotion();
-  const [ref, size] = useElementSize<HTMLDivElement>();
-  const width = Math.max(size.width, MIN_W);
-  const height = Math.max(size.height, MIN_H);
-  const scale = Math.min(width / PLAN_W, height / PLAN_H);
-  const ox = (width - PLAN_W * scale) / 2;
-  const oy = (height - PLAN_H * scale) / 2;
-  const avatarSize = Math.round(Math.max(28, Math.min(44, 38 * scale)));
+  const [lightMode, setLightMode] = useState<LightMode>('auto');
+  const night = lightMode === 'auto' ? theme === 'dark' : lightMode === 'night';
 
-  const { byRoom, seat } = useMemo(() => {
-    const groups = new Map<RoomLocation, AgentProfile[]>();
-    Object.values(agents).forEach((a) => {
-      const room = ROOMS.some((r) => r.id === a.roomLocation) ? a.roomLocation : 'Dev Bay';
-      groups.set(room, [...(groups.get(room) ?? []), a]);
+  const list = useMemo(() => Object.values(agents), [agents]);
+  const seats = useMemo(() => assignSeats(list), [list]);
+  const bySlot = useMemo(() => {
+    const m = new Map<Slot, AgentProfile>();
+    list.forEach((a) => {
+      const s = seats.get(a.id);
+      if (s) m.set(s.slot, a);
     });
-    const seats = new Map<string, { x: number; y: number }>();
-    ROOMS.forEach((room) => {
-      const members = groups.get(room.id) ?? [];
-      const perRow = Math.max(1, Math.min(members.length, 4));
-      const rows = Math.ceil(members.length / perRow);
-      members.forEach((a, i) => {
-        const row = Math.floor(i / perRow);
-        const col = i % perRow;
-        const inRow = Math.min(perRow, members.length - row * perRow);
-        seats.set(a.id, {
-          x: room.rect.x + (room.rect.w * (col + 1)) / (inRow + 1),
-          y: room.rect.y + 48 + ((room.rect.h - 48) * (row + 0.55)) / rows,
-        });
-      });
+    return m;
+  }, [list, seats]);
+  const rooms = useMemo(() => {
+    const m = new Map<RoomId, { members: number; working: number }>();
+    list.forEach((a) => {
+      const s = seats.get(a.id);
+      if (!s) return;
+      const cur = m.get(s.room) ?? { members: 0, working: 0 };
+      m.set(s.room, { members: cur.members + 1, working: cur.working + (isBusy(a.status) ? 1 : 0) });
     });
-    return { byRoom: groups, seat: seats };
-  }, [agents]);
+    return m;
+  }, [list, seats]);
 
-  const px = (p: { x: number; y: number }) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
   const pointOf = (id: string) => {
-    const s = seat.get(id);
-    return s ? px(s) : undefined;
+    const s = seats.get(id)?.slot;
+    return s ? { x: s.x, y: s.y } : undefined;
   };
+
+  const devRow = ROOMS.find((r) => r.id === 'Dev Bay')!.slots.some((s) => s.optional && bySlot.has(s));
+  const incubatorRow = ROOMS.find((r) => r.id === 'Incubator Pod')!.slots.some((s) => s.optional && bySlot.has(s));
+
+  let deskIndex = 0;
+  const desks = ROOMS.flatMap((room) =>
+    room.slots
+      .filter((s) => !s.optional || bySlot.has(s))
+      .map((s) => {
+        const a = bySlot.get(s);
+        return <Desk key={room.id + s.x + '-' + s.y} x={s.x} y={s.y} facing={s.facing} size={s.size} occupied={!!a} busy={!!a && isBusy(a.status)} accent={a?.accentColor} index={deskIndex++} />;
+      })
+  );
+
+  const glows = list
+    .filter((a) => isBusy(a.status))
+    .map((a) => {
+      const s = seats.get(a.id)?.slot;
+      if (!s) return null;
+      const off = -24 - deskDepth(s.size ?? 'std') + 16;
+      return <ellipse key={a.id} cx={s.x} cy={s.facing === 'up' ? s.y + off : s.y - off} rx={36} ry={20} fill="url(#ahq-screen)" />;
+    });
+
+  const lamps = [...ROOMS.map((r) => ({ id: r.id as string, rect: r.rect })), { id: 'corridor', rect: CORRIDOR }].flatMap(({ id, rect }) => {
+    const st = rooms.get(id as RoomId);
+    const opacity = st?.working ? (night ? 0.85 : 0.2) : night ? (st?.members || id === 'corridor' ? 0.4 : 0.14) : 0;
+    if (!opacity) return [];
+    return lightsFor(rect).map((p) => <circle key={id + p.x + '-' + p.y} cx={p.x} cy={p.y} r={id === 'corridor' ? 46 : 84} fill="url(#ahq-lamp)" opacity={opacity} />);
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col lg:flex-row">
-      <div ref={ref} className="relative min-h-[420px] min-w-0 flex-1 overflow-auto bg-canvas">
-        <div className="relative" style={{ width, height }}>
-          <svg width={width} height={height} className="pointer-events-none absolute inset-0" role="img" aria-label="Office floor plan">
-            <g transform={'translate(' + ox + ' ' + oy + ') scale(' + scale + ')'}>
-              <rect x={4} y={4} width={PLAN_W - 8} height={PLAN_H - 8} rx={14} className="fill-surface-2 stroke-line-strong" strokeWidth={6} />
-              <rect x={10} y={10} width={PLAN_W - 20} height={PLAN_H - 20} rx={10} fill="url(#ahq-carpet)" opacity={0.6} />
-              <defs>
-                <pattern id="ahq-carpet" width="14" height="14" patternUnits="userSpaceOnUse">
-                  <path d="M0 0h14v14H0z" fill="none" />
-                  <path d="M0 7h14M7 0v14" className="stroke-line" strokeWidth={0.6} />
-                </pattern>
-              </defs>
-              {ROOMS.map((room) => {
-                const working = (byRoom.get(room.id) ?? []).some((a) => isBusy(a.status));
+      <div className="relative min-h-[420px] min-w-0 flex-1 bg-canvas">
+        <PanZoom contentWidth={PLAN_W} contentHeight={PLAN_H} autoFit maxFitZoom={1.6}>
+          {() => (
+            <div className="relative" style={{ width: PLAN_W, height: PLAN_H }}>
+              <svg width={PLAN_W} height={PLAN_H} className="absolute inset-0" role="img" aria-label="Office floor plan">
+                <OfficeDefs />
+                <Scenery night={night} />
+                <OptionalDecor devRow={devRow} incubatorRow={incubatorRow} />
+                {desks}
+                {night ? <rect width={PLAN_W} height={PLAN_H} rx={16} fill="#050913" opacity={0.55} /> : null}
+                <g style={{ mixBlendMode: 'screen' }}>
+                  {lamps}
+                  {glows}
+                </g>
+              </svg>
+
+              {ROOMS.map((r) => {
+                const st = rooms.get(r.id);
                 return (
-                  <g key={room.id}>
-                    <rect
-                      x={room.rect.x}
-                      y={room.rect.y}
-                      width={room.rect.w}
-                      height={room.rect.h}
-                      rx={6}
-                      strokeWidth={working ? 4 : 3}
-                      style={{
-                        fill: 'color-mix(in srgb, ' + room.color + ' 8%, var(--surface))',
-                        stroke: working ? 'color-mix(in srgb, ' + room.color + ' 70%, var(--line-strong))' : 'var(--line-strong)',
-                      }}
-                    />
-                    <rect x={room.door.x} y={room.door.y} width={room.door.w} height={room.door.h} rx={2} style={{ fill: 'var(--surface-2)' }} />
-                    <Furniture room={room} />
-                  </g>
+                  <div
+                    key={r.id}
+                    title={r.purpose}
+                    className={cn(
+                      'pointer-events-none absolute flex items-center gap-1.5 whitespace-nowrap rounded-[3px] border px-1.5 py-0.5 text-[10.5px] font-semibold shadow-sm',
+                      night ? 'border-white/10 bg-[#11151c]/90 text-white/90' : 'border-black/10 bg-white/90 text-neutral-800'
+                    )}
+                    style={{ left: r.sign.x, top: r.sign.y }}
+                  >
+                    <span className="h-2 w-2 rounded-sm" style={{ background: r.color }} />
+                    {r.id}
+                    {st?.members ? <span className={cn('font-normal', st.working ? 'text-emerald-500' : 'opacity-60')}>{st.working ? '· ' + st.working + ' working' : '· ' + st.members}</span> : null}
+                  </div>
                 );
               })}
-              {Object.values(agents).map((agent) => {
-                const s = seat.get(agent.id);
-                return s ? <Desk key={agent.id} x={s.x} y={s.y} busy={isBusy(agent.status)} /> : null;
-              })}
-            </g>
-          </svg>
-          {ROOMS.map((room) => {
-            const members = byRoom.get(room.id) ?? [];
-            const working = members.filter((a) => isBusy(a.status)).length;
-            const p = px(room.rect);
-            return (
-              <header key={room.id} aria-label={room.id} className="pointer-events-none absolute flex items-start justify-between gap-2 px-3 pt-2" style={{ left: p.x, top: p.y, width: room.rect.w * scale }}>
-                <div className="min-w-0">
-                  <h3 className="flex items-center gap-1.5 truncate text-[12.5px] font-semibold">
-                    <span className="inline-block h-2 w-2 rounded-sm" style={{ background: room.color }} />
-                    {room.id}
-                  </h3>
-                  <p className="truncate text-[11px] text-fg-subtle">{room.purpose}</p>
-                </div>
-                <span className="shrink-0 text-[11px] text-fg-subtle">{working > 0 ? working + ' working' : members.length ? 'quiet' : 'empty'}</span>
-              </header>
-            );
-          })}
-          <svg width={width} height={height} className="pointer-events-none absolute inset-0" aria-hidden>
-            <FlowLayer flows={flows} pointOf={pointOf} reducedMotion={reduced} />
-          </svg>
-          {Object.values(agents).map((agent) => {
-            const s = seat.get(agent.id);
-            if (!s) return null;
-            const p = px(s);
-            const bubble = messages[agent.id];
-            return (
-              <div key={agent.id} className="absolute" style={{ left: p.x, top: p.y, transform: 'translate(-50%, -50%)' }}>
-                {bubble ? (
-                  <div
-                    role="status"
-                    className="ahq-bubble absolute bottom-full left-1/2 z-10 mb-1 w-max max-w-[150px] rounded-md border border-line-strong bg-surface-2 px-2 py-1 text-[11px] leading-snug text-fg shadow-md"
-                    style={{ transform: 'translateX(-50%)', marginBottom: 48 * scale }}
-                  >
-                    <span className="line-clamp-2">{bubble}</span>
-                  </div>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => select(agent.id === selectedId ? null : agent.id)}
-                  aria-pressed={selectedId === agent.id}
-                  aria-label={agent.name + ', ' + agent.title + ', ' + agent.status}
-                  className={cn('relative flex flex-col items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent', selectedId === agent.id && 'ring-2 ring-accent/50')}
-                >
-                  <AgentAvatar agent={agent} size={avatarSize} />
-                  <span className="pointer-events-none absolute left-1/2 top-full mt-1 flex w-[112px] -translate-x-1/2 flex-col items-center">
-                    <span className="text-[12px] font-semibold leading-none">{agent.name}</span>
-                    <span className={cn('mt-0.5 w-full truncate text-center text-[10.5px] leading-tight', agent.currentTask ? 'text-fg-muted' : 'text-fg-subtle')} title={agent.currentTask}>
-                      {agent.currentTask ?? agent.status}
+
+              <svg width={PLAN_W} height={PLAN_H} className="pointer-events-none absolute inset-0" aria-hidden>
+                <FlowLayer flows={flows} pointOf={pointOf} reducedMotion={reduced} />
+              </svg>
+
+              {list.map((agent) => {
+                const seat = seats.get(agent.id);
+                if (!seat) return null;
+                const { x, y, facing } = seat.slot;
+                const up = facing === 'up';
+                const bubble = messages[agent.id];
+                const selected = selectedId === agent.id;
+                return (
+                  <div key={agent.id} data-no-pan className="absolute" style={{ left: x, top: y }}>
+                    {bubble ? (
+                      <div
+                        role="status"
+                        className="ahq-bubble pointer-events-none absolute left-0 z-20 w-max max-w-[160px] rounded-md border border-line-strong bg-surface-2 px-2 py-1 text-[11px] leading-snug text-fg shadow-md"
+                        style={{ bottom: up ? 20 : 38, transform: 'translateX(-50%)' }}
+                      >
+                        <span className="line-clamp-2">{bubble}</span>
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => select(selected ? null : agent.id)}
+                      aria-pressed={selected}
+                      aria-label={agent.name + ', ' + agent.title + ', ' + agent.status}
+                      title={agent.name + ' · ' + agent.title + (agent.currentTask ? '\n' + agent.currentTask : '')}
+                      className={cn('absolute left-0 top-0 flex -translate-x-1/2 -translate-y-1/2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent', selected && 'ring-2 ring-accent')}
+                    >
+                      <AgentAvatar agent={agent} size={30} />
+                    </button>
+                    <span
+                      className="pointer-events-none absolute left-0 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded bg-black/70 px-1.5 py-px text-[10px] font-medium leading-tight text-white shadow"
+                      style={up ? { top: 19 } : { bottom: 19 }}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_DOT[statusTone(agent.status)] }} />
+                      {agent.name}
                     </span>
-                  </span>
-                </button>
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </PanZoom>
+        <div className="absolute right-3 top-3 flex items-center gap-0.5 rounded-lg border border-line-strong bg-surface p-0.5 shadow-md" role="radiogroup" aria-label="Lighting">
+          {(
+            [
+              ['auto', SunMoon, 'Follow theme'],
+              ['day', Sun, 'Day'],
+              ['night', Moon, 'Night'],
+            ] as const
+          ).map(([mode, Icon, label]) => (
+            <button
+              key={mode}
+              type="button"
+              role="radio"
+              aria-checked={lightMode === mode}
+              title={label}
+              onClick={() => setLightMode(mode)}
+              className={cn('flex h-6 items-center gap-1 rounded px-1.5 text-[11px]', lightMode === mode ? 'bg-surface-3 text-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg')}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label === 'Follow theme' ? 'Auto' : label}
+            </button>
+          ))}
         </div>
       </div>
       {selectedId ? null : <VizSidebar flows={flows} />}

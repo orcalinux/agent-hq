@@ -29,7 +29,7 @@ export function StatusBar() {
       ) : null}
       <button type="button" onClick={() => setView('connections')} className="flex items-center gap-1.5 hover:text-fg" title="Open Connections & Models">
         <StatusDot tone={connectedCount ? 'success' : 'warning'} />
-        {connectedCount ? `${connectedCount} provider${connectedCount === 1 ? '' : 's'} · ${modelCount} models` : 'No AI provider connected'}
+        {connectedCount ? `${connectedCount} provider${connectedCount === 1 ? '' : 's'} · ${modelCount} model${modelCount === 1 ? '' : 's'}` : 'No AI provider connected'}
       </button>
       <div className="ml-auto flex items-center gap-3">
         <button

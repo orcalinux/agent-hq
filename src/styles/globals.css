@@ -182,3 +182,7 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@keyframes ahq-led { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.ahq-led { animation: ahq-led 1.4s steps(2, jump-none) infinite; }
+@media (prefers-reduced-motion: reduce) { .ahq-led { animation: none !important; } }

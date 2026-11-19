@@ -257,6 +257,8 @@ export interface MissionState {
   source: MissionSource;
   title: string;
   prompt: string;
+  /** Files the user attached to the request; every task receives their current contents. */
+  contextFiles?: string[];
   currentStage: SOPStage;
   stageIndex: number;
   status: MissionStatus;
@@ -299,6 +301,8 @@ export interface ProposedAgent {
   name: string;
   role: 'architect' | 'frontend' | 'backend' | 'qa';
   title: string;
+  specialty?: string;
+  focus?: string;
   systemPrompt: string;
   model?: string;
   reason?: string;

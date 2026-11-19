@@ -14,6 +14,8 @@ function ConfigForm({ agent }: { agent: AgentProfile }) {
   const roleDefaults = useAgentStore((s) => s.roleDefaults);
   const providers = useConnectionsStore((s) => s.providers);
   const [title, setTitle] = useState(agent.title);
+  const [specialty, setSpecialty] = useState(agent.specialty || '');
+  const [focus, setFocus] = useState(agent.focus || '');
   const [description, setDescription] = useState(agent.description);
   const [prompt, setPrompt] = useState(agent.systemPrompt);
   const [caps, setCaps] = useState(agent.capabilities.join(', '));
@@ -23,11 +25,13 @@ function ConfigForm({ agent }: { agent: AgentProfile }) {
   const effective = resolveAgentModel(agent, roleDefaults);
 
   const dirty =
-    title !== agent.title || description !== agent.description || prompt !== agent.systemPrompt || review !== agent.reviewResponsibilities || autonomy !== agent.autonomyLevel || caps !== agent.capabilities.join(', ');
+    specialty !== (agent.specialty || '') || focus !== (agent.focus || '') || title !== agent.title || description !== agent.description || prompt !== agent.systemPrompt || review !== agent.reviewResponsibilities || autonomy !== agent.autonomyLevel || caps !== agent.capabilities.join(', ');
 
   const save = () => {
     update(agent.id, {
       title: title.trim() || agent.title,
+      specialty: specialty.trim() || undefined,
+      focus: focus.trim() || undefined,
       description,
       systemPrompt: prompt,
       reviewResponsibilities: review,
@@ -42,6 +46,12 @@ function ConfigForm({ agent }: { agent: AgentProfile }) {
     <div className="space-y-3">
       <Field label="Model" hint={agent.model ? undefined : 'Using the role default: ' + (effective ? modelLabel(providers, effective) : 'none set')}>
         <ModelSelect value={agent.model} onChange={(ref) => reassign(agent.id, ref)} emptyLabel="Use role default" />
+      </Field>
+      <Field label="Role / specialty" hint="Enter any domain, such as IoT, embedded systems, robotics or data science.">
+        <Input value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="e.g. IoT & Embedded Engineer" />
+      </Field>
+      <Field label="Domain instructions" hint="Used by Sovereign for assignments and included in every task sent to this agent.">
+        <Textarea rows={3} value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="What should this specialist study, build and verify?" />
       </Field>
       <Field label="Title"><Input value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
       <Field label="Description"><Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>

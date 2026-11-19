@@ -25,10 +25,13 @@ import {
   truncate,
 } from './orchestratorParsing';
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
+import { planNextWave } from './scheduler';
+import { selectRelevantFiles } from './taskContext';
 import { providerOfRef } from '@/types';
 
 const MAX_QA_LOOPS = 1;
 const QA_TASK_ID = 'qa-review';
+const TASK_FILE_CONTEXT_CHARS = 60_000;
 
 let runController: AbortController | null = null;
 const runTotals = { promptTokens: 0, completionTokens: 0, otherTokens: 0, costUSD: 0, unpricedTokens: 0 };
@@ -151,9 +154,20 @@ function projectContext(): string {
 
 async function attachmentContext(paths: string[] | undefined): Promise<string> {
   if (!paths?.length) return '';
+  const parts = await fileContents(paths, Infinity);
+  return `\n\nAttached files:\n${parts.join('\n\n')}`;
+}
+
+/** Reads files from open editor buffers or the workspace, stopping once the character budget is used. */
+async function fileContents(paths: string[], budget: number): Promise<string[]> {
   const ws = useWorkspaceStore.getState();
   const parts: string[] = [];
+  let used = 0;
   for (const p of paths) {
+    if (used >= budget) {
+      parts.push(`--- ${p} ---\n[omitted: context budget reached]`);
+      continue;
+    }
     let content = ws.buffers[p]?.content;
     if (content === undefined) {
       try {
@@ -162,16 +176,28 @@ async function attachmentContext(paths: string[] | undefined): Promise<string> {
         content = '[could not read file]';
       }
     }
-    parts.push(`--- ${p} ---\n${truncate(content, 20_000)}`);
+    const shown = truncate(content, Math.min(20_000, budget - used));
+    used += shown.length;
+    parts.push(`--- ${p} ---\n${shown}`);
   }
-  return `\n\nAttached files:\n${parts.join('\n\n')}`;
+  return parts;
+}
+
+async function taskFileContext(task: KanbanTaskCard, mission: MissionState): Promise<string> {
+  const ws = useWorkspaceStore.getState();
+  const files = new Set(ws.tree.filter((e) => e.type === 'file').map((e) => e.path));
+  const mentioned = selectRelevantFiles(`${task.title}\n${task.description}\n${task.qaFeedback ?? ''}\n${mission.prompt}`, [...files]);
+  const paths = [...new Set([...(mission.contextFiles ?? []).filter((p) => files.has(p)), ...mentioned])];
+  if (!paths.length) return '';
+  const parts = await fileContents(paths, TASK_FILE_CONTEXT_CHARS);
+  return `\n\nCurrent contents of relevant files (edit these rather than rewriting from scratch; keep everything you do not intend to change):\n${parts.join('\n\n')}`;
 }
 
 function rosterDescription(): string {
   return Object.values(agentsState().agents)
     .map((a) => {
       const mentor = a.internship?.isIntern ? `, junior — reviewed by ${agentsState().agents[a.internship.mentorId]?.name ?? a.internship.mentorId}` : '';
-      return `- ${a.id} | ${a.name} | ${a.title} (${a.role}${mentor})`;
+      return `- ${a.id} | ${a.name} | ${a.title} (${a.role}${mentor})${a.specialty ? ` | Specialty: ${a.specialty}` : ''}${a.focus ? ` | Focus: ${a.focus}` : ''}`;
     })
     .join('\n');
 }
@@ -197,7 +223,8 @@ function planInstructions(strategy: TeamStrategy): string {
       ? `Team design: first think about what THIS project actually needs (stack, domain, risk). Use existing roster agents where they fit. When the project needs a specialist the roster lacks (for example mobile, data/ML, DevOps, database, game, embedded, security), add up to 4 agents in "newAgents"; give each a short distinct name, a role (architect|frontend|backend|qa), a title, focused systemPrompt instructions for this project, an optional model ref from the available models, and a one-line reason. Assign tasks to them by their "key". Do not add agents you do not use.`
       : 'Team design: use ONLY agents from the roster. Do not propose new agents.';
   return `Mode: PLAN. Produce an execution plan. Respond with ONLY a JSON object (no prose outside it) of the form:
-{"summary": "one paragraph", "newAgents": [{"key": "mobile", "name": "Orion", "role": "frontend", "title": "Mobile Engineer", "systemPrompt": "...", "model": "<optional model ref>", "reason": "..."}], "tasks": [{"id": "t1", "title": "...", "description": "concrete instructions", "stage": "briefing|architecture|implementation", "agentId": "<roster agent id or new agent key>", "model": "<optional model ref for this task>", "priority": "critical|high|medium|low", "dependsOn": ["t0"]}]}
+{"summary": "one paragraph", "newAgents": [{"key": "mobile", "name": "Orion", "role": "frontend", "title": "Mobile Engineer", "specialty": "<any project domain, such as IoT & Embedded>", "focus": "<domain instructions and verification requirements>", "systemPrompt": "...", "model": "<optional model ref>", "reason": "..."}], "tasks": [{"id": "t1", "title": "...", "description": "concrete instructions", "stage": "briefing|architecture|implementation", "agentId": "<roster agent id or new agent key>", "model": "<optional model ref for this task>", "priority": "critical|high|medium|low", "dependsOn": ["t0"]}]}
+The role field is a workflow routing category only. Specialty is unrestricted: choose the expertise required by the project, including IoT, embedded firmware, electronics, robotics or any other domain.
 Rules: 2-10 tasks. Split work so tasks that depend on each other say so in dependsOn (outputs of dependencies are handed to the dependent task). Juniors only get small, well-scoped tasks. Do not add a QA task: QA review by Sentinel runs automatically. Dependencies must reference earlier task ids.
 Model choice: set "model" on a task only when it clearly benefits (a strong model for architecture or hard logic, a fast cheap model for simple edits); otherwise omit it and the agent's own model is used. Only use refs from the available models list.
 ${teamRule}`;
@@ -300,7 +327,7 @@ function materializeNewAgents(plan: OrchestratorPlan): OrchestratorPlan {
       continue;
     }
     const place = ROLE_PLACEMENT[p.role];
-    const id = store.addCustomAgent({ name: p.name, role: p.role, title: p.title, department: place.department, roomLocation: place.room, model: p.model ?? 'auto', systemPrompt: p.systemPrompt });
+    const id = store.addCustomAgent({ name: p.name, role: p.role, title: p.title, specialty: p.specialty, focus: p.focus, department: place.department, roomLocation: place.room, model: p.model ?? 'auto', systemPrompt: p.systemPrompt });
     idFor.set(p.key, id);
     store.logActivity({ kind: 'info', level: 'info', agentId: id, text: `Sovereign added ${p.name} (${p.title})${p.reason ? `: ${p.reason}` : ''}` });
   }
@@ -308,7 +335,7 @@ function materializeNewAgents(plan: OrchestratorPlan): OrchestratorPlan {
   return { ...plan, newAgents: [], tasks: plan.tasks.map((t) => (idFor.has(t.agentId) ? { ...t, agentId: idFor.get(t.agentId)! } : t)) };
 }
 
-function buildMission(plan: OrchestratorPlan, request: string): MissionState {
+function buildMission(plan: OrchestratorPlan, request: string, contextFiles?: string[]): MissionState {
   const now = Date.now();
   const id = `run-${now.toString(36)}`;
   const agents = agentsState().agents;
@@ -355,6 +382,7 @@ function buildMission(plan: OrchestratorPlan, request: string): MissionState {
     source: 'live',
     title: plan.summary ? truncate(plan.summary.split(/(?<=\.)\s/)[0], 120) : truncate(request, 120),
     prompt: request,
+    contextFiles: contextFiles?.length ? contextFiles : undefined,
     currentStage: 'briefing',
     stageIndex: 0,
     status: 'running',
@@ -374,9 +402,10 @@ export async function approveAndRun(messageId: string) {
   const msg = store.managerChatMessages.find((m) => m.id === messageId);
   if (!msg?.plan) return;
   const idx = store.managerChatMessages.findIndex((m) => m.id === messageId);
-  const request = [...store.managerChatMessages.slice(0, idx)].reverse().find((m) => m.sender === 'user')?.text ?? msg.plan.summary;
+  const requestMessage = [...store.managerChatMessages.slice(0, idx)].reverse().find((m) => m.sender === 'user');
+  const request = requestMessage?.text ?? msg.plan.summary;
   const plan = materializeNewAgents(msg.plan);
-  const mission = buildMission(plan, request);
+  const mission = buildMission(plan, request, requestMessage?.attachedFiles);
   store.updateChatMessage(messageId, { plan: { ...plan, status: 'executed', runId: mission.id } });
   store.setOrchestratorMode('build');
   store.startLiveMission(mission);
@@ -416,17 +445,21 @@ async function runTask(task: KanbanTaskCard, signal: AbortSignal) {
     .join('\n\n');
 
   const system = `${agent.systemPrompt}
+${agent.specialty ? `\nYour specialty is ${agent.specialty}.` : ''}
+${agent.focus ? `\nYour domain instructions: ${agent.focus}` : ''}
 
 You are executing one task of a larger plan coordinated by Sovereign.
 When you create or change files, output each file in full inside a fenced block whose info string contains path=<relative path>, e.g.:
 \`\`\`ts path=src/example.ts
 // full file content
 \`\`\`
-Files are NOT written automatically: the user reviews and applies them. Keep explanations short.`;
+Files are NOT written automatically: the user reviews and applies them. Keep explanations short.
+When you change an existing file, start from its current contents (provided below when available) and preserve unrelated code.`;
 
+  const fileContext = await taskFileContext(task, mission);
   const user = `Overall request:\n${mission.prompt}\n\nYour task: ${task.title}\n${task.description}${
     task.qaFeedback ? `\n\nQA feedback to address (this task was rejected):\n${task.qaFeedback}` : ''
-  }${depOutputs ? `\n\nResults from tasks you depend on:\n${depOutputs}` : ''}\n\n${projectContext()}`;
+  }${depOutputs ? `\n\nResults from tasks you depend on:\n${depOutputs}` : ''}${fileContext}\n\n${projectContext()}`;
 
   const update = throttle((full) => agentsState().updateTask(task.id, { output: full, progress: Math.min(90, 10 + Math.floor(full.length / 80)) }), 250);
   try {
@@ -710,19 +743,7 @@ export async function executeRun() {
 
   try {
     for (;;) {
-      const m = currentMission()!;
-      const work = topoOrder(m.tasks.filter((t) => t.id !== QA_TASK_ID));
-      for (const t of work) {
-        if (controller.signal.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
-        const fresh = taskById(t.id)!;
-        if (fresh.status === 'completed') continue;
-        const blocked = (fresh.dependsOn ?? []).map(taskById).find((d) => d && d.status !== 'completed');
-        if (blocked) {
-          agentsState().updateTask(fresh.id, { status: 'failed', error: `Blocked: dependency "${blocked.title}" did not complete.` });
-          continue;
-        }
-        await runTask(fresh, controller.signal);
-      }
+      await runWorkTasks(controller.signal);
       const failed = currentMission()!.tasks.filter((t) => t.id !== QA_TASK_ID && t.status === 'failed');
       if (failed.length) {
         finalize('failed', `${failed.length} task(s) failed. Fix the cause and use Retry.`);
@@ -773,6 +794,38 @@ export async function executeRun() {
 
 export function stopRun() {
   runController?.abort();
+}
+
+/** Runs pending work tasks in dependency waves, several at once, never two for the same agent. */
+async function runWorkTasks(signal: AbortSignal) {
+  const running = new Map<string, Promise<void>>();
+  let fatal: unknown = null;
+  for (;;) {
+    if (signal.aborted && !fatal) fatal = Object.assign(new Error('Aborted'), { name: 'AbortError' });
+    if (!fatal) {
+      const work = topoOrder(currentMission()!.tasks.filter((t) => t.id !== QA_TASK_ID));
+      const { start, blocked } = planNextWave(work, new Set(running.keys()));
+      for (const { task, dependency } of blocked) {
+        agentsState().updateTask(task.id, { status: 'failed', error: `Blocked: dependency "${dependency.title}" did not complete.` });
+      }
+      for (const task of start) {
+        const done = runTask(task, signal)
+          .catch((err) => {
+            fatal ??= err;
+          })
+          .finally(() => running.delete(task.id));
+        running.set(task.id, done);
+      }
+    }
+    if (!running.size) break;
+    await Promise.race(running.values());
+  }
+  if (fatal) throw fatal;
+  for (const t of currentMission()!.tasks) {
+    if (t.id !== QA_TASK_ID && t.status !== 'completed' && t.status !== 'failed') {
+      agentsState().updateTask(t.id, { status: 'failed', error: 'Could not be scheduled: a dependency never completed.' });
+    }
+  }
 }
 
 export async function resumeRun() {

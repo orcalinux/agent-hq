@@ -178,6 +178,8 @@ export function createNewInternProfile(
     id,
     name: spec.name.trim() || `Intern #${existingInternCount + 1}`,
     role: 'intern',
+    specialty: spec.specialty,
+    focus: spec.focus?.trim() || undefined,
     title: `AI ${spec.specialty} Intern`,
     description: `Junior ${spec.specialty} apprentice shadowing senior autonomous execution to unlock full engineering autonomy.`,
     avatar: spec.avatar || '🎓',

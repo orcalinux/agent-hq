@@ -110,7 +110,7 @@ export interface AgentStoreState {
   // Agents & models
   setRoleDefault: (role: AgentRole, model: AIModelId) => void;
   reassignModel: (agentId: string, model: AIModelId) => void;
-  updateAgent: (agentId: string, patch: Partial<Pick<AgentProfile, 'name' | 'title' | 'description' | 'systemPrompt' | 'capabilities' | 'reviewResponsibilities' | 'autonomyLevel'>>) => void;
+  updateAgent: (agentId: string, patch: Partial<Pick<AgentProfile, 'name' | 'title' | 'specialty' | 'focus' | 'description' | 'systemPrompt' | 'capabilities' | 'reviewResponsibilities' | 'autonomyLevel'>>) => void;
   updateAgentPrompt: (agentId: string, systemPrompt: string) => void;
   updateAgentAutonomy: (agentId: string, autonomyLevel: AutonomyLevel) => void;
   addCustomAgent: (spec: NewAgentSpec) => string;
@@ -254,6 +254,8 @@ export const useAgentStore = create<AgentStoreState>()(
             id,
             name,
             role: spec.role,
+            specialty: spec.specialty?.trim() || undefined,
+            focus: spec.focus?.trim() || undefined,
             title: spec.title.trim() || `${spec.role[0].toUpperCase()}${spec.role.slice(1)} specialist`,
             description: `Custom ${spec.department} agent.`,
             avatar: name.slice(0, 2).toUpperCase(),

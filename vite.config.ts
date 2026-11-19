@@ -27,12 +27,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    host: true,
+    host: '127.0.0.1',
     watch: { ignored: ['**/test-results/**', '**/dist/**'] },
   },
   preview: {
     port: 5173,
-    host: true,
+    host: '127.0.0.1',
   },
   test: {
     include: ['tests/unit/**/*.test.ts'],

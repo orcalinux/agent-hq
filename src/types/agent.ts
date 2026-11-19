@@ -96,6 +96,8 @@ export interface AgentProfile {
   id: string;
   name: string;
   role: AgentRole;
+  specialty?: string;
+  focus?: string;
   title: string;
   description: string;
   avatar: string;
@@ -139,6 +141,8 @@ export interface InternOnboardSpec {
 export interface NewAgentSpec {
   name: string;
   role: AgentRole;
+  specialty?: string;
+  focus?: string;
   title: string;
   department: Department;
   roomLocation: RoomLocation;

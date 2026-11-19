@@ -21,7 +21,9 @@ export function AddAgentDialog({ open, onClose }: { open: boolean; onClose: () =
   const add = useAgentStore((s) => s.addCustomAgent);
   const select = useAgentStore((s) => s.selectAgent);
   const [name, setName] = useState('');
-  const [role, setRole] = useState<AgentRole>('frontend');
+  const [role, setRole] = useState<AgentRole>('backend');
+  const [specialty, setSpecialty] = useState('');
+  const [focus, setFocus] = useState('');
   const [title, setTitle] = useState('');
   const [model, setModel] = useState('');
   const [autonomy, setAutonomy] = useState<AutonomyLevel>('Semi-Autonomous');
@@ -29,11 +31,13 @@ export function AddAgentDialog({ open, onClose }: { open: boolean; onClose: () =
 
   const submit = () => {
     const d = ROLE_DEFAULTS[role];
-    const id = add({ name: name.trim(), role, title: title.trim() || role, department: d.department, roomLocation: d.room, model: model || 'auto', autonomyLevel: autonomy, systemPrompt: prompt.trim() || undefined });
+    const id = add({ name: name.trim(), role, specialty, focus, title: title.trim() || specialty.trim() || role, department: d.department, roomLocation: d.room, model: model || 'auto', autonomyLevel: autonomy, systemPrompt: prompt.trim() || undefined });
     select(id);
     setName('');
     setTitle('');
     setPrompt('');
+    setSpecialty('');
+    setFocus('');
     onClose();
   };
 
@@ -42,13 +46,19 @@ export function AddAgentDialog({ open, onClose }: { open: boolean; onClose: () =
       <div className="space-y-3">
         <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Role">
-            <Select value={role} onChange={(e) => setRole(e.target.value as AgentRole)}>
-              {(Object.keys(ROLE_DEFAULTS) as AgentRole[]).map((r) => <option key={r} value={r}>{r}</option>)}
-            </Select>
+          <Field label="Role / specialty" hint="Any domain. You are not limited to software roles.">
+            <Input value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="e.g. IoT & Embedded Engineer" />
           </Field>
           <Field label="Title"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Data engineer" /></Field>
         </div>
+        <Field label="Domain instructions" hint="Sovereign uses this to assign tasks. These instructions also go to the agent on every task.">
+          <Textarea value={focus} onChange={(e) => setFocus(e.target.value)} rows={3} placeholder="Study STM32 firmware, C/C++, MQTT, sensors and OTA updates. Read the project documentation and verify changes with the available toolchain." />
+        </Field>
+        <Field label="Workflow" hint="Controls routing, default model and office placement. Your specialty can be anything.">
+          <Select value={role} onChange={(e) => setRole(e.target.value as AgentRole)}>
+            {(Object.keys(ROLE_DEFAULTS) as AgentRole[]).map((r) => <option key={r} value={r}>{r === 'backend' ? 'Engineering / implementation' : r === 'architect' ? 'Architecture / research' : r === 'qa' ? 'Review / testing' : r === 'intern' ? 'Junior workflow' : r}</option>)}
+          </Select>
+        </Field>
         <Field label="Model" hint="Leave unassigned to use the default for the role.">
           <ModelSelect value={model} onChange={setModel} emptyLabel="Role default" />
         </Field>

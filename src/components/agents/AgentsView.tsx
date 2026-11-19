@@ -42,7 +42,7 @@ function AgentTable() {
                   <div className="font-medium">{a.name}</div>
                   <div className="text-[11.5px] text-fg-subtle">{a.title}</div>
                 </td>
-                <td className="px-3 py-2 text-fg-muted">{a.internship?.isIntern ? 'junior' : a.role}</td>
+                <td className="px-3 py-2 text-fg-muted">{a.specialty || a.internship?.specialty || (a.internship?.isIntern ? 'junior' : a.role)}</td>
                 <td className="px-3 py-2 font-mono text-[12px]">{ref ? modelLabel(providers, ref) : <span className="font-sans text-warning">Unassigned</span>}{!a.model && ref ? <span className="ml-1 font-sans text-[11px] text-fg-subtle">(role default)</span> : null}</td>
                 <td className="px-3 py-2 text-fg-muted">{ref ? providerName(providers, ref) : '—'}</td>
                 <td className="max-w-56 truncate px-3 py-2 text-fg-muted" title={a.currentTask}>{a.currentTask ?? '—'}</td>

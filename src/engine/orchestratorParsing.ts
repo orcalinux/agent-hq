@@ -76,6 +76,8 @@ function parseNewAgents(raw: unknown, agents: Record<string, AgentProfile>, mode
       name,
       role,
       title,
+      specialty: typeof item.specialty === 'string' ? item.specialty.trim().slice(0, 160) : undefined,
+      focus: typeof item.focus === 'string' ? item.focus.trim().slice(0, 4000) : undefined,
       systemPrompt:
         String(item.systemPrompt ?? item.instructions ?? '').trim().slice(0, 4000) ||
         `You are ${name}, ${title} on an AI software engineering team coordinated by Sovereign. Be precise and output complete files.`,
@@ -160,8 +162,9 @@ const FILE_BLOCK = /```[^\n`]*?\bpath=["']?([^\s"'`]+)["']?[^\n]*\n([\s\S]*?)```
 export function extractFileBlocks(text: string): FileBlock[] {
   const out = new Map<string, string>();
   for (const m of stripThinking(text).matchAll(FILE_BLOCK)) {
-    const path = m[1].replace(/^\.?\/+/, '');
-    if (!path || path.includes('..') || path.startsWith('/')) continue;
+    if (m[1].startsWith('/')) continue;
+    const path = m[1].replace(/^(\.\/+)+/, '');
+    if (!path || path.split('/').includes('..')) continue;
     out.set(path, m[2].replace(/\n$/, ''));
   }
   return Array.from(out, ([path, content]) => ({ path, content }));

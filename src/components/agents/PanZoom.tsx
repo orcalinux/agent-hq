@@ -21,6 +21,8 @@ export function PanZoom({
   onResetLayout,
   resetLayoutLabel = 'Reset layout',
   className,
+  autoFit = false,
+  maxFitZoom = 1,
 }: {
   children: (view: View) => ReactNode;
   contentWidth: number;
@@ -28,11 +30,14 @@ export function PanZoom({
   onResetLayout?: () => void;
   resetLayoutLabel?: string;
   className?: string;
+  autoFit?: boolean;
+  maxFitZoom?: number;
 }) {
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; sx: number; sy: number; ox: number; oy: number } | null>(null);
   const [panning, setPanning] = useState(false);
+  const touched = useRef(false);
 
   const zoomAt = useCallback((factor: number, cx?: number, cy?: number) => {
     setView((v) => {
@@ -48,15 +53,28 @@ export function PanZoom({
   const fit = useCallback(() => {
     const rect = ref.current?.getBoundingClientRect();
     if (!rect || !contentWidth || !contentHeight) return setView({ zoom: 1, x: 0, y: 0 });
-    const zoom = clamp(Math.min(rect.width / contentWidth, rect.height / contentHeight, 1));
+    const zoom = clamp(Math.min((rect.width - 16) / contentWidth, (rect.height - 16) / contentHeight, maxFitZoom));
     setView({ zoom, x: (rect.width - contentWidth * zoom) / 2, y: (rect.height - contentHeight * zoom) / 2 });
-  }, [contentWidth, contentHeight]);
+  }, [contentWidth, contentHeight, maxFitZoom]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!autoFit || !el) return undefined;
+    const ro = new ResizeObserver(() => {
+      if (!touched.current && el.clientWidth > 0 && el.clientHeight > 0) fit();
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+    };
+  }, [autoFit, fit]);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      touched.current = true;
       const rect = el.getBoundingClientRect();
       if (e.ctrlKey || e.metaKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
         zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)), e.clientX - rect.left, e.clientY - rect.top);
@@ -81,6 +99,7 @@ export function PanZoom({
     else if (e.key === 'ArrowUp') setView((v) => ({ ...v, y: v.y + step }));
     else if (e.key === 'ArrowDown') setView((v) => ({ ...v, y: v.y - step }));
     else return;
+    touched.current = true;
     e.preventDefault();
   };
 
@@ -92,6 +111,7 @@ export function PanZoom({
       onKeyDown={onKeyDown}
       onPointerDown={(e) => {
         if (e.button !== 0 || (e.target as HTMLElement).closest('[data-no-pan]')) return;
+        touched.current = true;
         drag.current = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y };
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         setPanning(true);
@@ -122,7 +142,15 @@ export function PanZoom({
         </button>
         <IconButton icon={Plus} label="Zoom in (+)" size="sm" onClick={() => zoomAt(1.2)} disabled={view.zoom >= MAX_ZOOM} />
         <span className="mx-0.5 h-4 w-px bg-line" />
-        <IconButton icon={Maximize} label="Fit to screen" size="sm" onClick={fit} />
+        <IconButton
+          icon={Maximize}
+          label="Fit to screen"
+          size="sm"
+          onClick={() => {
+            touched.current = false;
+            fit();
+          }}
+        />
         {onResetLayout ? <IconButton icon={LayoutGrid} label={resetLayoutLabel} size="sm" onClick={onResetLayout} /> : null}
       </div>
     </div>
