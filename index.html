@@ -6,12 +6,7 @@
     <title>Agent HQ</title>
     <meta name="description" content="Plan, delegate and supervise AI engineering agents." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <script>
-      try {
-        var s = JSON.parse(localStorage.getItem('agent-hq.state') || '{}');
-        document.documentElement.setAttribute('data-theme', (s.state && s.state.themeMode) || 'dark');
-      } catch (e) {}
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

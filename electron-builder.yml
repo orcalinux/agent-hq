@@ -1,0 +1,47 @@
+appId: io.github.orcalinux.agenthq
+productName: Agent HQ
+copyright: Agent HQ contributors
+artifactName: Agent-HQ-${version}-${os}-${arch}.${ext}
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - dist-electron/**
+  - "!dist-electron/**/*.map"
+  # The UI libraries are already bundled into dist/ by Vite.
+  - "!node_modules/{react,react-dom,scheduler,zustand,lucide-react,clsx,tailwind-merge}/**"
+  - package.json
+asar: true
+protocols:
+  - name: Agent HQ
+    schemes: [agenthq]
+publish:
+  provider: github
+  owner: orcalinux
+  repo: agent-hq
+  releaseType: release
+linux:
+  target: [AppImage, deb]
+  category: Development
+  icon: build/icons
+  synopsis: A local command center for teams of AI coding agents
+  maintainer: orcalinux <orcalinux@users.noreply.github.com>
+  syncDesktopName: true
+  desktop:
+    entry:
+      Keywords: ai;agents;llm;orchestrator;coding;
+mac:
+  target: [dmg, zip]
+  category: public.app-category.developer-tools
+  icon: build/icon-mac.png
+dmg:
+  title: Agent HQ ${version}
+win:
+  target: [nsis]
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: Agent HQ

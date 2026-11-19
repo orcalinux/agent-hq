@@ -6,3 +6,5 @@ playwright-report
 .env.*
 *.log
 .DS_Store
+dist-electron
+release
