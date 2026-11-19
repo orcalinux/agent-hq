@@ -82,7 +82,7 @@ test('desktop app starts its own server, loads the UI and talks to the shell', a
 
     await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows()[0];
-      win.setSize(1300, 820);
+      win.setSize(1200, 760);
       win.emit('resize');
     });
     await page.waitForTimeout(700);
@@ -92,7 +92,7 @@ test('desktop app starts its own server, loads the UI and talks to the shell', a
   }
 
   const state = JSON.parse(fs.readFileSync(path.join(dirs.userData, 'window-state.json'), 'utf8'));
-  expect(state).toMatchObject({ width: 1300, height: 820, maximized: false });
+  expect(state).toMatchObject({ width: 1200, height: 760, maximized: false });
 });
 
 test('a second launch reuses the same origin and remembers the window size', async () => {
@@ -100,7 +100,7 @@ test('a second launch reuses the same origin and remembers the window size', asy
   try {
     expect(page.url()).toMatch(/^http:\/\/127\.0\.0\.1:4782\d\/$/);
     const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize());
-    expect(size).toEqual([1300, 820]);
+    expect(size).toEqual([1200, 760]);
   } finally {
     await app.close();
   }

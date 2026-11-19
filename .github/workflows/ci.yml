@@ -21,8 +21,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run build:electron
+      - name: Download the Electron binary
+        run: node node_modules/electron/install.js
       - name: Desktop app tests
-        run: xvfb-run --auto-servernum npx playwright test -c playwright.desktop.config.ts
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" npx playwright test -c playwright.desktop.config.ts
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
