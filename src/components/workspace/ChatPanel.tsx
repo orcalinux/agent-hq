@@ -8,6 +8,7 @@ import { stripThinking } from '@/engine/orchestratorParsing';
 import type { ManagerChatMessage, OrchestratorMode, OrchestratorPlan, TeamStrategy } from '@/types';
 import { Badge, Button, EmptyState, IconButton, Input, ProgressBar, Select, Tabs } from '@/components/ui/primitives';
 import { ModelSelect, fmtTokens, modelLabel } from '@/components/ui/helpers';
+import { ApprovalModeSelect } from '@/components/shell/ApprovalMode';
 import { Markdown } from './Markdown';
 
 const MODES: Array<{ id: OrchestratorMode; label: string; hint: string }> = [
@@ -274,6 +275,12 @@ export function ChatPanel() {
             <option value="adaptive">Sovereign designs the team for this project</option>
             <option value="fixed">Only use my existing agents</option>
           </Select>
+        </div>
+      ) : null}
+      {mode !== 'ask' ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-1.5">
+          <span className="text-[11.5px] text-fg-subtle">Approval</span>
+          <ApprovalModeSelect className="h-6 flex-1" />
         </div>
       ) : null}
       {live && (liveRunning || live.status === 'paused' || live.status === 'failed' || live.status === 'cancelled') ? (

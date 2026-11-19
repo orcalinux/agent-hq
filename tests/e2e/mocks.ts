@@ -45,7 +45,7 @@ function sse(text: string): string {
 function taskReply(title: string): string {
   if (title === 'Update greeting') return "Done.\n```ts path=src/greeting.ts\nexport const greeting = 'Hello, user';\n```";
   if (title === 'Add subtract helper') return 'Done.\n```ts path=src/math.ts\nexport const add = (a: number, b: number) => a + b;\nexport const subtract = (a: number, b: number) => a - b;\n```';
-  return 'Both changes are small and covered by the files above.';
+  return 'Both changes are small.\n```md path=docs/CHANGES.md\n# Changes\n\n- Greeting\n- Subtract\n```';
 }
 
 /** Stands in for the model provider: connections list one connected model and /api/chat answers from a script. */

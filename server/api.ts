@@ -12,7 +12,7 @@ import {
   StoredConnection,
   updateConfig,
 } from './config';
-import { ALLOWED_COMMANDS, isLoopbackRequest, parseAllowedCommand } from './security';
+import { ALLOWED_COMMANDS, isLoopbackRequest, parseAllowedCommand, resolveInside } from './security';
 import {
   chat,
   ChatMessage,
@@ -26,7 +26,7 @@ import {
   providerDescriptor,
   verifyConnection,
 } from './providers';
-import { gitStatus, readFile, scanTree, writeFile } from './workspace';
+import { deleteFile, gitStatus, readFile, scanTree, writeFile } from './workspace';
 
 const MAX_BODY = 8 * 1024 * 1024;
 
@@ -411,8 +411,15 @@ const routes: Record<string, Handler> = {
 
   'GET /api/workspace/file': async (_req, res, url) => {
     const rel = url.searchParams.get('path') || '';
+    if (url.searchParams.get('optional') === '1') {
+      const full = resolveInside(getWorkspaceRoot(), rel);
+      if (full && !fs.existsSync(full)) {
+        send(res, 200, { ok: true, path: rel, exists: false, content: '', size: 0, binary: false });
+        return;
+      }
+    }
     try {
-      send(res, 200, { ok: true, path: rel, ...readFile(getWorkspaceRoot(), rel) });
+      send(res, 200, { ok: true, path: rel, exists: true, ...readFile(getWorkspaceRoot(), rel) });
     } catch (err) {
       throw new HttpError(404, (err as Error).message);
     }
@@ -424,6 +431,17 @@ const routes: Record<string, Handler> = {
     try {
       const out = writeFile(getWorkspaceRoot(), body.path, body.content, { overwrite: body.overwrite !== false });
       send(res, 200, { ok: true, path: body.path, ...out });
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
+    }
+  },
+
+  'DELETE /api/workspace/file': async (req, res) => {
+    const body = await readJson(req);
+    if (typeof body.path !== 'string') throw new HttpError(400, 'path is required.');
+    try {
+      deleteFile(getWorkspaceRoot(), body.path);
+      send(res, 200, { ok: true, path: body.path });
     } catch (err) {
       throw new HttpError(400, (err as Error).message);
     }

@@ -5,6 +5,7 @@ import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { Kbd, StatusDot } from '@/components/ui/primitives';
 import { isBusy } from '@/components/ui/helpers';
+import { ApprovalModeBadge } from './ApprovalMode';
 
 export function StatusBar() {
   const workspaceName = useWorkspaceStore((s) => s.name);
@@ -32,6 +33,7 @@ export function StatusBar() {
         {connectedCount ? `${connectedCount} provider${connectedCount === 1 ? '' : 's'} · ${modelCount} model${modelCount === 1 ? '' : 's'}` : 'No AI provider connected'}
       </button>
       <div className="ml-auto flex items-center gap-3">
+        <ApprovalModeBadge className="py-0" />
         <button
           type="button"
           onClick={() => toggle('activityOpen')}

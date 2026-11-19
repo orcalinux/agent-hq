@@ -5,6 +5,7 @@ import { useLayoutStore } from '@/store/useLayoutStore';
 import { Badge, Button, Field, Input, Section, Select } from '@/components/ui/primitives';
 import { fmtDateTime } from '@/components/ui/helpers';
 import { SHORTCUTS } from '@/components/shell/useShortcuts';
+import { ApprovalModeCards } from '@/components/shell/ApprovalMode';
 
 export default function SettingsView() {
   const theme = useAgentStore((s) => s.themeMode);
@@ -65,6 +66,11 @@ export default function SettingsView() {
               </>
             )}
             <p className="text-[11.5px] text-fg-subtle">Agents and the editor can only read and write inside this folder.</p>
+          </Section>
+
+          <Section title="Agent permissions">
+            <p className="text-[12.5px] text-fg-muted">Choose how much the agents may do without asking. Changes are always reviewed by QA first, stay inside the project folder, and can be undone from the Changes panel.</p>
+            <ApprovalModeCards />
           </Section>
 
           <Section title="Appearance">

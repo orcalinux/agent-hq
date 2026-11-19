@@ -88,8 +88,12 @@ export const api = {
   files: () => call<{ root: string; files: WorkspaceTreeEntry[]; truncated: boolean }>('GET', '/api/workspace/files'),
   readFile: (path: string) =>
     call<{ path: string; content: string; size: number; binary: boolean }>('GET', `/api/workspace/file?path=${encodeURIComponent(path)}`),
+  /** Like readFile, but a missing file is answered with `exists: false` instead of an error. */
+  readFileIfExists: (path: string) =>
+    call<{ path: string; exists: boolean; content: string; size: number; binary: boolean }>('GET', `/api/workspace/file?path=${encodeURIComponent(path)}&optional=1`),
   writeFile: (path: string, content: string, overwrite = true) =>
     call<{ path: string; size: number; created: boolean }>('PUT', '/api/workspace/file', { path, content, overwrite }),
+  deleteFile: (path: string) => call<{ path: string }>('DELETE', '/api/workspace/file', { path }),
   upload: (files: Array<{ path: string; content: string }>, overwrite = false) =>
     call<{ ok: boolean; saved: string[]; errors: string[] }>('POST', '/api/workspace/upload', { files, overwrite }),
   git: () =>

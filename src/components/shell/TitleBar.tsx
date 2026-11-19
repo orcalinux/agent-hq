@@ -6,6 +6,7 @@ import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { StatusDot } from '@/components/ui/primitives';
 import { cn } from '@/utils/cn';
+import { ApprovalModeBadge } from './ApprovalMode';
 
 interface Insets {
   left: number;
@@ -88,6 +89,9 @@ export function TitleBar() {
           <StatusDot tone={running ? 'success' : 'neutral'} />
           {status}
         </span>
+      </div>
+      <div className="ml-auto flex items-center" style={noDrag}>
+        <ApprovalModeBadge />
       </div>
     </header>
   );

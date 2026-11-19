@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
+  ApprovalMode,
   ActiveBeamEvent,
   ActivityEvent,
   AgentProfile,
@@ -73,6 +74,7 @@ export interface AgentStoreState {
 
   orchestratorMode: OrchestratorMode;
   teamStrategy: TeamStrategy;
+  approvalMode: ApprovalMode;
   managerChatMessages: ManagerChatMessage[];
   emailConfig: EmailNotificationConfig;
   sentEmails: SentEmailRecord[];
@@ -106,6 +108,7 @@ export interface AgentStoreState {
   setCommandPaletteOpen: (open: boolean) => void;
   setOrchestratorMode: (mode: OrchestratorMode) => void;
   setTeamStrategy: (strategy: TeamStrategy) => void;
+  setApprovalMode: (mode: ApprovalMode) => void;
 
   // Agents & models
   setRoleDefault: (role: AgentRole, model: AIModelId) => void;
@@ -139,6 +142,7 @@ export interface AgentStoreState {
   recordAgentTask: (agentId: string, record: AgentProfile['taskHistory'][number]) => void;
   logActivity: (event: Omit<ActivityEvent, 'id' | 'timestamp'>) => void;
   setProposedChangeStatus: (changeId: string, status: ProposedFileChange['status']) => void;
+  updateProposedChange: (changeId: string, patch: Partial<ProposedFileChange>) => void;
   finalizeRun: (record: RunRecord) => void;
   setLiveRunning: (running: boolean) => void;
   clearRunHistory: () => void;
@@ -182,6 +186,7 @@ export const useAgentStore = create<AgentStoreState>()(
 
         orchestratorMode: 'ask',
         teamStrategy: 'adaptive',
+        approvalMode: 'ask',
         managerChatMessages: DEFAULT_MANAGER_CHAT_MESSAGES,
         emailConfig: DEFAULT_EMAIL_CONFIG,
         sentEmails: [],
@@ -218,6 +223,7 @@ export const useAgentStore = create<AgentStoreState>()(
         setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
         setOrchestratorMode: (mode) => set({ orchestratorMode: mode }),
         setTeamStrategy: (strategy) => set({ teamStrategy: strategy }),
+        setApprovalMode: (mode) => set({ approvalMode: mode }),
 
         // ---------------------------------------------------------- Agents & models
         setRoleDefault: (role, model) => set((s) => ({ roleDefaults: { ...s.roleDefaults, [role]: model } })),
@@ -495,6 +501,17 @@ export const useAgentStore = create<AgentStoreState>()(
                     proposedChanges: (s.activeMission.proposedChanges ?? []).map((c) =>
                       c.id === changeId ? { ...c, status, appliedAt: status === 'applied' ? Date.now() : c.appliedAt } : c
                     ),
+                  },
+                }
+              : s
+          ),
+        updateProposedChange: (changeId, patch) =>
+          set((s) =>
+            s.activeMission
+              ? {
+                  activeMission: {
+                    ...s.activeMission,
+                    proposedChanges: (s.activeMission.proposedChanges ?? []).map((c) => (c.id === changeId ? { ...c, ...patch } : c)),
                   },
                 }
               : s
@@ -791,6 +808,7 @@ export const useAgentStore = create<AgentStoreState>()(
         activeView: s.activeView,
         orchestratorMode: s.orchestratorMode,
         teamStrategy: s.teamStrategy,
+        approvalMode: s.approvalMode,
         managerChatMessages: s.managerChatMessages.slice(-100).map((m) => (m.streaming ? { ...m, streaming: false, error: m.error ?? 'Interrupted' } : m)),
         emailConfig: s.emailConfig,
         sentEmails: s.sentEmails,

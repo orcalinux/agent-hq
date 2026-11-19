@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { expect, test } from '@playwright/test';
-import { E2E_WORKSPACE, resetFixtureWorkspace } from './fixture';
+import { E2E_WORKSPACE, FIXTURE_FILES, resetFixtureWorkspace } from './fixture';
 import { mockProvider, pick, trapErrors } from './mocks';
 
 test.beforeEach(() => resetFixtureWorkspace());
@@ -58,7 +58,7 @@ test('plan, approve and run: parallel waves, file context, QA and applying a cha
 
   await expect(page.getByText('Proposed plan · 3 tasks')).toBeVisible();
   await page.getByRole('button', { name: 'Approve & run' }).click();
-  await expect(page.getByText(/Run completed and approved by QA\. 2 proposed file change/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Run completed and approved by QA\. 3 proposed file change/)).toBeVisible({ timeout: 30_000 });
 
   const task = (title: string) => calls.find((c) => c.kind === 'task' && c.task === title)!;
   const [t1, t2, t3] = [task('Update greeting'), task('Add subtract helper'), task('Document the changes')];
@@ -77,6 +77,46 @@ test('plan, approve and run: parallel waves, file context, QA and applying a cha
   await expect(row.getByText('applied')).toBeVisible();
   await expect.poll(() => fs.readFileSync(path.join(E2E_WORKSPACE, 'src/greeting.ts'), 'utf8')).toContain('Hello, user');
   expect(fs.readFileSync(path.join(E2E_WORKSPACE, 'src/math.ts'), 'utf8'), 'unapplied changes are not written').not.toContain('subtract');
+
+  expect(errors).toEqual([]);
+});
+
+test('full access: runs without plan approval, auto-applies QA-approved changes, and undo restores files', async ({ page }) => {
+  const errors = trapErrors(page);
+  await mockProvider(page, 200);
+  await page.goto('/');
+
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Connections', exact: true }).click();
+  await page.getByRole('tab', { name: 'Role defaults' }).click();
+  await page.getByRole('button', { name: 'Fill empty roles' }).click();
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Workspace', exact: true }).click();
+
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await pick(page, 'Team strategy', 'Only use my existing agents');
+  await pick(page, 'Approval mode', 'Full access');
+  const confirm = page.getByRole('dialog', { name: /Turn on full access/ });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Allow full access' }).click();
+  await expect(page.getByTestId('approval-mode-badge')).toHaveText('Full access');
+
+  await page.getByRole('textbox', { name: 'Message Sovereign' }).fill('Greet the user and add subtraction.');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByText('Full access is on: running the plan without waiting for approval.')).toBeVisible();
+  await expect(page.getByText(/Auto mode wrote 3 file\(s\) to the project\./)).toBeVisible({ timeout: 30_000 });
+
+  const read = (rel: string) => fs.readFileSync(path.join(E2E_WORKSPACE, rel), 'utf8');
+  expect(read('src/greeting.ts')).toContain('Hello, user');
+  expect(read('src/math.ts')).toContain('subtract');
+  expect(read('docs/CHANGES.md')).toContain('# Changes');
+
+  await page.getByRole('tab', { name: /Changes/ }).click();
+  const row = (file: string) => page.locator('div', { has: page.getByText(file, { exact: true }) }).filter({ has: page.getByRole('button', { name: 'Undo' }) }).last();
+  await row('src/math.ts').getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(() => read('src/math.ts')).toBe(FIXTURE_FILES['src/math.ts']);
+  await row('docs/CHANGES.md').getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(() => fs.existsSync(path.join(E2E_WORKSPACE, 'docs/CHANGES.md'))).toBe(false);
+  expect(read('src/greeting.ts'), 'other changes stay applied').toContain('Hello, user');
+  await expect(page.getByText('reverted', { exact: true })).toHaveCount(2);
 
   expect(errors).toEqual([]);
 });

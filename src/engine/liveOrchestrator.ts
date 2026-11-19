@@ -27,6 +27,7 @@ import {
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
 import { planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
+import { autoAppliesChanges, autoStartsRuns, selectAutoApply } from './approval';
 import { providerOfRef } from '@/types';
 
 const MAX_QA_LOOPS = 1;
@@ -289,6 +290,12 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
       }
     }
     agentsState().updateChatMessage(replyId, patch);
+    const now = agentsState();
+    if (patch.plan && autoStartsRuns(now.approvalMode, mode) && !now.isLiveRunning && !now.isSimulating) {
+      now.appendChatMessage({ sender: 'system', text: 'Full access is on: running the plan without waiting for approval.' });
+      now.logActivity({ kind: 'info', level: 'warn', text: 'Full access: plan started without approval' });
+      void approveAndRun(replyId).catch((err) => agentsState().appendChatMessage({ sender: 'system', text: `Could not start the run: ${(err as Error).message}` }));
+    }
   } catch (err) {
     update.flush();
     agentsState().updateChatMessage(replyId, (m) => ({
@@ -453,7 +460,7 @@ When you create or change files, output each file in full inside a fenced block 
 \`\`\`ts path=src/example.ts
 // full file content
 \`\`\`
-Files are NOT written automatically: the user reviews and applies them. Keep explanations short.
+Files are only written to the project after QA approves the run. Keep explanations short.
 When you change an existing file, start from its current contents (provided below when available) and preserve unrelated code.`;
 
   const fileContext = await taskFileContext(task, mission);
@@ -677,7 +684,7 @@ async function sha256(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function finalize(status: MissionState['status'], error?: string) {
+function finalize(status: MissionState['status'], error?: string, autoApplied?: { applied: number; failed: number }) {
   const store = agentsState();
   const mission = currentMission();
   if (!mission) return;
@@ -719,9 +726,11 @@ function finalize(status: MissionState['status'], error?: string) {
   store.appendChatMessage({
     sender: 'system',
     text:
-      status === 'completed'
-        ? `Run completed and approved by QA. ${m.proposedChanges?.length ?? 0} proposed file change(s) are ready to review in the Changes panel.`
-        : `Run ${status}${error ? `: ${error}` : '.'}`,
+      status !== 'completed'
+        ? `Run ${status}${error ? `: ${error}` : '.'}`
+        : autoApplied
+          ? `Run completed and approved by QA. Auto mode wrote ${autoApplied.applied} file(s) to the project${autoApplied.failed ? `; ${autoApplied.failed} could not be written` : ''}. Undo any of them in the Changes panel.`
+          : `Run completed and approved by QA. ${m.proposedChanges?.length ?? 0} proposed file change(s) are ready to review in the Changes panel.`,
   });
 }
 
@@ -783,7 +792,8 @@ export async function executeRun() {
         summaryNotes: m.qaNotes ?? '',
       },
     });
-    finalize('completed');
+    const autoApplied = autoAppliesChanges(agentsState().approvalMode) ? await autoApplyChanges() : undefined;
+    finalize('completed', undefined, autoApplied);
   } catch (err) {
     if (isAbort(err)) finalize('cancelled', 'Stopped by user.');
     else finalize('failed', (err as Error).message);
@@ -847,11 +857,60 @@ export async function retryTask(taskId: string) {
   await resumeRun();
 }
 
-export async function applyProposedChange(changeId: string) {
+async function currentContent(path: string): Promise<string | null> {
+  const file = await api.readFileIfExists(path);
+  if (!file.exists) return null;
+  if (file.binary) throw new Error(`${path} is a binary file; it is not overwritten.`);
+  return file.content;
+}
+
+export async function applyProposedChange(changeId: string, opts: { auto?: boolean } = {}) {
   const m = currentMission();
   const change = m?.proposedChanges?.find((c) => c.id === changeId);
-  if (!change) return;
+  if (!change || change.status === 'applied') return;
+  const previousContent = await currentContent(change.path);
   await useWorkspaceStore.getState().writeAndReload(change.path, change.content);
-  agentsState().setProposedChangeStatus(changeId, 'applied');
-  agentsState().logActivity({ kind: 'info', level: 'success', runId: m!.id, text: `Applied ${change.path}` });
+  agentsState().updateProposedChange(changeId, { status: 'applied', appliedAt: Date.now(), previousContent, autoApplied: opts.auto || undefined });
+  agentsState().logActivity({
+    kind: 'info',
+    level: 'success',
+    runId: m!.id,
+    agentId: change.agentId,
+    text: `${opts.auto ? 'Auto-applied' : 'Applied'} ${change.path}${previousContent === null ? ' (new file)' : ''}`,
+  });
+}
+
+/** Puts a file back the way it was before the change was applied; deletes it if the change created it. */
+export async function revertProposedChange(changeId: string) {
+  const m = currentMission();
+  const change = m?.proposedChanges?.find((c) => c.id === changeId);
+  if (!change || change.status !== 'applied' || change.previousContent === undefined) return;
+  const workspace = useWorkspaceStore.getState();
+  if (change.previousContent === null) {
+    await api.deleteFile(change.path);
+    await workspace.refreshTree();
+    void workspace.loadGit();
+  } else {
+    await workspace.writeAndReload(change.path, change.previousContent);
+  }
+  agentsState().updateProposedChange(changeId, { status: 'reverted' });
+  agentsState().logActivity({ kind: 'info', level: 'warn', runId: m!.id, text: `Undid ${change.path}${change.previousContent === null ? ' (deleted the new file)' : ''}` });
+}
+
+/** Auto mode: writes QA-approved changes, one per path, and keeps what each file held before so it can be undone. */
+export async function autoApplyChanges(): Promise<{ applied: number; failed: number }> {
+  const { apply, superseded } = selectAutoApply(currentMission()?.proposedChanges ?? []);
+  for (const change of superseded) agentsState().setProposedChangeStatus(change.id, 'discarded');
+  let applied = 0;
+  let failed = 0;
+  for (const change of apply) {
+    try {
+      await applyProposedChange(change.id, { auto: true });
+      applied++;
+    } catch (err) {
+      failed++;
+      agentsState().logActivity({ kind: 'info', level: 'error', runId: currentMission()?.id, text: `Could not auto-apply ${change.path}: ${(err as Error).message}` });
+    }
+  }
+  return { applied, failed };
 }

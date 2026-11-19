@@ -74,6 +74,14 @@ export function writeFile(root: string, rel: string, content: string, opts: { ov
   return { size: Buffer.byteLength(content), created: !exists };
 }
 
+export function deleteFile(root: string, rel: string): void {
+  const full = resolveInside(root, rel);
+  if (!full) throw new Error('Path must be inside the workspace.');
+  if (!fs.existsSync(full)) return;
+  if (!fs.lstatSync(full).isFile()) throw new Error(`${rel} is not a file.`);
+  fs.unlinkSync(full);
+}
+
 export function gitStatus(root: string): Promise<{
   isRepo: boolean;
   branch?: string;

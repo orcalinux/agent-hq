@@ -3,7 +3,8 @@ import { Check, ChevronDown, ChevronRight, Play, Trash2, X } from 'lucide-react'
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useAgentStore, formatClock } from '@/store/useAgentStore';
 import { useLayoutStore, type BottomTab } from '@/store/useLayoutStore';
-import { applyProposedChange } from '@/engine/liveOrchestrator';
+import { applyProposedChange, revertProposedChange } from '@/engine/liveOrchestrator';
+import { canRevert } from '@/engine/approval';
 import { api } from '@/api/client';
 import { Badge, Button, EmptyState, IconButton, Spinner, Tabs } from '@/components/ui/primitives';
 import { fmtDuration } from '@/components/ui/helpers';
@@ -159,13 +160,22 @@ function ChangesTab() {
     }
   };
 
+  const undo = async (id: string) => {
+    setError(null);
+    try {
+      await revertProposedChange(id);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto">
       {error ? <p className="px-3 py-1 text-[12px] text-danger" role="alert">{error}</p> : null}
       <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">
         Proposed by agents {pending.length ? `(${pending.length} pending)` : ''}
       </div>
-      {proposals.length === 0 ? <p className="px-3 pb-2 text-[12px] text-fg-subtle">Agents propose file changes during a run. You review and apply them here; nothing is written automatically.</p> : null}
+      {proposals.length === 0 ? <p className="px-3 pb-2 text-[12px] text-fg-subtle">Agents propose file changes during a run. You review and apply them here, or turn on auto-apply in Settings to write QA-approved changes automatically.</p> : null}
       {proposals.map((p) => {
         const exists = tree.some((f) => f.path === p.path);
         return (
@@ -175,7 +185,9 @@ function ChangesTab() {
                 {open === p.id ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               </button>
               <span className="min-w-0 flex-1 truncate font-mono">{p.path}</span>
-              <Badge tone={p.status === 'applied' ? 'success' : p.status === 'discarded' ? 'neutral' : 'warning'}>{exists ? p.status : `new · ${p.status}`}</Badge>
+              {p.autoApplied && p.status === 'applied' ? <Badge tone="accent">auto</Badge> : null}
+              <Badge tone={p.status === 'applied' ? 'success' : p.status === 'discarded' || p.status === 'reverted' ? 'neutral' : 'warning'}>{exists || p.status !== 'pending' ? p.status : `new · ${p.status}`}</Badge>
+              {canRevert(p) ? <Button size="sm" variant="ghost" onClick={() => void undo(p.id)}>Undo</Button> : null}
               {p.status === 'pending' ? (
                 <>
                   {exists ? <Button size="sm" onClick={() => { showDiff({ path: p.path, content: p.content, label: 'agent proposal' }); void openFile(p.path); }}>Diff</Button> : null}

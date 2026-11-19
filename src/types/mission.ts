@@ -230,9 +230,21 @@ export interface ProposedFileChange {
   content: string;
   taskId: string;
   agentId: string;
-  status: 'pending' | 'applied' | 'discarded';
+  status: 'pending' | 'applied' | 'discarded' | 'reverted';
   appliedAt?: number;
+  /** File contents before the change was applied; `null` when the change created the file. Enables undo. */
+  previousContent?: string | null;
+  /** Written by auto mode rather than by the user clicking Apply. */
+  autoApplied?: boolean;
 }
+
+/**
+ * How much the agents may do without asking.
+ * - `ask`: plans need approval and every file change is applied by hand.
+ * - `auto`: plans need approval; file changes approved by QA are written automatically.
+ * - `full`: Build requests start running at once and QA-approved changes are written automatically.
+ */
+export type ApprovalMode = 'ask' | 'auto' | 'full';
 
 export interface VerificationResult {
   command: string;

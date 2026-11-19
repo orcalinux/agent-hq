@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { parseAllowedCommand, resolveInside } from '../../server/security';
+import { deleteFile } from '../../server/workspace';
 
 describe('terminal allowlist', () => {
   it('accepts allow-listed read-only commands', () => {
@@ -52,5 +53,16 @@ describe('resolveInside', () => {
     expect(resolveInside(root, '../x')).toBeNull();
     expect(resolveInside(root, 'link/secret.txt')).toBeNull();
     expect(resolveInside(root, 'link/new.txt')).toBeNull();
+  });
+
+  it('deleteFile removes files inside the root only', () => {
+    fs.writeFileSync(path.join(root, 'src/tmp.ts'), 'x');
+    deleteFile(root, 'src/tmp.ts');
+    expect(fs.existsSync(path.join(root, 'src/tmp.ts'))).toBe(false);
+    expect(() => deleteFile(root, 'src/missing.ts')).not.toThrow();
+    expect(() => deleteFile(root, 'link/secret.txt')).toThrow(/inside the workspace/);
+    expect(() => deleteFile(root, '../x')).toThrow(/inside the workspace/);
+    expect(() => deleteFile(root, 'src')).toThrow(/not a file/);
+    expect(fs.existsSync(path.join(outside, 'secret.txt'))).toBe(true);
   });
 });
