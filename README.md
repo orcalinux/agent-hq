@@ -128,7 +128,17 @@ Other scripts: `npm start` (build once and serve on `127.0.0.1:5173` without Vit
 
 ## Desktop app
 
-Download the installer for your system from [Releases](https://github.com/orcalinux/agent-hq/releases): `.AppImage` or `.deb` on Linux, `.exe` on Windows, `.dmg` on macOS. Or run it from source:
+Download the installer for your system from [Releases](https://github.com/orcalinux/agent-hq/releases), then:
+
+| System | File | Install |
+| --- | --- | --- |
+| Debian, Ubuntu, Mint, Pop!_OS | `.deb` | `sudo apt install ./Agent-HQ-*.deb` |
+| Fedora, RHEL, Rocky, Alma, openSUSE | `.rpm` | `sudo dnf install ./Agent-HQ-*.rpm` (`sudo zypper install` on openSUSE) |
+| Any Linux | `.AppImage` | `chmod +x Agent-HQ-*.AppImage` and run it |
+| Windows | `.exe` | Run the installer |
+| macOS | `.dmg` | Drag Agent HQ to Applications |
+
+The `.deb` and `.rpm` packages pull in their dependencies, add Agent HQ to the application menu and register `agenthq://` links. Or run it from source:
 
 ```bash
 npm run desktop        # build and open the desktop app
