@@ -45,14 +45,14 @@ export function Dialog({ open, onClose, title, description, children, footer, wi
   useRestoreFocus(open, ref);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-overlay p-4 pt-[10vh]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-overlay p-4 pt-[10vh] backdrop-blur-[2px]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={cn('w-full rounded-lg border border-line-strong bg-surface shadow-xl focus:outline-none', width)}
+        className={cn('ahq-pop w-full overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-pop focus:outline-none', width)}
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
           <div>

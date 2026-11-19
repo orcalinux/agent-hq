@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import type { AIProviderId } from '@/types';
-import { Button, Tabs } from '@/components/ui/primitives';
+import { Button, PageTitle, Tabs } from '@/components/ui/primitives';
 import { ConnectionWizard } from './ConnectionWizard';
 import { LocalTools, ProviderTable } from './ProviderTable';
 import { ModelsPanel, RoleDefaults } from './ModelsPanel';
@@ -18,11 +18,8 @@ export default function ConnectionsView() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-1.5">
-        <div>
-          <h1 className="text-[14px] font-semibold">Connections and models</h1>
-          <p className="text-[12px] text-fg-muted">{connected} of {providers.length} providers connected</p>
-        </div>
+      <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-surface/70 px-5 py-2 backdrop-blur">
+        <PageTitle group="Models" title="Connections" subtitle={`${connected} of ${providers.length} providers connected`} />
         <div className="flex items-center gap-2">
           <Tabs<TabId>
             label="Sections"

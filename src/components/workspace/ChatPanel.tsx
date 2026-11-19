@@ -56,7 +56,7 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
   };
 
   return (
-    <div className="mt-2 rounded-md border border-line bg-surface-2">
+    <div className="mt-2 overflow-hidden rounded-xl border border-line bg-surface-2 shadow-card">
       <div className="border-b border-line px-3 py-2">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[12px] font-semibold">Proposed plan · {plan.tasks.length} tasks</span>
@@ -69,7 +69,7 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
           <div className="mb-1.5 text-[12px] font-semibold">Sovereign wants to add {newAgents.length === 1 ? 'an agent' : `${newAgents.length} agents`} for this project</div>
           <ul className="space-y-1.5">
             {newAgents.map((n) => (
-              <li key={n.key} className="rounded-md border border-line bg-surface px-2 py-1.5">
+              <li key={n.key} className="rounded-lg border border-line bg-surface px-2 py-1.5">
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="text-[12.5px] font-medium">{n.name} <span className="font-normal text-fg-muted">· {n.title}</span> <Badge>{n.role}</Badge></div>
@@ -147,7 +147,7 @@ function Message({ message }: { message: ManagerChatMessage }) {
   if (message.sender === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[88%] rounded-lg bg-accent-soft px-3 py-2 text-[13px]">
+        <div className="max-w-[88%] rounded-2xl rounded-br-md border border-accent/20 bg-accent-soft px-3.5 py-2 text-[13px] shadow-card">
           <p className="whitespace-pre-wrap break-words">{message.text}</p>
           {message.attachedFiles?.length ? (
             <div className="mt-1 flex flex-wrap gap-1">
@@ -195,7 +195,7 @@ function AttachPicker({ onPick }: { onPick: (path: string) => void }) {
     <div className="relative">
       <IconButton icon={Paperclip} label="Attach a project file" active={open} onClick={() => setOpen((o) => !o)} />
       {open ? (
-        <div className="absolute bottom-9 left-0 z-20 w-72 rounded-md border border-line-strong bg-surface p-1.5 shadow-lg">
+        <div className="absolute bottom-9 left-0 z-20 w-72 rounded-xl border border-line-strong bg-surface p-1.5 shadow-pop">
           {activePath ? (
             <button type="button" className="mb-1 w-full rounded px-2 py-1 text-left text-[12px] text-accent hover:bg-surface-2" onClick={() => { onPick(activePath); setOpen(false); }}>
               Attach open file: {activePath.split('/').pop()}
@@ -331,7 +331,7 @@ export function ChatPanel() {
             ))}
           </div>
         ) : null}
-        <div className="rounded-md border border-line bg-canvas focus-within:border-accent">
+        <div className="rounded-xl border border-line bg-surface-2 shadow-card transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft">
           <textarea
             id="orchestrator-input"
             value={draft}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
-import { Badge, Button, Field, Input, Section, Select } from '@/components/ui/primitives';
+import { Badge, Button, Field, Input, PageTitle, Section, Select } from '@/components/ui/primitives';
 import { fmtDateTime } from '@/components/ui/helpers';
 import { SHORTCUTS } from '@/components/shell/useShortcuts';
 import { ApprovalModeCards } from '@/components/shell/ApprovalMode';
@@ -41,8 +41,8 @@ export default function SettingsView() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center border-b border-line bg-surface px-4">
-        <h1 className="text-[14px] font-semibold">Settings</h1>
+      <header className="flex min-h-14 shrink-0 items-center border-b border-line bg-surface/70 px-5 py-2 backdrop-blur">
+        <PageTitle group="App" title="Settings" subtitle="Project folder, agent permissions, appearance and QA." />
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <div className="max-w-2xl space-y-8">
@@ -102,7 +102,7 @@ export default function SettingsView() {
               <Button onClick={() => void sendEmail()} disabled={!emailConfig.email}>Add test message</Button>
             </div>
             {sentEmails.length ? (
-              <ul className="divide-y divide-line rounded-md border border-line text-[12px]">
+              <ul className="divide-y divide-line rounded-xl border border-line bg-surface shadow-card text-[12px]">
                 {sentEmails.slice(0, 5).map((m) => <li key={m.id} className="px-3 py-1.5"><div className="font-medium">{m.subject}</div><div className="text-fg-subtle">{m.to} · {fmtDateTime(m.sentAt)} · logged locally</div></li>)}
               </ul>
             ) : null}

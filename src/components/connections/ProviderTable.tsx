@@ -68,7 +68,7 @@ export function ProviderTable({ onConnect }: { onConnect: (id: AIProviderId) => 
   const providers = useConnectionsStore((s) => s.providers);
   const loading = useConnectionsStore((s) => s.loading);
   return (
-    <div className="overflow-x-auto rounded-md border border-line">
+    <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
       <table className="w-full text-left text-[12.5px]">
         <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
           <tr>
@@ -101,7 +101,7 @@ export function LocalTools() {
         </div>
         <Button size="sm" icon={RefreshCw} loading={detecting} onClick={() => void detect()}>Re-detect</Button>
       </div>
-      <div className="overflow-x-auto rounded-md border border-line">
+      <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
         <table className="w-full text-left text-[12.5px]">
           <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
             <tr>

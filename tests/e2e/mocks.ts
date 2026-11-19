@@ -16,6 +16,26 @@ const PROVIDERS = [
   },
 ];
 
+const MAGPIE_MODELS = [
+  { id: 'daily-coding', name: 'daily-coding (routing group)' },
+  { id: 'claude/claude-sonnet-4-5', name: 'Claude Sonnet 4.5' },
+  { id: 'claude/claude-haiku-4-5', name: 'Claude Haiku 4.5' },
+  { id: 'codex/gpt-5.1-codex', name: 'GPT-5.1 Codex' },
+];
+
+/** Magpie's local gateway as a connected provider, for screenshots of the integration. */
+const MAGPIE_PROVIDER = {
+  id: 'magpie',
+  name: 'Magpie gateway',
+  methods: ['local_endpoint'],
+  envVars: ['MAGPIE_GATEWAY'],
+  envKeyPresent: false,
+  docsUrl: 'https://usemagpie.ai',
+  notes: 'Uses the models, routing groups, subscriptions and failover you set up in Magpie, through its local gateway.',
+  connection: { method: 'local_endpoint', connectedAt: new Date().toISOString(), endpointUrl: 'http://127.0.0.1:3425' },
+  models: MAGPIE_MODELS.map((m) => ({ ref: `magpie:${m.id}`, providerId: 'magpie', id: m.id, name: m.name, via: 'local_endpoint', capabilities: ['chat', 'tools'] })),
+};
+
 export const PLAN = {
   summary: 'Update the greeting and add a subtract helper.',
   tasks: [
@@ -49,11 +69,19 @@ function taskReply(title: string): string {
 }
 
 /** Stands in for the model provider: connections list one connected model and /api/chat answers from a script. */
-export async function mockProvider(page: Page, delayMs = 700): Promise<ChatCall[]> {
+export async function mockProvider(page: Page, delayMs = 700, opts: { magpie?: boolean } = {}): Promise<ChatCall[]> {
   const calls: ChatCall[] = [];
-  await page.route('**/api/connections', (route) => route.fulfill({ json: { ok: true, providers: PROVIDERS } }));
+  const providers = opts.magpie ? [MAGPIE_PROVIDER, ...PROVIDERS] : PROVIDERS;
+  await page.route('**/api/connections', (route) => route.fulfill({ json: { ok: true, providers } }));
   await page.route('**/api/connections/detect', (route) =>
-    route.fulfill({ json: { ok: true, clis: [], ollama: { reachable: false, endpoint: 'http://127.0.0.1:11434' } } })
+    route.fulfill({
+      json: {
+        ok: true,
+        clis: [],
+        ollama: { reachable: false, endpoint: 'http://127.0.0.1:11434' },
+        ...(opts.magpie ? { magpie: { reachable: true, endpoint: 'http://127.0.0.1:3425', models: MAGPIE_MODELS.length } } : {}),
+      },
+    })
   );
   await page.route('**/api/chat', async (route: Route) => {
     const body = route.request().postDataJSON() as { system: string; messages: Array<{ content: string }> };

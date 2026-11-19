@@ -110,7 +110,7 @@ export function ModelsPanel() {
   return (
     <div className="space-y-2">
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter models" aria-label="Filter models" className="max-w-xs" />
-      <div className="overflow-x-auto rounded-md border border-line">
+      <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
         <table className="w-full text-left text-[12.5px]">
           <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
             <tr>

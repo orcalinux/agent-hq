@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
-import { Badge, EmptyState, Section } from '@/components/ui/primitives';
+import { Badge, EmptyState, PageTitle, Section } from '@/components/ui/primitives';
 import { fmtCost, fmtDateTime, fmtDuration, fmtTokens, modelLabel, usageCostLabel } from '@/components/ui/helpers';
 
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-line">
+    <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
       <table className="w-full text-left text-[12.5px]">
         <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
           <tr>{headers.map((h) => <th key={h} className="px-3 py-1.5 font-medium">{h}</th>)}</tr>
@@ -55,11 +55,8 @@ export default function ReportsView() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex min-h-12 shrink-0 items-center justify-between border-b border-line bg-surface px-4 py-1.5">
-        <div>
-          <h1 className="text-[14px] font-semibold">Reports</h1>
-          <p className="text-[12px] text-fg-muted">Measured from real runs. Values with no data source show a dash.</p>
-        </div>
+      <header className="flex min-h-14 shrink-0 items-center justify-between border-b border-line bg-surface/70 px-5 py-2 backdrop-blur">
+        <PageTitle group="Insights" title="Reports" subtitle="Measured from real runs. Values with no data source show a dash." />
       </header>
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
         <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-[12.5px] sm:grid-cols-3 lg:grid-cols-6">

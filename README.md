@@ -49,14 +49,25 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
 - **Plan first, then build.** Sovereign proposes tasks, agents and models; you edit and approve before anything runs.
 - **Parallel by design.** Independent tasks run in waves, up to 3 at once and never two at once for the same agent.
 - **Reviewed work.** Juniors get an N+1 senior review, and Sentinel QA can send work back once for rework.
-- **You stay in control.** Agent edits arrive as diffs in the **Changes** tab and are only written when you apply them.
+- **You choose how much to trust the agents.** By default edits arrive as diffs in the **Changes** tab and are only written when you apply them. **Auto-apply** writes QA-approved changes for you, and **Full access** also skips plan approval. Every auto-applied file can be undone.
 - **Local and bring-your-own-model.** Claude Code, Codex, Gemini, Ollama and the Magpie gateway, with automatic failover when a provider runs out of credit.
-- **A real desktop app.** Installers for Linux, Windows and macOS, with a tray icon that shows the run, notifications, `agenthq://` links and auto-update.
+- **A real desktop app.** `.deb`, `.rpm`, AppImage, Windows and macOS installers, with a tray icon that shows the run, notifications, `agenthq://` links and auto-update.
 
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/agents.png" alt="Agent graph with two agents coding" /><br /><sub><b>Agents</b>: live graph of the team mid-run</sub></td>
     <td width="50%"><img src="docs/screenshots/tasks.png" alt="Task board mid-run" /><br /><sub><b>Tasks</b>: board from briefing to shipped</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/office.png" alt="Agent office floor plan with agents at their desks" /><br /><sub><b>Office</b>: the team at work, monitors light up while an agent codes</sub></td>
+    <td width="50%"><img src="docs/screenshots/reports.png" alt="Reports with usage, cost and run history" /><br /><sub><b>Reports</b>: usage, cost and run history from real runs</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/connections.png" alt="Connections with the Magpie gateway connected" /><br /><sub><b>Connections</b>: Magpie gateway and other providers</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings.png" alt="Settings with the agent permission modes" /><br /><sub><b>Settings</b>: Ask, Auto-apply or Full access</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/workspace-light.png" alt="Workspace in the light theme" /><br /><sub><b>Light theme</b></sub></td>
   </tr>
 </table>
 
@@ -73,8 +84,22 @@ flowchart LR
   G --> H{Sentinel QA}
   H -- rejected --> I[One rework] --> H
   H -- approved --> J[Optional verification command]
-  J --> K[Changes tab: you apply]
+  J --> K{Approval mode}
+  K -- Ask --> L[Changes tab: you apply]
+  K -- Auto / Full access --> M[Written automatically, undo per file]
 ```
+
+## Agent permissions (auto mode)
+
+Like the permission modes in Claude Code and Codex, you decide how much the agents may do without asking. Pick a mode in **Settings → Agent permissions** or in the chat panel; the title bar and status bar show it while it is on.
+
+| Mode | Plans | File changes |
+| --- | --- | --- |
+| **Ask every time** (default) | You approve each plan | You apply each change in the Changes tab |
+| **Auto-apply changes** | You approve each plan | Written automatically once Sentinel QA approves the run |
+| **Full access** | Build requests start running at once | Written automatically once Sentinel QA approves the run |
+
+Turning on a more permissive mode asks for confirmation first. Auto mode never writes work that QA rejected, only writes inside the project folder, and keeps each file's previous contents: **Undo** in the Changes tab restores the file, or deletes it if the agent created it. Every automatic write is logged in the activity panel.
 
 ## Features
 
@@ -103,6 +128,10 @@ Agent HQ only uses supported mechanisms. It never reads or reuses another tool's
 | [Magpie](https://usemagpie.ai) | Its local gateway: every model and routing group you set up in Magpie, with its subscriptions and failover |
 
 **Magpie.** If you use [Magpie](https://usemagpie.ai) to manage models and accounts, connect **Magpie gateway** and every model and routing group it offers (for example `group/smart-coding`) becomes available to each agent, without Agent HQ holding any keys. The address is read from Magpie's own `gateway.json` (default `http://127.0.0.1:3425`); set `MAGPIE_GATEWAY` to point elsewhere and `MAGPIE_API_KEY` if your gateway requires a caller key.
+
+<p align="center"><img src="docs/screenshots/desktop-magpie.png" alt="Agent HQ desktop app listing 30 models and routing groups from a Magpie gateway" width="900" /><br /><sub>The desktop app connected to a real Magpie gateway: its routing groups and every model from the Claude Code and Codex accounts set up in Magpie.</sub></p>
+
+Agent HQ talks to models as plain text and tells every model that it has no tools, because gateways that wrap an agent account (Magpie with Claude Code or Codex) may otherwise let a model try a tool call and leak it into the answer.
 
 CLIs are looked up on `PATH` plus common install locations (nvm, npm global, bun, volta, `~/.claude/local`). A connection is only marked connected after a real test call succeeds. Codex models are read from the CLI's own model cache; the Claude CLI exposes aliases only (`sonnet`, `opus`, `haiku`, `default`).
 
@@ -146,7 +175,7 @@ npm run desktop:dev    # the desktop app on the Vite dev server, with hot reload
 npm run dist:desktop   # build installers for this system into release/
 ```
 
-<p align="center"><img src="docs/screenshots/desktop.png" alt="Agent HQ desktop app on Linux with its custom title bar" width="900" /></p>
+<p align="center"><img src="docs/screenshots/desktop.png" alt="Agent HQ desktop app on Linux answering a question through the Magpie gateway" width="900" /><br /><sub>The desktop app on Linux: Sovereign answers through a Magpie routed Claude model.</sub></p>
 
 The desktop app runs the same UI and server inside one window, so there is nothing to start first. It shares connections and settings with the browser version (`~/.config/agent-hq`).
 

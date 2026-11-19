@@ -34,6 +34,14 @@ const MAX_QA_LOOPS = 1;
 const QA_TASK_ID = 'qa-review';
 const TASK_FILE_CONTEXT_CHARS = 60_000;
 
+/**
+ * Agent HQ talks to models as plain text. Gateways and CLIs that wrap an agent (Magpie with a Claude Code or
+ * Codex account, the Claude CLI) may still offer the model their own tools; a model that tries one leaks the
+ * tool call into the answer as markup. Every request says so up front.
+ */
+export const TEXT_ONLY_NOTICE =
+  'Environment: you are answering inside Agent HQ as plain text. You have no tools here: do not call tools, run commands, browse, or write tool-call markup such as <invoke> or <function_calls>. Everything you need (project files, task context) is included in this conversation; if something is missing, say what you would need.';
+
 let runController: AbortController | null = null;
 const runTotals = { promptTokens: 0, completionTokens: 0, otherTokens: 0, costUSD: 0, unpricedTokens: 0 };
 let chatController: AbortController | null = null;
@@ -87,7 +95,7 @@ async function callAgent(
     try {
       result = await streamChat({
         model,
-        system: args.system,
+        system: `${args.system}\n\n${TEXT_ONLY_NOTICE}`,
         messages: args.messages,
         signal: args.signal,
         onDelta: (t) => {

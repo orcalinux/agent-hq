@@ -3,7 +3,7 @@ import { AlertTriangle, Play, RotateCcw, Square } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { resumeRun, stopRun } from '@/engine/liveOrchestrator';
 import { SOP_STAGES, type KanbanTaskCard, type SOPStage } from '@/types';
-import { Badge, Button, EmptyState, Input, ProgressBar, Select } from '@/components/ui/primitives';
+import { Badge, Button, EmptyState, Input, PageTitle, ProgressBar, Select } from '@/components/ui/primitives';
 import { cn } from '@/utils/cn';
 import { TaskDetail } from './TaskDetail';
 import { PRIORITY_ORDER, STATUS_TONE } from './taskUi';
@@ -19,7 +19,7 @@ function TaskCard({ task, selected, onSelect }: { task: KanbanTaskCard; selected
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        'w-full rounded-md border bg-surface p-2.5 text-left transition-colors hover:bg-surface-2',
+        'w-full rounded-xl border bg-surface p-3 text-left shadow-card transition-colors hover:border-line-strong hover:bg-surface-2',
         selected ? 'border-accent' : problem ? 'border-danger/40' : 'border-line'
       )}
     >
@@ -83,13 +83,12 @@ export default function TasksView() {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-1.5">
-        <div className="min-w-0">
-          <h1 className="text-[14px] font-semibold">Tasks</h1>
-          <p className="truncate text-[12px] text-fg-muted">
-            {mission ? mission.title + ' · ' + done + '/' + mission.tasks.length + ' done · ' + mission.status : 'No run yet'}
-          </p>
-        </div>
+      <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-surface/70 px-5 py-2 backdrop-blur">
+        <PageTitle
+          group="Work"
+          title="Tasks"
+          subtitle={mission ? mission.title + ' · ' + done + '/' + mission.tasks.length + ' done · ' + mission.status : 'No run yet'}
+        />
         <div className="flex flex-wrap items-center gap-2">
           {mission ? <Badge tone={isLive ? 'accent' : 'warning'}>{isLive ? 'Live run' : 'Simulated demo'}</Badge> : null}
           {isLive && liveRunning ? <Button variant="danger" icon={Square} onClick={stopRun}>Stop</Button> : null}

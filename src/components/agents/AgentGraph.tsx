@@ -159,7 +159,7 @@ export function AgentGraph() {
                 aria-pressed={selectedId === agent.id}
                 style={{ left: cx - nodeW / 2, top: cy - NODE_H / 2, width: nodeW, height: NODE_H }}
                 className={cn(
-                  'absolute flex cursor-grab touch-none select-none flex-col gap-1 rounded-lg border bg-surface px-3 py-2 text-left shadow-sm transition-[border-color,box-shadow,background-color] duration-200 hover:bg-surface-2 active:cursor-grabbing',
+                  'absolute flex cursor-grab touch-none select-none flex-col gap-1 rounded-xl border bg-surface px-3 py-2 text-left shadow-sm transition-[border-color,box-shadow,background-color] duration-200 hover:bg-surface-2 active:cursor-grabbing',
                   selectedId === agent.id ? 'border-accent ring-2 ring-accent/25' : active ? 'border-accent/60' : 'border-line-strong'
                 )}
               >

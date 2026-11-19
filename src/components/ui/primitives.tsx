@@ -7,8 +7,8 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md';
 
 const VARIANT: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-accent-fg hover:opacity-90',
-  secondary: 'bg-surface-2 text-fg border border-line hover:bg-surface-3',
+  primary: 'ahq-btn-primary text-accent-fg',
+  secondary: 'bg-surface-2 text-fg border border-line shadow-card hover:border-line-strong hover:bg-surface-3',
   ghost: 'text-fg-muted hover:bg-surface-2 hover:text-fg',
   danger: 'bg-danger-soft text-danger border border-danger/30 hover:bg-danger/20',
 };
@@ -30,7 +30,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg font-medium transition-[background-color,border-color,color,filter] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50',
         size === 'sm' ? 'h-6 px-2 text-[12px]' : 'h-7 px-2.5 text-[12.5px]',
         VARIANT[variant],
         className
@@ -62,7 +62,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       title={label}
       aria-pressed={active}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40',
+        'inline-flex shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40',
         size === 'sm' ? 'h-6 w-6' : 'h-7 w-7',
         active && 'bg-surface-3 text-fg',
         className
@@ -86,7 +86,7 @@ const TONE_BADGE: Record<Tone, string> = {
 
 export function Badge({ tone = 'neutral', children, className, title }: { tone?: Tone; children: ReactNode; className?: string; title?: string }) {
   return (
-    <span title={title} className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-px text-[11px] font-medium', TONE_BADGE[tone], className)}>
+    <span title={title} className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-px text-[11px] font-medium', TONE_BADGE[tone], className)}>
       {children}
     </span>
   );
@@ -152,7 +152,7 @@ export interface TabItem<T extends string> {
 
 export function Tabs<T extends string>({ items, value, onChange, className, label }: { items: TabItem<T>[]; value: T; onChange: (id: T) => void; className?: string; label: string }) {
   return (
-    <div role="tablist" aria-label={label} className={cn('flex items-center gap-0.5', className)}>
+    <div role="tablist" aria-label={label} className={cn('flex items-center gap-0.5 rounded-lg bg-surface-2/60 p-0.5', className)}>
       {items.map((item) => (
         <button
           key={item.id}
@@ -161,14 +161,28 @@ export function Tabs<T extends string>({ items, value, onChange, className, labe
           aria-selected={value === item.id}
           onClick={() => onChange(item.id)}
           className={cn(
-            'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition-colors',
-            value === item.id ? 'bg-surface-3 text-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg'
+            'inline-flex h-6 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition-colors',
+            value === item.id ? 'bg-surface-3 text-fg shadow-card' : 'text-fg-muted hover:text-fg'
           )}
         >
           {item.label}
-          {item.count ? <span className="rounded bg-surface-3 px-1 text-[10.5px] text-fg-muted">{item.count}</span> : null}
+          {item.count ? <span className="rounded-full bg-accent-soft px-1.5 text-[10.5px] font-medium text-accent">{item.count}</span> : null}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** View heading in the breadcrumb style: a muted group name, then the view. */
+export function PageTitle({ group, title, subtitle }: { group: string; title: string; subtitle?: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <h1 className="flex items-center gap-1.5 text-[14px] font-semibold tracking-tight">
+        <span className="font-normal text-fg-subtle">{group}</span>
+        <span className="font-normal text-fg-subtle/60">/</span>
+        <span className="truncate">{title}</span>
+      </h1>
+      {subtitle ? <div className="truncate text-[12px] text-fg-muted">{subtitle}</div> : null}
     </div>
   );
 }

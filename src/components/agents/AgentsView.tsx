@@ -3,7 +3,7 @@ import { GraduationCap, Plus } from 'lucide-react';
 import { useAgentStore, resolveAgentModel } from '@/store/useAgentStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { useLayoutStore, type AgentsViewMode } from '@/store/useLayoutStore';
-import { Badge, Button, StatusDot, Tabs } from '@/components/ui/primitives';
+import { Badge, Button, PageTitle, StatusDot, Tabs } from '@/components/ui/primitives';
 import { fmtRelative, fmtTokens, isBusy, modelLabel, providerName, statusTone, usageCostLabel } from '@/components/ui/helpers';
 import { cn } from '@/utils/cn';
 import { AgentDetail } from './AgentDetail';
@@ -70,11 +70,8 @@ export default function AgentsView() {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-1.5">
-        <div>
-          <h1 className="text-[14px] font-semibold">Agents</h1>
-          <p className="text-[12px] text-fg-muted">Click an agent to configure it and see its history.</p>
-        </div>
+      <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-surface/70 px-5 py-2 backdrop-blur">
+        <PageTitle group="Work" title="Agents" subtitle="Click an agent to configure it and see its history." />
         <div className="flex items-center gap-2">
           <Tabs<AgentsViewMode>
             label="Agents view"

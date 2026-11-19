@@ -73,7 +73,7 @@ export function VizSidebar({ flows }: { flows: AgentFlow[] }) {
   const nameOf = (id: string) => agents[id]?.name ?? id;
   return (
     <aside className="flex w-full shrink-0 flex-col gap-3 overflow-y-auto border-t border-line bg-canvas p-3 lg:w-80 lg:border-l lg:border-t-0">
-      <section className="rounded-md border border-line bg-surface p-3">
+      <section className="rounded-xl border border-line bg-surface p-3 shadow-card">
         <div className="mb-1 flex items-center justify-between gap-2">
           <h3 className="text-[12px] font-semibold">Current run</h3>
           {mission ? <Badge tone={mission.source === 'simulation' ? 'warning' : 'accent'}>{mission.source === 'simulation' ? 'demo' : 'live'} · {mission.status}</Badge> : null}
