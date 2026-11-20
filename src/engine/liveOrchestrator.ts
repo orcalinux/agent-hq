@@ -103,6 +103,12 @@ async function callAgent(
           args.onDelta?.(full);
         },
       });
+      if (result.models?.length) {
+        const providerId = providerOfRef(model);
+        useConnectionsStore.setState((state) => ({
+          providers: state.providers.map((provider) => provider.id === providerId ? { ...provider, models: result.models! } : provider),
+        }));
+      }
       break;
     } catch (err) {
       const message = (err as Error).message ?? '';

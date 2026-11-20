@@ -154,6 +154,7 @@ export interface ChatStreamResult {
   text: string;
   usage?: ChatUsage;
   latencyMs: number;
+  models?: ModelInfo[];
 }
 
 export async function streamChat(req: ChatStreamRequest): Promise<ChatStreamResult> {
@@ -194,6 +195,7 @@ export async function streamChat(req: ChatStreamRequest): Promise<ChatStreamResu
         message?: string;
         usage?: ChatUsage | null;
         latencyMs?: number;
+        models?: ModelInfo[];
       };
       if (ev.type === 'delta' && ev.text) {
         text += ev.text;
@@ -201,7 +203,7 @@ export async function streamChat(req: ChatStreamRequest): Promise<ChatStreamResu
       } else if (ev.type === 'error') {
         throw new ApiError(502, ev.message || 'Model call failed.');
       } else if (ev.type === 'done') {
-        result = { text, usage: ev.usage ?? undefined, latencyMs: ev.latencyMs ?? 0 };
+        result = { text, usage: ev.usage ?? undefined, latencyMs: ev.latencyMs ?? 0, models: ev.models };
       }
     }
   }

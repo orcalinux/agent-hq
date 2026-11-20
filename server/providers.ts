@@ -3,6 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import type { ConnectionMethod, ProviderId, StoredConnection } from './config';
+import { claudeModelChoices, observeCliModels, reportedClaudeModels } from './cliModelIdentity';
 
 export interface ModelInfo {
   ref: string;
@@ -30,6 +31,7 @@ export interface ChatResult {
   text: string;
   usage?: ChatUsage;
   latencyMs: number;
+  resolvedModels?: string[];
 }
 
 export interface ChatRequest {
@@ -403,9 +405,9 @@ async function streamingPost(url: string, headers: Record<string, string>, paylo
 
 const OPENAI_NON_CHAT = /(embedding|whisper|tts|dall-e|moderation|davinci|babbage|image|audio|realtime|transcribe|search|computer-use|sora)/i;
 
-export async function discoverModels(conn: StoredConnection): Promise<ModelInfo[]> {
+export async function discoverModels(conn: StoredConnection, cwd = ''): Promise<ModelInfo[]> {
   const { providerId, method } = conn;
-  if (method === 'cli') return cliModels(conn);
+  if (method === 'cli') return cliModels(conn, cwd);
   const key = apiKeyFor(conn);
   switch (providerId) {
     case 'anthropic': {
@@ -544,15 +546,10 @@ function codexCachedModels(): Array<[string, string, number | undefined]> {
   }
 }
 
-function cliModels(conn: StoredConnection): ModelInfo[] {
+function cliModels(conn: StoredConnection, cwd: string): ModelInfo[] {
   const codex = conn.providerId === 'openai' ? codexCachedModels() : [];
   const aliases: Partial<Record<ProviderId, Array<[string, string]>>> = {
-    anthropic: [
-      ['default', 'Claude Code (CLI default model)'],
-      ['sonnet', 'Claude Code · sonnet alias'],
-      ['opus', 'Claude Code · opus alias'],
-      ['haiku', 'Claude Code · haiku alias'],
-    ],
+    anthropic: claudeModelChoices(conn, cwd),
     openai: [['default', 'Codex CLI (configured default model)'], ...codex.map(([id, name]) => [id, name] as [string, string])],
     google: [['default', 'Gemini CLI (configured default model)']],
   };
@@ -635,7 +632,7 @@ async function chatViaCli(req: ChatRequest): Promise<ChatResult> {
     const args = ['-p', '--output-format', 'json'];
     if (alias && alias !== 'default') args.push('--model', alias);
     const out = await runCliStreaming(binary, args, prompt, req.cwd, req.signal);
-    let parsed: { result?: string; is_error?: boolean; usage?: { input_tokens?: number; output_tokens?: number } } | undefined;
+    let parsed: { result?: string; is_error?: boolean; modelUsage?: unknown; usage?: { input_tokens?: number; output_tokens?: number } } | undefined;
     try {
       parsed = JSON.parse(out.stdout.trim().split('\n').filter(Boolean).pop() || '');
     } catch {
@@ -648,6 +645,7 @@ async function chatViaCli(req: ChatRequest): Promise<ChatResult> {
     req.onDelta(text);
     return {
       text,
+      resolvedModels: reportedClaudeModels(parsed),
       usage: parsed.usage ? { inputTokens: parsed.usage.input_tokens, outputTokens: parsed.usage.output_tokens } : undefined,
       latencyMs: Date.now() - start,
     };
@@ -843,7 +841,8 @@ export async function verifyConnection(conn: StoredConnection, cwd: string): Pro
         onDelta: () => {},
       });
       if (!result.text.trim()) throw new Error(`${binary} returned an empty response.`);
-      return { models: cliModels(conn), detail: `${info.version ?? binary} answered a test prompt in ${result.latencyMs} ms` };
+      observeCliModels(conn, cwd, 'cli:default', result.resolvedModels ?? []);
+      return { models: cliModels(conn, cwd), detail: `${info.version ?? binary} answered a test prompt in ${result.latencyMs} ms` };
     } catch (err) {
       if ((err as Error).name === 'AbortError') throw new Error(`${binary} did not answer within 120 s.`);
       throw err;

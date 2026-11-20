@@ -30,6 +30,7 @@ import {
 } from './providers';
 import { INSTALL_GUIDES, installCommandFor } from './installers';
 import { buildTerminalLaunch } from './terminal';
+import { observeCliModels } from './cliModelIdentity';
 import { deleteFile, gitStatus, readFile, scanTree, writeFile } from './workspace';
 
 const MAX_BODY = 8 * 1024 * 1024;
@@ -145,10 +146,11 @@ function buildConnection(id: ProviderId, body: Record<string, unknown>): StoredC
 }
 
 async function ensureModels(id: ProviderId): Promise<ModelInfo[]> {
-  const cached = modelCache.get(id);
-  if (cached) return cached;
   const conn = loadConfig().connections[id];
   if (!conn) return [];
+  if (conn.method === 'cli') return discoverModels(conn, getWorkspaceRoot());
+  const cached = modelCache.get(id);
+  if (cached) return cached;
   try {
     const models = await discoverModels(conn);
     modelCache.set(id, models);
@@ -351,13 +353,16 @@ const routes: Record<string, Handler> = {
     const conn = loadConfig().connections[id];
     if (!conn) throw new HttpError(404, 'Provider is not connected.');
     try {
-      const models = await discoverModels(conn);
+      const { models } = conn.method === 'cli' && id === 'anthropic'
+        ? await verifyConnection(conn, getWorkspaceRoot())
+        : { models: await discoverModels(conn, getWorkspaceRoot()) };
       modelCache.set(id, models);
       updateConfig((cfg) => {
         const c = cfg.connections[id];
         if (c) {
           c.lastVerifiedAt = new Date().toISOString();
           delete c.lastError;
+          if (conn.cliModelObservation) c.cliModelObservation = conn.cliModelObservation;
         }
       });
       send(res, 200, { ok: true, models, connection: publicConnection(id) });
@@ -380,6 +385,7 @@ const routes: Record<string, Handler> = {
       if ((m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') throw new HttpError(400, 'Invalid message.');
     }
     const { conn, model } = resolveModelRef(ref);
+    const cwd = getWorkspaceRoot();
 
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/event-stream');
@@ -399,11 +405,19 @@ const routes: Record<string, Handler> = {
         system: typeof body.system === 'string' ? body.system : undefined,
         messages,
         maxTokens: typeof body.maxTokens === 'number' ? body.maxTokens : undefined,
-        cwd: getWorkspaceRoot(),
+        cwd,
         signal: controller.signal,
         onDelta: (text) => write({ type: 'delta', text }),
       });
-      write({ type: 'done', usage: result.usage ?? null, latencyMs: result.latencyMs });
+      const current = loadConfig().connections[conn.providerId];
+      if (result.resolvedModels?.length && current?.method === conn.method && current?.connectedAt === conn.connectedAt) {
+        updateConfig((cfg) => {
+          const stored = cfg.connections[conn.providerId];
+          if (stored) observeCliModels(stored, cwd, model, result.resolvedModels!);
+        });
+      }
+      const models = result.resolvedModels?.length ? await ensureModels(conn.providerId) : undefined;
+      write({ type: 'done', usage: result.usage ?? null, latencyMs: result.latencyMs, models });
     } catch (err) {
       if ((err as Error).name !== 'AbortError') write({ type: 'error', message: (err as Error).message });
     }

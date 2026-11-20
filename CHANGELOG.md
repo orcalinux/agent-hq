@@ -11,6 +11,17 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.5.3] — 2026-11-20
+
+### Fixed
+- Claude CLI assignments now show the actual model IDs reported during verification or execution instead of the generic "Claude Code (CLI default model)" label.
+- Automatic selections and aliases show their last used model without changing existing assignments. Exact reported IDs also become selectable in the model pickers.
+- Model identity updates propagate immediately to agent and role labels, survive restarts, and stay scoped to the project where they were observed. Unverified aliases never claim a guessed version.
+
+### Verification
+- Added coverage for CLI response parsing, verification, exact model arguments, persistence, independent aliases, multiple reported models and workspace isolation.
+- Added a browser regression for updated agent labels and model choices after a response.
+
 ## [0.5.2] — 2026-11-20
 
 ### Fixed

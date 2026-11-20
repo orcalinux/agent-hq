@@ -140,7 +140,7 @@ Agent HQ only uses supported mechanisms. It never reads or reuses another tool's
 
 Agent HQ talks to models as plain text and tells every model that it has no tools, because gateways that wrap an agent account (Magpie with Claude Code or Codex) may otherwise let a model try a tool call and leak it into the answer.
 
-CLIs are looked up on `PATH` plus common install locations (nvm, npm global, bun, volta, `~/.claude/local`). A connection is only marked connected after a real test call succeeds. Codex models are read from the CLI's own model cache; the Claude CLI exposes aliases only (`sonnet`, `opus`, `haiku`, `default`).
+CLIs are looked up on `PATH` plus common install locations (nvm, npm global, bun, volta, `~/.claude/local`). A connection is only marked connected after a real test call succeeds. Codex models are read from the CLI's own model cache. For Claude Code, **Verify** runs a short test prompt and reads the actual model IDs from the CLI's JSON response. Automatic selections and aliases show their **last used** model; reported IDs also become explicit model choices. Existing role and agent assignments keep working. Each subsequent call updates these labels, and observations are scoped to the project folder. Unverified aliases stay labeled as aliases rather than guessing a model version.
 
 ## Quick start
 

@@ -14,6 +14,7 @@ export interface StoredConnection {
   connectedAt: string;
   lastVerifiedAt?: string;
   lastError?: string;
+  cliModelObservation?: { cwd: string; models: Record<string, string[]> };
 }
 
 export interface StoredConfig {
