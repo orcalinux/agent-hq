@@ -109,6 +109,10 @@ export interface DesktopApi {
   setTheme: (mode: 'dark' | 'light') => void;
   /** Opens the application menu at a point in the window (Windows and Linux, where the title bar is custom). */
   showMenu: (x: number, y: number) => void;
+  /** Minimize, maximize/restore or close the window (Linux, where the app draws its own window buttons). */
+  windowControl: (action: 'minimize' | 'toggle-maximize' | 'close') => void;
+  isMaximized: () => Promise<boolean>;
+  onMaximized: (listener: (maximized: boolean) => void) => () => void;
   onCommand: (listener: (command: DesktopCommand) => void) => () => void;
   getUpdateState: () => Promise<UpdateState>;
   onUpdate: (listener: (state: UpdateState) => void) => () => void;

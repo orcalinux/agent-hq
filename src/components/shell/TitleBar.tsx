@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
-import { Menu } from 'lucide-react';
+import { Copy, Menu, Minus, Square, X } from 'lucide-react';
 import { desktopApi, statusFrom } from '@/desktop/bridge';
 import { TITLE_BAR_HEIGHT } from '@/desktop/types';
 import { useAgentStore } from '@/store/useAgentStore';
@@ -25,11 +25,11 @@ function controlsOverlay(): ControlsOverlay | undefined {
 
 /** Room the native window buttons take: traffic lights on the left (macOS), the overlay on the right (Windows, Linux). */
 function useControlInsets(platform: string): Insets {
-  const fallback: Insets = platform === 'darwin' ? { left: 78, right: 0 } : { left: 0, right: 140 };
+  const fallback: Insets = platform === 'darwin' ? { left: 78, right: 0 } : platform === 'linux' ? { left: 0, right: 0 } : { left: 0, right: 140 };
   const [insets, setInsets] = useState<Insets>(fallback);
   useEffect(() => {
     const overlay = controlsOverlay();
-    if (!overlay || platform === 'darwin') return;
+    if (!overlay || platform === 'darwin' || platform === 'linux') return;
     const measure = () => {
       const rect = overlay.getTitlebarAreaRect();
       if (overlay.visible && rect.width > 0) setInsets({ left: Math.max(0, rect.x), right: Math.max(0, window.innerWidth - rect.x - rect.width) });
@@ -48,6 +48,47 @@ function useControlInsets(platform: string): Insets {
 const drag = { WebkitAppRegion: 'drag' } as CSSProperties;
 const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties;
 
+function WindowButton({ label, onClick, danger, children }: { label: string; onClick: () => void; danger?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      style={noDrag}
+      className={cn(
+        'flex h-full w-11 items-center justify-center text-fg-muted transition-colors duration-150 focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-accent',
+        danger ? 'hover:bg-danger hover:text-white active:bg-danger/80' : 'hover:bg-surface-3 hover:text-fg active:bg-surface-2'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Minimize, maximize and close, drawn by the app so they match the theme and sit inside the title bar's border. */
+function LinuxWindowControls() {
+  const api = desktopApi();
+  const [maximized, setMaximized] = useState(false);
+  useEffect(() => {
+    if (!api) return;
+    let live = true;
+    void api.isMaximized().then((value) => live && setMaximized(value)).catch(() => undefined);
+    const off = api.onMaximized(setMaximized);
+    return () => { live = false; off(); };
+  }, [api]);
+  if (!api) return null;
+  return (
+    <div className="ml-2 flex h-full shrink-0 items-stretch" style={noDrag}>
+      <WindowButton label="Minimize" onClick={() => api.windowControl('minimize')}><Minus className="h-4 w-4" strokeWidth={1.75} /></WindowButton>
+      <WindowButton label={maximized ? 'Restore' : 'Maximize'} onClick={() => api.windowControl('toggle-maximize')}>
+        {maximized ? <Copy className="h-3.5 w-3.5 -scale-x-100" strokeWidth={1.75} /> : <Square className="h-3.5 w-3.5" strokeWidth={1.75} />}
+      </WindowButton>
+      <WindowButton label="Close" danger onClick={() => api.windowControl('close')}><X className="h-4 w-4" strokeWidth={1.75} /></WindowButton>
+    </div>
+  );
+}
+
 /** The desktop app's title bar: drag area, application menu, project name and live run status. */
 export function TitleBar() {
   const api = desktopApi();
@@ -61,7 +102,7 @@ export function TitleBar() {
   return (
     <header
       className="relative flex shrink-0 select-none items-center border-b border-line bg-surface text-[12px] text-fg-muted"
-      style={{ ...drag, height: TITLE_BAR_HEIGHT, paddingLeft: insets.left + 6, paddingRight: insets.right + 8 }}
+      style={{ ...drag, height: TITLE_BAR_HEIGHT, paddingLeft: insets.left + 6, paddingRight: platform === 'linux' ? 0 : insets.right + 8 }}
       onDoubleClick={(e) => e.preventDefault()}
       data-testid="desktop-title-bar"
     >
@@ -95,6 +136,7 @@ export function TitleBar() {
         <UpdateButton />
         <ApprovalModeBadge />
       </div>
+      {platform === 'linux' ? <LinuxWindowControls /> : null}
     </header>
   );
 }

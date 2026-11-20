@@ -71,6 +71,35 @@ test('agent detail cards support editing and discarding in the desktop shell', a
   }
 });
 
+test('Linux window buttons sit inside the title bar and minimize, maximize, restore and close', async () => {
+  test.skip(process.platform !== 'linux', 'Linux draws its own window buttons');
+  const { app, page, errors } = await launch();
+  try {
+    const bar = page.getByTestId('desktop-title-bar');
+    const barBox = (await bar.boundingBox())!;
+    const buttons = ['Minimize', 'Maximize', 'Close'].map((name) => bar.getByRole('button', { name, exact: true }));
+    for (const button of buttons) {
+      const box = (await button.boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(barBox.y);
+      expect(box.y + box.height).toBeLessThanOrEqual(barBox.y + barBox.height + 0.5);
+      expect(box.x + box.width).toBeLessThanOrEqual(barBox.x + barBox.width + 0.5);
+    }
+    const isMax = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMaximized());
+    const before = await isMax();
+    await buttons[1].click();
+    await expect.poll(isMax).toBe(!before);
+    await expect(bar.getByRole('button', { name: before ? 'Maximize' : 'Restore', exact: true })).toBeVisible();
+    await bar.getByRole('button', { name: before ? 'Maximize' : 'Restore', exact: true }).click();
+    await expect.poll(isMax).toBe(before);
+    await buttons[0].click();
+    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(true);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].restore());
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
 test('desktop app starts its own server, loads the UI and talks to the shell', async () => {
   const { app, page, errors } = await launch();
   try {

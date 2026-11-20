@@ -301,7 +301,9 @@ function createWindow(): BrowserWindow {
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin'
       ? { trafficLightPosition: { x: 14, y: Math.round((TITLE_BAR_HEIGHT - 14) / 2) } }
-      : { titleBarOverlay: { ...TITLE_BAR[theme], height: TITLE_BAR_HEIGHT } }),
+      : process.platform === 'win32'
+        ? { titleBarOverlay: { ...TITLE_BAR[theme], height: TITLE_BAR_HEIGHT } }
+        : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -339,8 +341,11 @@ function createWindow(): BrowserWindow {
   };
   win.on('resize', rememberSoon);
   win.on('move', rememberSoon);
-  win.on('maximize', remember);
-  win.on('unmaximize', remember);
+  const tellMaximized = () => {
+    if (!win.isDestroyed()) win.webContents.send('desktop:maximized', win.isMaximized());
+  };
+  win.on('maximize', () => { remember(); tellMaximized(); });
+  win.on('unmaximize', () => { remember(); tellMaximized(); });
 
   win.on('close', (event) => {
     remember();
@@ -403,10 +408,17 @@ function registerIpc(): void {
   ipcMain.on('desktop:theme', (event, mode: unknown) => {
     if (!fromApp(event) || (mode !== 'dark' && mode !== 'light')) return;
     theme = mode;
-    if (process.platform !== 'darwin') mainWindow?.setTitleBarOverlay({ ...TITLE_BAR[theme], height: TITLE_BAR_HEIGHT });
+    if (process.platform === 'win32') mainWindow?.setTitleBarOverlay({ ...TITLE_BAR[theme], height: TITLE_BAR_HEIGHT });
     mainWindow?.setBackgroundColor(CANVAS[theme]);
     quickPanel?.publish();
   });
+  ipcMain.on('desktop:window', (event, action: unknown) => {
+    if (!fromApp(event) || !mainWindow) return;
+    if (action === 'minimize') mainWindow.minimize();
+    else if (action === 'close') mainWindow.close();
+    else if (action === 'toggle-maximize') mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
+  });
+  ipcMain.handle('desktop:is-maximized', (event) => event.sender === mainWindow?.webContents && Boolean(mainWindow?.isMaximized()));
   ipcMain.on('desktop:menu', (event, at: { x?: unknown; y?: unknown }) => {
     if (!fromApp(event) || !mainWindow) return;
     Menu.getApplicationMenu()?.popup({ window: mainWindow, x: Number(at?.x) || 0, y: Number(at?.y) || TITLE_BAR_HEIGHT });

@@ -11,6 +11,14 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.4.3] — 2026-11-20
+
+### Fixed
+- **Window buttons on Linux now match the app.** Minimize, maximize/restore and close are drawn inside the title bar, so its bottom line runs the full width instead of breaking under the system buttons. They follow the light and dark theme, ease in on hover, and Close turns red.
+
+### Tested
+- A desktop test checks the buttons sit inside the title bar and that minimize, maximize, restore and close work.
+
 ## [0.4.2] — 2026-11-20
 
 ### Fixed
