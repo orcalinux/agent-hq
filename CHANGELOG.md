@@ -11,6 +11,20 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.3.0] — 2026-11-20
+
+### Added
+- **Update button** in the title bar: once a newer version is downloaded, an **↑ Update** pill appears. Its × hides it for 3 days.
+- **What's new before updating**: the pill opens the release notes of every version between yours and the new one, with **Restart to update** and **Later**.
+- **Updates that wait for your agents**: if agents are working, **When agents finish** restarts by itself once they are done, and the pill says **Waiting to update**.
+- **What's new after an update**: the first launch of a new version shows its notes once.
+- **Settings › Updates**: the version and its status, **Check now**, What's new, and options for the update button, automatic updates, how often to check (1, 6, 12 or 24 hours), automatic download (off for metered networks) and automatic restart.
+- Tray menu item **Restart to update** and a system notification when an update is ready.
+- GitHub release pages now show the notes from this changelog.
+
+### Fixed
+- Windows installers were missing from 0.2.0 because two terminal tests used a Linux-only folder.
+
 ## [0.2.0] — 2026-11-20
 
 ### Added
@@ -44,5 +58,6 @@ git push --follow-tags
 
 First release: web UI, real provider connections, and an orchestrator that adapts when a provider runs out of credit.
 
+[0.3.0]: https://github.com/orcalinux/agent-hq/releases/tag/v0.3.0
 [0.2.0]: https://github.com/orcalinux/agent-hq/releases/tag/v0.2.0
 [0.1.0]: https://github.com/orcalinux/agent-hq/commit/ad75829

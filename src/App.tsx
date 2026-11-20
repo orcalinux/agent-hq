@@ -5,6 +5,7 @@ import { ActivityPanel } from '@/components/shell/ActivityPanel';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { ErrorBoundary } from '@/components/shell/ErrorBoundary';
 import { TitleBar } from '@/components/shell/TitleBar';
+import { WhatsNewDialog } from '@/components/shell/WhatsNewDialog';
 import { useShortcuts } from '@/components/shell/useShortcuts';
 import { Spinner } from '@/components/ui/primitives';
 import { WorkspaceView } from '@/components/workspace/WorkspaceView';
@@ -54,6 +55,7 @@ export default function App() {
       {activityOpen ? <ActivityPanel /> : null}
       <StatusBar />
       <CommandPalette />
+      <WhatsNewDialog />
     </div>
   );
 }

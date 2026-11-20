@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { clampSize, createTerminal, defaultShell, MAX_SESSIONS, TerminalError, closeAllTerminals, listTerminals, writeTerminal } from '../../server/pty';
+import os from 'os';
+
+const TMP = os.tmpdir();
 
 describe('integrated terminal helpers', () => {
   it('keeps terminal dimensions inside sane bounds', () => {
@@ -15,8 +18,8 @@ describe('integrated terminal helpers', () => {
   });
 
   it('starts a real shell in the requested folder and rejects bad input', async () => {
-    const session = await createTerminal({ cwd: '/tmp' });
-    expect(session.cwd).toBe('/tmp');
+    const session = await createTerminal({ cwd: TMP });
+    expect(session.cwd).toBe(TMP);
     expect(listTerminals().map((s) => s.id)).toContain(session.id);
     expect(() => writeTerminal(session.id, 42)).toThrow(TerminalError);
     expect(() => writeTerminal('missing', 'ls')).toThrow(/no longer running/);
@@ -26,8 +29,8 @@ describe('integrated terminal helpers', () => {
   });
 
   it('limits how many terminals can be open', async () => {
-    for (let index = 0; index < MAX_SESSIONS; index++) await createTerminal({ cwd: '/tmp' });
-    await expect(createTerminal({ cwd: '/tmp' })).rejects.toThrow(/At most/);
+    for (let index = 0; index < MAX_SESSIONS; index++) await createTerminal({ cwd: TMP });
+    await expect(createTerminal({ cwd: TMP })).rejects.toThrow(/At most/);
     closeAllTerminals();
   });
 });

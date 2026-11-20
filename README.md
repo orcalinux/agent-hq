@@ -191,7 +191,8 @@ The desktop app runs the same UI and server inside one window, so there is nothi
 - **Notifications** when a plan is ready for review or a run finishes or fails while the window is in the background.
 - **Native menu**: open a project (`Ctrl+O`), switch views, command palette, zoom, full screen.
 - **`agenthq://` links**: `agenthq://open?path=/abs/project` opens a project after asking you, `agenthq://view/agents` shows a view.
-- **Single instance**, remembered window size and position, and **auto-update** from GitHub releases (AppImage, Windows and macOS).
+- **Single instance**, remembered window size and position.
+- **Updates itself** from GitHub releases (AppImage, `.deb`, `.rpm`, Windows and macOS). A new version downloads in the background; an **↑ Update** pill in the title bar shows what changed and restarts into it, or waits until no agent is working. **Settings › Updates** sets how often it checks, whether it downloads and restarts by itself, and opens What's new.
 
 To publish a release, bump `version` in `package.json` and push a tag such as `v0.2.0`. `.github/workflows/release.yml` builds the installers on Linux, Windows and macOS and attaches them to the GitHub release. The builds are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper warn on first launch; on macOS, right-click the app and choose **Open**.
 

@@ -16,6 +16,55 @@ export interface DesktopStatus {
   running: boolean;
 }
 
+export type UpdateStatus =
+  | 'unsupported'
+  | 'idle'
+  | 'checking'
+  | 'up-to-date'
+  | 'available'
+  | 'downloading'
+  | 'ready'
+  | 'error';
+
+export interface UpdateState {
+  status: UpdateStatus;
+  /** The version running now. */
+  current: string;
+  /** The newer version found, downloading or ready to install. */
+  version?: string;
+  /** Download progress, 0 to 100. */
+  percent?: number;
+  /** Download size in bytes, when known. */
+  size?: number;
+  error?: string;
+  /** When the last check finished, in ms since the epoch. */
+  checkedAt?: number;
+  /** Ready, and restarting by itself once no agent is working. */
+  waiting?: boolean;
+  /** The version this one replaced, on the first launch after an update. */
+  updatedFrom?: string;
+  /** Plays the flow without a release (AGENT_HQ_SIMULATE_UPDATE). */
+  simulated?: boolean;
+}
+
+export interface UpdatePrefs {
+  /** Check for a newer version by itself. */
+  auto: boolean;
+  /** Hours between checks. */
+  everyHours: 1 | 6 | 12 | 24;
+  /** Download a newer version as soon as it is found. */
+  autoDownload: boolean;
+  /** Restart into a downloaded update once no agent is working. */
+  autoRestart: boolean;
+  /** Show the Update button in the title bar. */
+  showButton: boolean;
+  /** The button hidden until then (ms since the epoch), for this version only. */
+  hiddenUntil?: number;
+  hiddenVersion?: string;
+}
+
+export const DEFAULT_UPDATE_PREFS: UpdatePrefs = { auto: true, everyHours: 6, autoDownload: true, autoRestart: false, showButton: true };
+
 export interface DesktopApi {
   platform: string;
   version: string;
@@ -26,6 +75,19 @@ export interface DesktopApi {
   /** Opens the application menu at a point in the window (Windows and Linux, where the title bar is custom). */
   showMenu: (x: number, y: number) => void;
   onCommand: (listener: (command: DesktopCommand) => void) => () => void;
+  getUpdateState: () => Promise<UpdateState>;
+  onUpdate: (listener: (state: UpdateState) => void) => () => void;
+  checkForUpdates: () => void;
+  /** Downloads a found update (when automatic download is off). */
+  downloadUpdate: () => void;
+  /** Quits, installs the downloaded update and starts the new version. `later` restarts once no agent is working. */
+  installUpdate: (when?: 'now' | 'idle') => void;
+  getUpdatePrefs: () => Promise<UpdatePrefs>;
+  setUpdatePrefs: (prefs: Partial<UpdatePrefs>) => Promise<UpdatePrefs>;
+  /** CHANGELOG.md of a version: the installed one, or a newer one from GitHub. */
+  getChangelog: (version?: string) => Promise<string | null>;
+  /** First launch after an update has shown its notes. */
+  ackUpdated: () => void;
 }
 
 export const TITLE_BAR_HEIGHT = 36;

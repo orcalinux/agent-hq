@@ -19,7 +19,7 @@ function freshDirs(): void {
   fs.writeFileSync(path.join(dirs.workspace, 'src', 'index.ts'), 'export const hello = () => "hi";\n');
 }
 
-async function launch(): Promise<{ app: ElectronApplication; page: Page; errors: string[] }> {
+async function launch(extraEnv: Record<string, string> = {}): Promise<{ app: ElectronApplication; page: Page; errors: string[] }> {
   const app = await electron.launch({
     args: [root, ...(process.platform === 'linux' && process.env.CI ? ['--no-sandbox'] : [])],
     cwd: root,
@@ -31,6 +31,7 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page; errors:
       AGENT_HQ_NO_UPDATES: '1',
       MAGPIE_GATEWAY: '127.0.0.1:9',
       OLLAMA_HOST: '127.0.0.1:9',
+      ...extraEnv,
     },
   });
   const page = await app.firstWindow();
@@ -231,4 +232,113 @@ test('built desktop opens an integrated terminal in the project and stops its sh
       }
     })
     .toBe('stopped');
+});
+
+const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version as string;
+const prefsFile = () => path.join(dirs.userData, 'update-prefs.json');
+const lastFile = () => path.join(dirs.userData, 'last-version');
+
+test('a downloaded update shows the Update pill, its notes, and restarts from there', async () => {
+  fs.rmSync(prefsFile(), { force: true });
+  const { app, page, errors } = await launch({ AGENT_HQ_SIMULATE_UPDATE: '99.0.0' });
+  try {
+    const pill = page.getByTestId('update-button');
+    await expect(pill).toHaveAttribute('data-kind', 'ready', { timeout: 15_000 });
+    await expect(pill).toHaveText('Update');
+    await expect(pill).toHaveAttribute('title', 'Restart to update to v99.0.0');
+    const bar = await page.getByTestId('desktop-title-bar').boundingBox();
+    const box = await pill.boundingBox();
+    expect(box!.y).toBeGreaterThanOrEqual(bar!.y);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(bar!.y + bar!.height);
+
+    await pill.click();
+    const dialog = page.getByRole('dialog', { name: 'Update to v99.0.0' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Simulated update');
+    await expect(dialog.getByTestId('release-notes')).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: 'Later' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Later' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(pill).toBeVisible();
+
+    await pill.click();
+    await page.getByTestId('update-restart').click();
+    await expect(pill).toBeHidden();
+
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Updates' }).click();
+    await expect(page.getByTestId('update-status')).toContainText('Up to date');
+    await expect(page.getByTestId('update-version-row')).toContainText(`v${version}`);
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
+test('with automatic download off, the pill offers the update and downloads it on a click', async () => {
+  fs.writeFileSync(prefsFile(), JSON.stringify({ autoDownload: false }));
+  const { app, page, errors } = await launch({ AGENT_HQ_SIMULATE_UPDATE: '99.0.0' });
+  try {
+    const pill = page.getByTestId('update-button');
+    await expect(pill).toHaveAttribute('data-kind', 'available', { timeout: 15_000 });
+    await expect(pill).toHaveAttribute('title', /v99\.0\.0 is out · 98\.4 MB/);
+    await pill.click();
+    await expect(pill).toHaveAttribute('data-kind', 'downloading');
+    await expect(pill).toContainText('Downloading…');
+    await expect(page.getByRole('dialog', { name: 'Update to v99.0.0' })).toBeVisible({ timeout: 15_000 });
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+    fs.rmSync(prefsFile(), { force: true });
+  }
+});
+
+test('the × hides the pill for 3 days and Settings can show it again', async () => {
+  fs.rmSync(prefsFile(), { force: true });
+  const { app, page } = await launch({ AGENT_HQ_SIMULATE_UPDATE: '99.0.0' });
+  try {
+    const pill = page.getByTestId('update-button');
+    await expect(pill).toHaveAttribute('data-kind', 'ready', { timeout: 15_000 });
+    await pill.hover();
+    await page.getByTestId('update-hide').click();
+    await expect(pill).toBeHidden();
+    const saved = JSON.parse(fs.readFileSync(prefsFile(), 'utf8'));
+    expect(saved.hiddenVersion).toBe('99.0.0');
+    expect(saved.hiddenUntil).toBeGreaterThan(Date.now() + 2 * 24 * 3600 * 1000);
+
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Settings', exact: true }).click();
+    const updates = page.getByTestId('settings-updates');
+    await updates.getByRole('button', { name: 'Show again' }).click();
+    await expect(pill).toBeVisible();
+    await updates.getByRole('tablist', { name: 'Update button' }).getByRole('tab', { name: 'Off' }).click();
+    await expect(pill).toBeHidden();
+    expect(JSON.parse(fs.readFileSync(prefsFile(), 'utf8')).showButton).toBe(false);
+  } finally {
+    await app.close();
+    fs.rmSync(prefsFile(), { force: true });
+  }
+});
+
+test("the first launch after an update shows What's new once", async () => {
+  fs.writeFileSync(lastFile(), '0.0.1');
+  let { app, page } = await launch();
+  try {
+    const dialog = page.getByRole('dialog', { name: `What's new in v${version}` });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('updated from v0.0.1');
+    await expect(dialog.getByTestId('release-notes').first()).toHaveAttribute('data-version', version);
+    await dialog.getByRole('button', { name: 'Got it' }).click();
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => fs.readFileSync(lastFile(), 'utf8').trim()).toBe(version);
+  } finally {
+    await app.close();
+  }
+  ({ app, page } = await launch());
+  try {
+    await expect(page.getByTestId('desktop-title-bar')).toBeVisible();
+    await page.waitForTimeout(800);
+    await expect(page.getByRole('dialog', { name: /What's new/ })).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
 });

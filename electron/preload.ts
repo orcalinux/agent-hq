@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { DesktopApi, DesktopCommand, DesktopStatus } from '../src/desktop/types';
+import type { DesktopApi, DesktopCommand, DesktopStatus, UpdatePrefs, UpdateState } from '../src/desktop/types';
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -13,6 +13,19 @@ const api: DesktopApi = {
     ipcRenderer.on('desktop:command', handler);
     return () => ipcRenderer.removeListener('desktop:command', handler);
   },
+  getUpdateState: () => ipcRenderer.invoke('desktop:update-state') as Promise<UpdateState>,
+  onUpdate: (listener) => {
+    const handler = (_event: IpcRendererEvent, state: UpdateState) => listener(state);
+    ipcRenderer.on('desktop:update', handler);
+    return () => ipcRenderer.removeListener('desktop:update', handler);
+  },
+  checkForUpdates: () => ipcRenderer.send('desktop:update-check'),
+  downloadUpdate: () => ipcRenderer.send('desktop:update-download'),
+  installUpdate: (when) => ipcRenderer.send('desktop:update-install', when === 'idle' ? 'idle' : 'now'),
+  getUpdatePrefs: () => ipcRenderer.invoke('desktop:update-prefs') as Promise<UpdatePrefs>,
+  setUpdatePrefs: (prefs) => ipcRenderer.invoke('desktop:update-prefs-set', prefs) as Promise<UpdatePrefs>,
+  getChangelog: (version) => ipcRenderer.invoke('desktop:changelog', typeof version === 'string' ? version : '') as Promise<string | null>,
+  ackUpdated: () => ipcRenderer.send('desktop:update-ack'),
 };
 
 contextBridge.exposeInMainWorld('agentHqDesktop', api);

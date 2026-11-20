@@ -15,10 +15,11 @@ import {
   Tray,
   type MenuItemConstructorOptions,
 } from 'electron';
-import { TITLE_BAR_HEIGHT, type DesktopCommand, type DesktopStatus } from '../src/desktop/types';
+import { TITLE_BAR_HEIGHT, type DesktopCommand, type DesktopStatus, type UpdatePrefs } from '../src/desktop/types';
 import { startStandaloneServer, type StandaloneServer } from '../server/standalone';
 import { deepLinkFromArgv, parseDeepLink, PROTOCOL } from './deepLink';
 import { fitToDisplays, loadWindowState, MIN_SIZE, saveWindowState } from './windowState';
+import { createUpdater } from './updater';
 
 const PRODUCT = 'Agent HQ';
 const REPO_URL = 'https://github.com/orcalinux/agent-hq';
@@ -47,6 +48,26 @@ let toldAboutTray = false;
 let theme: 'dark' | 'light' = 'dark';
 const CANVAS = { dark: '#131316', light: '#f6f6f8' };
 let pendingLink: string | undefined = deepLinkFromArgv(process.argv);
+const updater = createUpdater({
+  onState: (state) => {
+    mainWindow?.webContents.send('desktop:update', state);
+    updateTray();
+  },
+  onReady: (version) => {
+    if (!Notification.isSupported()) return;
+    const notification = new Notification({
+      title: `${PRODUCT} ${version} is ready`,
+      body: 'Restart to update. Your projects and settings are kept.',
+      icon: appIcon(),
+    });
+    notification.on('click', () => showWindow());
+    notification.show();
+  },
+  busy: () => status.running,
+  beforeInstall: () => {
+    quitting = true;
+  },
+});
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -118,25 +139,13 @@ async function pickProject(): Promise<void> {
   if (!result.canceled && result.filePaths[0]) send({ type: 'open-project', path: result.filePaths[0] });
 }
 
-async function checkForUpdates(manual: boolean): Promise<void> {
-  if (!app.isPackaged || process.env.AGENT_HQ_NO_UPDATES) {
-    if (manual && mainWindow) await dialog.showMessageBox(mainWindow, { message: 'Updates are only checked in installed builds.' });
-    return;
-  }
-  try {
-    const { autoUpdater } = await import('electron-updater');
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-    const result = manual ? await autoUpdater.checkForUpdates() : await autoUpdater.checkForUpdatesAndNotify();
-    if (manual && mainWindow) {
-      const latest = result?.updateInfo.version;
-      await dialog.showMessageBox(mainWindow, {
-        message: latest && latest !== app.getVersion() ? `Version ${latest} is downloading. It installs when you quit.` : `${PRODUCT} ${app.getVersion()} is up to date.`,
-      });
-    }
-  } catch (err) {
-    if (manual && mainWindow) await dialog.showMessageBox(mainWindow, { type: 'warning', message: 'Could not check for updates.', detail: (err as Error).message });
-  }
+/** The menu command: the title bar and Settings show progress, so only outcomes with nothing to show get a dialog. */
+async function checkForUpdatesFromMenu(): Promise<void> {
+  const state = await updater.check();
+  if (!mainWindow) return;
+  if (state.status === 'unsupported') await dialog.showMessageBox(mainWindow, { message: 'Updates are only checked in installed builds.' });
+  else if (state.status === 'up-to-date') await dialog.showMessageBox(mainWindow, { message: `${PRODUCT} ${app.getVersion()} is up to date.` });
+  else if (state.status === 'error') await dialog.showMessageBox(mainWindow, { type: 'warning', message: 'Could not check for updates.', detail: state.error });
 }
 
 function buildMenu(): void {
@@ -189,7 +198,7 @@ function buildMenu(): void {
         { label: 'Report an Issue', click: () => void shell.openExternal(`${REPO_URL}/issues/new`) },
         { label: 'Releases', click: () => void shell.openExternal(`${REPO_URL}/releases`) },
         { type: 'separator' },
-        { label: 'Check for Updates…', click: () => void checkForUpdates(true) },
+        { label: 'Check for Updates…', click: () => void checkForUpdatesFromMenu() },
         { label: 'Show Settings Folder', click: () => void shell.openPath(app.getPath('userData')) },
         ...(isMac ? [] : [{ type: 'separator' as const }, { label: `About ${PRODUCT}`, click: () => app.showAboutPanel() }]),
       ],
@@ -212,10 +221,14 @@ function updateTray(): void {
     showWindow();
     send({ type: 'navigate', view });
   };
+  const update = updater.state();
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: status.label, enabled: false },
       { type: 'separator' },
+      ...(update.status === 'ready'
+        ? [{ label: `Restart to update to ${update.version}`, click: () => updater.install('now') }, { type: 'separator' as const }]
+        : []),
       { label: `Show ${PRODUCT}`, click: () => showWindow() },
       { label: 'Workspace', click: go('workspace') },
       { label: 'Agents', click: go('agents') },
@@ -348,6 +361,7 @@ function registerIpc(): void {
     updateTray();
     if (process.platform === 'darwin' || process.platform === 'linux') app.setBadgeCount(status.busy);
     mainWindow?.setProgressBar(status.running ? 2 : -1);
+    if (!status.running) updater.idle();
   });
   ipcMain.on('desktop:notify', (event, payload: { title?: unknown; body?: unknown }) => {
     if (!fromApp(event) || !Notification.isSupported()) return;
@@ -368,6 +382,25 @@ function registerIpc(): void {
   ipcMain.on('desktop:menu', (event, at: { x?: unknown; y?: unknown }) => {
     if (!fromApp(event) || !mainWindow) return;
     Menu.getApplicationMenu()?.popup({ window: mainWindow, x: Number(at?.x) || 0, y: Number(at?.y) || TITLE_BAR_HEIGHT });
+  });
+  const fromAppInvoke = (event: Electron.IpcMainInvokeEvent) => event.sender === mainWindow?.webContents && isAppOrigin(event.senderFrame?.url ?? '');
+  ipcMain.handle('desktop:update-state', (event) => (fromAppInvoke(event) ? updater.state() : null));
+  ipcMain.handle('desktop:update-prefs', (event) => (fromAppInvoke(event) ? updater.prefs() : null));
+  ipcMain.handle('desktop:update-prefs-set', (event, next: unknown) =>
+    fromAppInvoke(event) && next && typeof next === 'object' ? updater.setPrefs(next as Partial<UpdatePrefs>) : updater.prefs()
+  );
+  ipcMain.handle('desktop:changelog', (event, version: unknown) => (fromAppInvoke(event) ? updater.changelog(typeof version === 'string' ? version : '') : null));
+  ipcMain.on('desktop:update-check', (event) => {
+    if (fromApp(event)) void updater.check();
+  });
+  ipcMain.on('desktop:update-download', (event) => {
+    if (fromApp(event)) updater.download();
+  });
+  ipcMain.on('desktop:update-install', (event, when: unknown) => {
+    if (fromApp(event)) updater.install(when === 'idle' ? 'idle' : 'now');
+  });
+  ipcMain.on('desktop:update-ack', (event) => {
+    if (fromApp(event)) updater.ackUpdated();
   });
 }
 
@@ -406,7 +439,7 @@ async function start(): Promise<void> {
     pendingLink = undefined;
     void handleDeepLink(link);
   }
-  setTimeout(() => void checkForUpdates(false), 10_000);
+  updater.start();
 
   app.on('activate', () => {
     if (mainWindow) showWindow();

@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { StatusDot } from '@/components/ui/primitives';
 import { cn } from '@/utils/cn';
 import { ApprovalModeBadge } from './ApprovalMode';
+import { UpdateButton } from './UpdateButton';
 
 interface Insets {
   left: number;
@@ -91,6 +92,7 @@ export function TitleBar() {
         </span>
       </div>
       <div className="ml-auto flex items-center" style={noDrag}>
+        <UpdateButton />
         <ApprovalModeBadge />
       </div>
     </header>

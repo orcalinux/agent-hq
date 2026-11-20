@@ -29,3 +29,5 @@ await Promise.all([
 
 fs.cpSync(path.join(root, 'electron/assets'), path.join(out, 'assets'), { recursive: true });
 console.log('dist-electron: main.cjs, preload.cjs, server.cjs, assets/');
+// The installed version's release notes, for What's new after an update, offline.
+fs.copyFileSync(path.join(root, 'CHANGELOG.md'), path.join(out, 'CHANGELOG.md'));

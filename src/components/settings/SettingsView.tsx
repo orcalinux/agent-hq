@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Bell, Database, FolderOpen, Keyboard, Palette, ShieldCheck, TestTube2, type LucideIcon } from 'lucide-react';
+import { Bell, CircleArrowUp, Database, FolderOpen, Keyboard, Palette, ShieldCheck, TestTube2, type LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
@@ -8,11 +8,14 @@ import type { ThemePreference } from '@/types';
 import { fmtDateTime } from '@/components/ui/helpers';
 import { SHORTCUTS } from '@/components/shell/useShortcuts';
 import { ApprovalModeCards } from '@/components/shell/ApprovalMode';
+import { UpdatesSettings } from './UpdatesSettings';
+import { useUpdateStore } from '@/desktop/useUpdate';
 
 const SECTIONS: Array<{ id: string; title: string; hint: string; icon: LucideIcon; tint: string }> = [
   { id: 'project', title: 'Project', hint: 'The folder agents work in', icon: FolderOpen, tint: '#2563EB' },
   { id: 'permissions', title: 'Agent permissions', hint: 'How much they may do alone', icon: ShieldCheck, tint: '#16A34A' },
   { id: 'appearance', title: 'Appearance', hint: 'Theme and layout', icon: Palette, tint: '#DB2777' },
+  { id: 'updates', title: 'Updates', hint: 'Version and new releases', icon: CircleArrowUp, tint: '#0EA5E9' },
   { id: 'qa', title: 'QA verification', hint: 'Checks run after each task', icon: TestTube2, tint: '#D97706' },
   { id: 'notifications', title: 'Notifications', hint: 'Local outbox', icon: Bell, tint: '#7C3AED' },
   { id: 'data', title: 'Data', hint: 'History and counters', icon: Database, tint: '#0D9488' },
@@ -40,6 +43,7 @@ function Section({ id, children }: { id: string; children: ReactNode }) {
 
 export default function SettingsView() {
   const [active, setActive] = useState('project');
+  const openNotes = useUpdateStore((s) => s.openNotes);
   const themePreference = useAgentStore((s) => s.themePreference);
   const setThemePreference = useAgentStore((s) => s.setThemePreference);
   const verification = useAgentStore((s) => s.verificationCommand);
@@ -96,15 +100,14 @@ export default function SettingsView() {
                 </button>
               );
             })}
-            <a
-              href="https://github.com/orcalinux/agent-hq/blob/main/CHANGELOG.md"
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 flex h-8 items-center gap-2 rounded-lg px-3 text-[12px] text-fg-subtle transition-colors hover:text-fg"
+            <button
+              type="button"
+              onClick={() => openNotes('browse')}
+              className="mt-3 flex h-8 w-full items-center gap-2 rounded-lg px-3 text-left text-[12px] text-fg-subtle transition-colors hover:text-fg"
             >
               <span className="rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">v{__APP_VERSION__}</span>
               What's new
-            </a>
+            </button>
           </nav>
           <div className="min-w-0 flex-1 space-y-5 pb-10">
           <Section id="project">
@@ -151,6 +154,10 @@ export default function SettingsView() {
               <p className="text-[11.5px] text-fg-subtle">System follows your operating system and switches when it does.</p>
             </div>
             <Button onClick={resetLayout}>Reset panel layout</Button>
+          </Section>
+
+          <Section id="updates">
+            <UpdatesSettings />
           </Section>
 
           <Section id="qa">
