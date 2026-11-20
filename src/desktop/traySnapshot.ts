@@ -1,5 +1,16 @@
-import type { AgentProfile, ActivityEvent, MissionState, ProviderState, AIModelId } from '../types';
+import type { AgentProfile, ActivityEvent, Lesson, MissionState, ProviderState, AIModelId } from '../types';
+import { agentGrowth, weeklyLessons } from '../engine/growth';
 import type { DesktopStatus, TraySnapshot } from './types';
+
+function learningSummary(agents: AgentProfile[], lessons: Lesson[]): TraySnapshot['learning'] {
+  const top = agents.map((agent) => agentGrowth(agent, lessons)).sort((a, b) => b.score - a.score)[0];
+  const weekly = weeklyLessons(lessons);
+  return {
+    lessons: lessons.length,
+    thisWeek: weekly[weekly.length - 1],
+    ...(top && top.score > 0 ? { top: { name: top.agent.name, level: top.level.name } } : {}),
+  };
+}
 
 export function makeTraySnapshot(
   state: { agents: Record<string, AgentProfile>; activeMission: MissionState | null; activity: ActivityEvent[]; themeMode: string },
@@ -8,6 +19,7 @@ export function makeTraySnapshot(
   status: DesktopStatus,
   resolveModel: (agent: AgentProfile) => AIModelId,
   labelModel: (model: AIModelId) => string,
+  lessons?: Lesson[],
 ): TraySnapshot {
   const agents = Object.values(state.agents);
   const mission = state.activeMission;
@@ -33,6 +45,7 @@ export function makeTraySnapshot(
       estimatedCostUSD: sum.estimatedCostUSD + agent.tokenUsage.estimatedCostUSD,
       unpricedTokens: sum.unpricedTokens + agent.tokenUsage.unpricedTokens,
     }), { calls: 0, totalTokens: 0, estimatedCostUSD: 0, unpricedTokens: 0 }),
+    ...(lessons ? { learning: learningSummary(agents, lessons) } : {}),
     agents: agents.slice(0, 100).map((agent) => {
       const model = resolveModel(agent);
       return {

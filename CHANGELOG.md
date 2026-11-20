@@ -11,6 +11,17 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.7.0] — 2026-11-20
+
+### Added
+- **Growth page** (Insights → Growth, `Alt+6`) to follow how each agent specializes on the project. Every agent has a card with its level (Newcomer, Learning, Practiced, Skilled, Expert) and progress to the next, focus areas drawn from its lessons, lessons, confirmations, prompt uses and finished tasks with the success rate, the mix of lesson kinds, lessons per week over 8 weeks, how much came from reviews or from you, and its latest lesson.
+- Team totals, a team learning chart and a feed of the newest lessons. Sort agents by experience, recent learning or name; **Open memory** jumps to the agent's Memory panel.
+- The desktop tray's quick status shows how many lessons the team has learned, this week's count and the most experienced agent, and opens Growth.
+- Reports → Learning links to Growth. Growth is also in the View menu, the command palette and `agenthq://` links.
+
+### Verification
+- Unit tests for lesson weighting, levels, focus areas, weekly buckets, per-agent growth and the tray summary; browser tests for the Growth page, sorting, the shortcut, opening memory and the empty state; Growth added to the layout audit at every window width.
+
 ## [0.6.0] — 2026-11-20
 
 ### Added

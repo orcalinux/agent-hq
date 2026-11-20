@@ -5,11 +5,12 @@ import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { useUpdateStore } from './useUpdate';
 import { makeTraySnapshot } from './traySnapshot';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
+import { useMemoryStore } from '@/store/useMemoryStore';
 import type { ViewMode } from '@/types';
 import { openIntegratedTerminal } from '@/utils/terminalActions';
 import type { DesktopApi, DesktopCommand, DesktopStatus } from './types';
 
-const VIEWS: ViewMode[] = ['workspace', 'agents', 'tasks', 'reports', 'connections', 'settings'];
+const VIEWS: ViewMode[] = ['workspace', 'agents', 'tasks', 'reports', 'growth', 'connections', 'settings'];
 
 export function desktopApi(): DesktopApi | undefined {
   return typeof window !== 'undefined' ? window.agentHqDesktop : undefined;
@@ -123,8 +124,9 @@ export function installDesktopBridge(): () => void {
   const publishSnapshot = () => {
     const state = useAgentStore.getState();
     const providers = useConnectionsStore.getState().providers;
+    const memory = useMemoryStore.getState();
     const snapshot = makeTraySnapshot(state, useWorkspaceStore.getState(), providers, statusFrom(state),
-      (agent) => resolveAgentModel(agent, state.roleDefaults), (model) => modelLabel(providers, model));
+      (agent) => resolveAgentModel(agent, state.roleDefaults), (model) => modelLabel(providers, model), memory.loaded ? memory.lessons : undefined);
     const key = JSON.stringify(snapshot);
     if (key !== lastSnapshot) {
       lastSnapshot = key;
@@ -135,10 +137,12 @@ export function installDesktopBridge(): () => void {
   const offStore = useAgentStore.subscribe((state) => { publish(state); publishSnapshot(); });
   const offWorkspace = useWorkspaceStore.subscribe(publishSnapshot);
   const offConnections = useConnectionsStore.subscribe(publishSnapshot);
+  const offMemory = useMemoryStore.subscribe(publishSnapshot);
   return () => {
     offCommand();
     offStore();
     offWorkspace();
     offConnections();
+    offMemory();
   };
 }

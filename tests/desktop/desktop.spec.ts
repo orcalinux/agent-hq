@@ -282,6 +282,33 @@ test('quick status shows live project data in a separate sandboxed panel and ope
   }
 });
 
+test('quick status shows what the team learned and opens Growth', async () => {
+  const memoryDir = path.join(dirs.workspace, '.agent-hq', 'memory');
+  const now = Date.now();
+  fs.mkdirSync(memoryDir, { recursive: true });
+  fs.writeFileSync(path.join(memoryDir, 'lessons.json'), JSON.stringify({
+    version: 1,
+    lessons: [
+      { id: 'a', agentId: 'agent-frontend', kind: 'convention', text: 'Style buttons with Tailwind classes.', source: 'user', createdAt: now, updatedAt: now, reinforced: 6, uses: 10 },
+      { id: 'b', agentId: 'team', kind: 'preference', text: 'Keep commit messages short.', source: 'user', createdAt: now, updatedAt: now, reinforced: 0, uses: 0 },
+    ],
+  }));
+  const { app, page, errors } = await launch();
+  try {
+    const panel = await openQuickStatus(app, page);
+    const learning = panel.getByTestId('tray-learning');
+    await expect(learning).toContainText('2 lessons learned · 2 this week');
+    await expect(learning).toContainText('Most experienced: Pulse (Learning)');
+    await learning.click();
+    await expect(page.getByRole('main', { name: 'growth', exact: true })).toBeVisible();
+    await expect(page.getByTestId('growth-card').first()).toHaveAttribute('aria-label', 'Pulse growth');
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+    fs.rmSync(memoryDir, { recursive: true, force: true });
+  }
+});
+
 test('quick status follows live changes and both themes, including long text and unpriced usage', async ({}, testInfo) => {
   const { app, page, errors } = await launch();
   try {

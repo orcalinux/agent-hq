@@ -185,6 +185,7 @@ function buildMenu(): void {
         { label: 'Agents', accelerator: 'Alt+2', registerAccelerator: false, click: go('agents') },
         { label: 'Tasks', accelerator: 'Alt+3', registerAccelerator: false, click: go('tasks') },
         { label: 'Reports', accelerator: 'Alt+4', registerAccelerator: false, click: go('reports') },
+        { label: 'Growth', accelerator: 'Alt+6', registerAccelerator: false, click: go('growth') },
         { type: 'separator' },
         { label: 'Command Palette', accelerator: 'CmdOrCtrl+K', registerAccelerator: false, click: () => send({ type: 'command-palette' }) },
         { label: 'Switch Theme (System, Light, Dark)', click: () => send({ type: 'toggle-theme' }) },
@@ -481,7 +482,7 @@ async function start(): Promise<void> {
       showWindow();
       if (action.type === 'updates') send({ type: 'show-updates' });
       else if (action.type === 'open') {
-        const views = ['workspace', 'agents', 'tasks', 'reports', 'connections', 'settings'];
+        const views = ['workspace', 'agents', 'tasks', 'reports', 'growth', 'connections', 'settings'];
         if (typeof action.agentId === 'string') send({ type: 'show-agent', agentId: action.agentId });
         else if (action.view && views.includes(action.view)) send({ type: 'navigate', view: action.view });
       }

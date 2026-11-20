@@ -2,7 +2,7 @@ import type { ViewMode } from '../src/types';
 
 export const PROTOCOL = 'agenthq';
 
-const VIEWS: ViewMode[] = ['workspace', 'agents', 'tasks', 'reports', 'connections', 'settings'];
+const VIEWS: ViewMode[] = ['workspace', 'agents', 'tasks', 'reports', 'growth', 'connections', 'settings'];
 
 export type DeepLink = { type: 'navigate'; view: ViewMode } | { type: 'open-project'; path: string };
 

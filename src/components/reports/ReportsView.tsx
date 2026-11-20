@@ -3,7 +3,7 @@ import { useAgentStore } from '@/store/useAgentStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { memoryStats, useMemoryStore } from '@/store/useMemoryStore';
 import { TEAM_MEMORY } from '@/types';
-import { Badge, EmptyState, PageTitle, Section } from '@/components/ui/primitives';
+import { Badge, Button, EmptyState, PageTitle, Section } from '@/components/ui/primitives';
 import { fmtCost, fmtDateTime, fmtDuration, fmtRelative, fmtTokens, modelLabel, usageCostLabel } from '@/components/ui/helpers';
 
 /**
@@ -205,7 +205,7 @@ function LearningSection() {
   const team = memoryStats(lessons, TEAM_MEMORY);
   const rows = Object.values(agents).map((a) => ({ agent: a, stats: memoryStats(lessons, a.id) }));
   return (
-    <Section title="Learning">
+    <Section title="Learning" action={<Button size="sm" variant="ghost" onClick={() => setActiveView('growth')}>Open Growth</Button>}>
       {total.count === 0 ? (
         <p className="text-[12px] text-fg-subtle">No lessons yet. Agents learn from QA and mentor feedback and after each run; you can also teach them from an agent's panel or with /remember in the chat.</p>
       ) : (

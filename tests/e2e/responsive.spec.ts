@@ -23,6 +23,7 @@ const SCREENS: Array<{ name: string; open: (page: Page) => Promise<unknown>; clo
   { name: 'agents office', open: async (p) => { await nav(p, 'Agents'); await p.getByRole('tab', { name: 'Office', exact: true }).click(); } },
   { name: 'tasks', open: (p) => nav(p, 'Tasks') },
   { name: 'reports', open: (p) => nav(p, 'Reports') },
+  { name: 'growth', open: (p) => nav(p, 'Growth') },
   { name: 'providers', open: async (p) => { await nav(p, 'Connections'); await p.getByRole('tab', { name: 'Providers' }).click(); } },
   { name: 'models', open: async (p) => { await nav(p, 'Connections'); await p.getByRole('tab', { name: 'Models' }).click(); } },
   { name: 'role defaults', open: async (p) => { await nav(p, 'Connections'); await p.getByRole('tab', { name: 'Role defaults' }).click(); } },

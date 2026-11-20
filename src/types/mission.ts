@@ -6,6 +6,7 @@ export type ViewMode =
   | 'agents'
   | 'tasks'
   | 'reports'
+  | 'growth'
   | 'connections'
   | 'settings';
 

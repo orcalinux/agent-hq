@@ -5,7 +5,7 @@ import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import type { ViewMode } from '@/types';
 import { openIntegratedTerminal } from '@/utils/terminalActions';
 
-const ALT_VIEWS: Record<string, ViewMode> = { '1': 'workspace', '2': 'agents', '3': 'tasks', '4': 'reports', '5': 'connections' };
+const ALT_VIEWS: Record<string, ViewMode> = { '1': 'workspace', '2': 'agents', '3': 'tasks', '4': 'reports', '5': 'connections', '6': 'growth' };
 
 export const SHORTCUTS: Array<{ keys: string; action: string }> = [
   { keys: 'Ctrl/Cmd+K', action: 'Command palette' },

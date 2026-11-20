@@ -25,6 +25,8 @@ export interface TraySnapshot extends DesktopStatus {
   totalProviders: number;
   mission: { title: string; completed: number; total: number; failed: number; review: number; source: 'live' | 'simulation' } | null;
   usage: { calls: number; totalTokens: number; estimatedCostUSD: number; unpricedTokens: number };
+  /** What the team has learned on this project; missing until the project's memory is read. */
+  learning?: { lessons: number; thisWeek: number; top?: { name: string; level: string } };
   agents: Array<{ id: string; name: string; title: string; avatar: string; status: AgentStatus; model: string; task?: string }>;
   activity: Array<{ id: string; text: string; timestamp: number; level: 'info' | 'success' | 'warn' | 'error'; agent?: string }>;
 }

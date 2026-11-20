@@ -1,4 +1,4 @@
-import { Bot, ChevronsLeft, Code2, FileBarChart, KanbanSquare, Monitor, Moon, Plug, Settings, Sun, type LucideIcon } from 'lucide-react';
+import { Bot, ChevronsLeft, Code2, FileBarChart, KanbanSquare, Monitor, Moon, Plug, Settings, Sun, TrendingUp, type LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { selectAllModels, useConnectionsStore } from '@/store/useConnectionsStore';
@@ -25,7 +25,13 @@ const GROUPS: Array<{ label: string; items: NavItem[] }> = [
       { id: 'tasks', label: 'Tasks', icon: KanbanSquare, shortcut: 'Alt+3' },
     ],
   },
-  { label: 'Insights', items: [{ id: 'reports', label: 'Reports', icon: FileBarChart, shortcut: 'Alt+4' }] },
+  {
+    label: 'Insights',
+    items: [
+      { id: 'reports', label: 'Reports', icon: FileBarChart, shortcut: 'Alt+4' },
+      { id: 'growth', label: 'Growth', icon: TrendingUp, shortcut: 'Alt+6' },
+    ],
+  },
   { label: 'Models', items: [{ id: 'connections', label: 'Connections', icon: Plug, shortcut: 'Alt+5' }] },
 ];
 

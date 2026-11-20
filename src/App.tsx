@@ -18,6 +18,7 @@ import { useLayoutStore } from '@/store/useLayoutStore';
 const AgentsView = lazy(() => import('@/components/agents/AgentsView'));
 const TasksView = lazy(() => import('@/components/tasks/TasksView'));
 const ReportsView = lazy(() => import('@/components/reports/ReportsView'));
+const GrowthView = lazy(() => import('@/components/growth/GrowthView'));
 const ConnectionsView = lazy(() => import('@/components/connections/ConnectionsView'));
 const SettingsView = lazy(() => import('@/components/settings/SettingsView'));
 
@@ -46,6 +47,7 @@ export default function App() {
                 {activeView === 'agents' && <AgentsView />}
                 {activeView === 'tasks' && <TasksView />}
                 {activeView === 'reports' && <ReportsView />}
+                {activeView === 'growth' && <GrowthView />}
                 {activeView === 'connections' && <ConnectionsView />}
                 {activeView === 'settings' && <SettingsView />}
               </Suspense>

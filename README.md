@@ -49,7 +49,7 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
 - **Plan first, then build.** Sovereign proposes tasks, agents and models; you edit and approve before anything runs.
 - **Parallel by design.** Independent tasks run in waves, up to 3 at once and never two at once for the same agent.
 - **Reviewed work.** Juniors get an N+1 senior review, and Sentinel QA can send work back once for rework.
-- **Agents that learn.** Each project has a long-term memory in `.agent-hq/memory/lessons.json`. Agents are taught with `/remember`, learn from QA and mentor feedback and from a short reflection after every run, and receive the relevant lessons in their next prompt. See [Agent memory](#agent-memory).
+- **Agents that learn.** Each project has a long-term memory in `.agent-hq/memory/lessons.json`. Agents are taught with `/remember`, learn from QA and mentor feedback and from a short reflection after every run, and receive the relevant lessons in their next prompt. **Insights → Growth** shows each agent's level, focus areas and learning over time. See [Agent memory](#agent-memory).
 - **You choose how much to trust the agents.** By default edits arrive as diffs in the **Changes** tab and are only written when you apply them. **Auto-apply** writes QA-approved changes for you, and **Full access** also skips plan approval. Every auto-applied file can be undone.
 - **Local and bring-your-own-model.** Claude Code, Codex, Gemini, Ollama and the Magpie gateway, with automatic failover when a provider runs out of credit.
 - **Looks right on your system.** The theme is **System** by default (light or dark, following your OS live) and can be pinned to Light or Dark. The sidebar glides open and shut, and the editor has modern file tabs with an unsaved dot.
@@ -76,6 +76,9 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
   </tr>
   <tr>
     <td colspan="2"><img src="docs/screenshots/office-day.png" alt="The office in daylight with sunbeams, glass room signs and a live minimap" /><br /><sub><b>Office</b>: daylight, live minimap, glass HUD and speech bubbles; it fades to night with the theme</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/growth.png" alt="Growth page with a card per agent showing level, focus areas, lesson kinds and weekly learning" /><br /><sub><b>Growth</b>: each agent's level, focus areas and learning over the last 8 weeks</sub></td>
   </tr>
 </table>
 
@@ -119,6 +122,15 @@ Agents keep what they learn **per project**, in plain JSON you can read, edit an
 - **Learning mode** (Settings → Memory and learning): **Every run** (default), **Only from feedback**, or **Off**.
 - **Search by meaning.** Lessons are always searched by keyword. If [Ollama](https://ollama.com) is running, Agent HQ also uses an embedding model (`nomic-embed-text` preferred) so "change the look of a button" finds a lesson about Tailwind. Install it from Settings with one click; otherwise search stays keyword-only. Everything stays on your computer.
 - **Safe by design.** Memory files stay inside the project, agents cannot overwrite them through file blocks, and a malformed file is reported rather than replaced.
+
+### Watching agents grow
+
+**Insights → Growth** (`Alt+6`) has a card per agent, so you can follow each one's specialization:
+
+- **Level**, from Newcomer through Learning, Practiced and Skilled to Expert, with progress to the next level. Points come from the agent's own lessons (each lesson 1, plus 0.5 per time it was confirmed again up to 6, 0.2 per time it was used in a prompt up to 10, 0.5 if pinned) and 0.5 per finished task.
+- **Focus areas**: the subjects that come up in at least two of its lessons, such as `tailwind` or `migration`.
+- **Lessons, confirmations, uses and tasks** with the success rate, the mix of lesson kinds, lessons per week over the last 8 weeks, how many came from reviews or from you, and the latest lesson.
+- Team totals, a team learning chart and a feed of the newest lessons. **Open memory** jumps to the agent's Memory panel. On the desktop, the tray's quick status shows the lesson count and the most experienced agent.
 
 ## Features
 

@@ -32,6 +32,7 @@ function buildCommands(): Command[] {
     { id: 'v-agents', group: 'Go to', label: 'Agents', hint: 'Alt+2', run: goto('agents') },
     { id: 'v-tasks', group: 'Go to', label: 'Tasks', hint: 'Alt+3', run: goto('tasks') },
     { id: 'v-reports', group: 'Go to', label: 'Reports', hint: 'Alt+4', run: goto('reports') },
+    { id: 'v-growth', group: 'Go to', label: 'Growth: agent expertise and learning', hint: 'Alt+6', run: goto('growth') },
     { id: 'v-conn', group: 'Go to', label: 'Connections & Models', hint: 'Alt+5', run: goto('connections') },
     { id: 'v-settings', group: 'Go to', label: 'Settings', hint: 'Ctrl+,', run: goto('settings') },
     { id: 'theme', group: 'View', label: 'Switch theme (System, Light, Dark)', run: () => agent().toggleThemeMode() },

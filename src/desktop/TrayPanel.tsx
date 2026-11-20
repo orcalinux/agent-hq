@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, ArrowUpRight, ChevronRight, CircleArrowUp, FolderOpen, Settings, Users, X } from 'lucide-react';
+import { Activity, ArrowUpRight, ChevronRight, CircleArrowUp, FolderOpen, Settings, TrendingUp, Users, X } from 'lucide-react';
 import { Badge, Button, IconButton, StatusDot, Tabs } from '@/components/ui/primitives';
 import { fmtRelative, fmtTokens, statusTone, usageCostLabel } from '@/components/ui/helpers';
 import type { TrayAction, TrayState } from './types';
@@ -112,6 +112,16 @@ export function TrayPanel() {
                   <span>{state.usage.calls} recorded calls</span>
                   <span>Estimated cost: {usageCostLabel(state.usage)}</span>
                 </div>
+                {state.learning ? (
+                  <button type="button" data-testid="tray-learning" onClick={() => act({ type: 'open', view: 'growth' })} className="flex w-full min-w-0 items-center gap-2.5 rounded-xl border border-line bg-surface px-3 py-2.5 text-left shadow-card transition-colors hover:bg-surface-2">
+                    <TrendingUp aria-hidden className="h-4 w-4 shrink-0 text-success" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px]">{state.learning.lessons} lesson{state.learning.lessons === 1 ? '' : 's'} learned · {state.learning.thisWeek} this week</span>
+                      <span className="block truncate text-[11px] text-fg-muted">{state.learning.top ? `Most experienced: ${state.learning.top.name} (${state.learning.top.level})` : 'Agents learn from reviews and after each run'}</span>
+                    </span>
+                    <ChevronRight aria-hidden className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
+                  </button>
+                ) : null}
                 {state.update.status === 'ready' ? (
                   <button type="button" onClick={() => act({ type: 'updates' })} className="flex w-full items-center gap-2 rounded-xl border border-accent/25 bg-accent-soft px-3 py-2.5 text-left">
                     <CircleArrowUp aria-hidden className="h-4 w-4 shrink-0 text-accent" />
