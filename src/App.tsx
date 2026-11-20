@@ -7,6 +7,7 @@ import { ErrorBoundary } from '@/components/shell/ErrorBoundary';
 import { TitleBar } from '@/components/shell/TitleBar';
 import { WhatsNewDialog } from '@/components/shell/WhatsNewDialog';
 import { useShortcuts } from '@/components/shell/useShortcuts';
+import { OverflowTooltipHost } from '@/components/ui/OverflowTooltip';
 import { Spinner } from '@/components/ui/primitives';
 import { WorkspaceView } from '@/components/workspace/WorkspaceView';
 import { useAgentStore } from '@/store/useAgentStore';
@@ -56,6 +57,7 @@ export default function App() {
       <StatusBar />
       <CommandPalette />
       <WhatsNewDialog />
+      <OverflowTooltipHost />
     </div>
   );
 }

@@ -126,7 +126,7 @@ export function CommandPalette() {
   let lastGroup = '';
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-overlay pt-[12vh]" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
-      <div role="dialog" aria-modal="true" aria-label="Command palette" className="w-full max-w-xl overflow-hidden rounded-lg border border-line-strong bg-surface shadow-xl" onKeyDown={onKeyDown}>
+      <div role="dialog" aria-modal="true" aria-label="Command palette" className="mx-4 w-full max-w-xl overflow-hidden rounded-lg border border-line-strong bg-surface shadow-xl" onKeyDown={onKeyDown}>
         <input
           ref={inputRef}
           value={query}
@@ -152,10 +152,10 @@ export function CommandPalette() {
                   data-active={i === index}
                   onMouseMove={() => setIndex(i)}
                   onClick={() => run(cmd)}
-                  className={cn('flex h-8 cursor-pointer items-center justify-between px-4 text-[13px]', i === index ? 'bg-accent-soft text-fg' : 'text-fg-muted')}
+                  className={cn('flex h-8 cursor-pointer items-center justify-between gap-3 px-4 text-[13px]', i === index ? 'bg-accent-soft text-fg' : 'text-fg-muted')}
                 >
-                  <span className="truncate">{cmd.label}</span>
-                  {cmd.hint ? <Kbd>{cmd.hint}</Kbd> : null}
+                  <span className="min-w-0 truncate">{cmd.label}</span>
+                  {cmd.hint ? <span className="shrink-0"><Kbd>{cmd.hint}</Kbd></span> : null}
                 </div>
               </div>
             );

@@ -1,7 +1,28 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+
+type TruncateTag = 'span' | 'div' | 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'strong' | 'code';
+
+/**
+ * Single-line text that ends in an ellipsis when its container is too narrow, and shows the full text
+ * in the shared overflow tooltip only while it is cut off. `lines` clamps to that many lines instead.
+ * Truncation is measured from the rendered width, never a character count.
+ */
+export function Truncate({ as: Tag = 'span', lines, className, style, children, fullText }: { as?: TruncateTag; lines?: number; className?: string; style?: CSSProperties; children: ReactNode; fullText?: string }) {
+  const clamp: CSSProperties | undefined = lines && lines > 1 ? { display: '-webkit-box', WebkitLineClamp: lines, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' } : undefined;
+  return (
+    <Tag data-truncate="" data-full-text={fullText} className={cn('min-w-0 max-w-full', clamp ? 'break-words' : 'block truncate', className)} style={{ ...clamp, ...style }}>
+      {children}
+    </Tag>
+  );
+}
+
+/** Plain-text children become a truncating label; anything else is left as it is. */
+function label(children: ReactNode): ReactNode {
+  return typeof children === 'string' || typeof children === 'number' ? <span className="min-w-0 truncate">{children}</span> : children;
+}
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md';
@@ -30,15 +51,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg font-medium transition-[background-color,border-color,color,filter] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex max-w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-[background-color,border-color,color,filter] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50',
         size === 'sm' ? 'h-6 px-2 text-[12px]' : 'h-7 px-2.5 text-[12.5px]',
         VARIANT[variant],
         className
       )}
       {...rest}
     >
-      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-      {children}
+      {loading ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" /> : Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : null}
+      {label(children)}
     </button>
   );
 });
@@ -86,8 +107,8 @@ const TONE_BADGE: Record<Tone, string> = {
 
 export function Badge({ tone = 'neutral', children, className, title }: { tone?: Tone; children: ReactNode; className?: string; title?: string }) {
   return (
-    <span title={title} className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-px text-[11px] font-medium', TONE_BADGE[tone], className)}>
-      {children}
+    <span title={title} className={cn('inline-flex min-w-0 max-w-full items-center gap-1 whitespace-nowrap rounded-full px-2 py-px text-[11px] font-medium', TONE_BADGE[tone], className)}>
+      {label(children)}
     </span>
   );
 }
@@ -120,7 +141,7 @@ export { Select, type SelectProps, type SelectChangeEvent } from './Select';
 export function Field({ label, hint, children, className }: { label: string; hint?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <label className={cn('block space-y-1', className)}>
-      <span className="block text-[12px] font-medium text-fg-muted">{label}</span>
+      <span className="block truncate text-[12px] font-medium text-fg-muted">{label}</span>
       {children}
       {hint ? <span className="block text-[11.5px] text-fg-subtle">{hint}</span> : null}
     </label>
@@ -150,9 +171,21 @@ export interface TabItem<T extends string> {
   count?: number;
 }
 
+/**
+ * Tab labels shrink and ellipsise together as the bar narrows, down to a readable minimum; past that
+ * the bar scrolls sideways (without a scrollbar) and keeps the selected tab in view.
+ */
 export function Tabs<T extends string>({ items, value, onChange, className, label }: { items: TabItem<T>[]; value: T; onChange: (id: T) => void; className?: string; label: string }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const list = listRef.current;
+    const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!list || !tab || list.scrollWidth <= list.clientWidth) return;
+    const left = tab.offsetLeft - list.offsetLeft;
+    if (left < list.scrollLeft || left + tab.offsetWidth > list.scrollLeft + list.clientWidth) list.scrollTo({ left: Math.max(0, left - 8) });
+  }, [value]);
   return (
-    <div role="tablist" aria-label={label} className={cn('flex items-center gap-0.5 rounded-lg bg-surface-2/60 p-0.5', className)}>
+    <div ref={listRef} role="tablist" aria-label={label} className={cn('flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-lg bg-surface-2/60 p-0.5 [scrollbar-width:none]', className)}>
       {items.map((item) => (
         <button
           key={item.id}
@@ -161,12 +194,12 @@ export function Tabs<T extends string>({ items, value, onChange, className, labe
           aria-selected={value === item.id}
           onClick={() => onChange(item.id)}
           className={cn(
-            'inline-flex h-6 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition-colors',
+            'inline-flex h-6 shrink items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[12.5px] transition-colors',
             value === item.id ? 'bg-surface-3 text-fg shadow-card' : 'text-fg-muted hover:text-fg'
           )}
         >
-          {item.label}
-          {item.count ? <span className="rounded-full bg-accent-soft px-1.5 text-[10.5px] font-medium text-accent">{item.count}</span> : null}
+          <span className="ahq-min-label truncate">{item.label}</span>
+          {item.count ? <span className="shrink-0 rounded-full bg-accent-soft px-1.5 text-[10.5px] font-medium text-accent">{item.count}</span> : null}
         </button>
       ))}
     </div>
@@ -177,10 +210,10 @@ export function Tabs<T extends string>({ items, value, onChange, className, labe
 export function PageTitle({ group, title, subtitle }: { group: string; title: string; subtitle?: ReactNode }) {
   return (
     <div className="min-w-0">
-      <h1 className="flex items-center gap-1.5 text-[14px] font-semibold tracking-tight">
-        <span className="font-normal text-fg-subtle">{group}</span>
-        <span className="font-normal text-fg-subtle/60">/</span>
-        <span className="truncate">{title}</span>
+      <h1 className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[14px] font-semibold tracking-tight">
+        <span className="min-w-0 shrink-[4] truncate font-normal text-fg-subtle">{group}</span>
+        <span className="shrink-0 font-normal text-fg-subtle/60">/</span>
+        <span className="min-w-0 truncate">{title}</span>
       </h1>
       {subtitle ? <div className="truncate text-[12px] text-fg-muted">{subtitle}</div> : null}
     </div>
@@ -190,8 +223,8 @@ export function PageTitle({ group, title, subtitle }: { group: string; title: st
 export function Section({ title, action, children, className }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={cn('space-y-2', className)}>
-      <div className="flex items-center justify-between">
-        <h3 className="text-[12px] font-semibold uppercase tracking-wide text-fg-subtle">{title}</h3>
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <h3 className="min-w-0 truncate text-[12px] font-semibold uppercase tracking-wide text-fg-subtle">{title}</h3>
         {action}
       </div>
       {children}

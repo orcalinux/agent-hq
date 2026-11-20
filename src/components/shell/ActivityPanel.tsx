@@ -35,9 +35,9 @@ export function ActivityPanel() {
       <Splitter orientation="horizontal" side="end" size={height} onResize={(v) => setLayout({ activityHeight: v })} min={120} max={480} label="Resize activity panel" />
       <section aria-label="Activity monitor" style={{ height }} className="flex shrink-0 bg-surface">
         <div className="flex w-72 shrink-0 flex-col border-r border-line">
-          <div className="flex h-8 items-center justify-between border-b border-line px-3">
-            <span className="text-[12px] font-semibold">Active agents</span>
-            <span className="text-[11px] text-fg-subtle">{fmtTokens(totals.tokens)} tokens · {totals.calls} calls</span>
+          <div className="flex h-8 items-center justify-between gap-2 whitespace-nowrap border-b border-line px-3">
+            <span className="min-w-0 truncate text-[12px] font-semibold">Active agents</span>
+            <span className="min-w-0 truncate text-[11px] text-fg-subtle">{fmtTokens(totals.tokens)} tokens · {totals.calls} calls</span>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {busy.length === 0 ? (
@@ -47,8 +47,8 @@ export function ActivityPanel() {
                 <div key={a.id} className="border-b border-line px-3 py-2">
                   <div className="flex items-center gap-2">
                     <StatusDot tone={statusTone(a.status)} pulse={isBusy(a.status)} />
-                    <span className="font-medium">{a.name}</span>
-                    <Badge>{a.status}</Badge>
+                    <span className="min-w-0 truncate font-medium">{a.name}</span>
+                    <Badge className="shrink-0">{a.status}</Badge>
                   </div>
                   {a.currentTask ? <p className="mt-0.5 truncate text-[12px] text-fg-muted">{a.currentTask}</p> : null}
                   <p className="mt-0.5 truncate font-mono text-[11px] text-fg-subtle">{modelLabel(providers, resolveAgentModel(a, roleDefaults)) || 'no model'}</p>
@@ -58,8 +58,8 @@ export function ActivityPanel() {
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-8 items-center justify-between border-b border-line px-3">
-            <span className="text-[12px] font-semibold">Events <span className="font-normal text-fg-subtle">({activity.length})</span></span>
+          <div className="flex h-8 items-center justify-between gap-2 whitespace-nowrap border-b border-line px-3">
+            <span className="min-w-0 truncate text-[12px] font-semibold">Events <span className="font-normal text-fg-subtle">({activity.length})</span></span>
             <IconButton icon={X} label="Close activity panel" size="sm" onClick={() => toggle('activityOpen')} />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto font-mono text-[11.5px]">

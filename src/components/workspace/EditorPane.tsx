@@ -174,15 +174,15 @@ export function EditorPane() {
       {activePath && buffer ? (
         <>
           <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
-            <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-fg-muted" title={activePath}>{activePath}</span>
-            {saveError ? <span className="truncate text-[11.5px] text-danger" role="alert">{saveError}</span> : null}
+            <span className="ahq-min-label flex-1 truncate font-mono text-[11.5px] text-fg-muted" title={activePath}>{activePath}</span>
+            {saveError ? <span className="min-w-0 max-w-[40%] truncate text-[11.5px] text-danger" role="alert">{saveError}</span> : null}
             {target && target.path === activePath ? <Badge tone="accent">Proposed change</Badge> : null}
-            <div className="flex items-center gap-0.5 rounded-md border border-line p-0.5">
+            <div className="flex shrink-0 items-center gap-0.5 rounded-md border border-line p-0.5">
               <IconButton icon={Code2} label="Edit" size="sm" active={mode === 'code'} onClick={() => setEditorMode('code')} />
               <IconButton icon={Columns2} label="Diff" size="sm" active={mode === 'diff'} onClick={() => setEditorMode('diff')} />
             </div>
             {target && target.path === activePath ? <Button size="sm" variant="ghost" onClick={() => showDiff(null)}>Clear proposal</Button> : null}
-            <span aria-live="polite" className={cn('flex items-center gap-1 text-[11.5px] transition-colors', dirty ? 'text-warning' : 'text-fg-subtle')}>
+            <span aria-live="polite" className={cn('flex shrink-0 items-center gap-1 whitespace-nowrap text-[11.5px] transition-colors', dirty ? 'text-warning' : 'text-fg-subtle')}>
               {dirty ? <span className="h-1.5 w-1.5 rounded-full bg-warning" /> : <Check className="h-3 w-3" />}
               {dirty ? 'Unsaved' : 'Saved'}
             </span>

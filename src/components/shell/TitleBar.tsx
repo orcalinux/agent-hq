@@ -80,18 +80,18 @@ export function TitleBar() {
           <Menu className="h-4 w-4" />
         </button>
       ) : null}
-      <div className="ml-1.5 flex min-w-0 items-center gap-1.5">
-        {project ? <span className="truncate font-medium text-fg">{project}</span> : null}
-        {project ? <span className="text-fg-subtle">—</span> : null}
+      <div className="ml-1.5 flex min-w-0 max-w-[32%] items-center gap-1.5 whitespace-nowrap">
+        {project ? <span className="min-w-0 truncate font-medium text-fg">{project}</span> : null}
+        {project ? <span className="shrink-0 text-fg-subtle">—</span> : null}
         <span className="shrink-0">Agent HQ</span>
       </div>
-      <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5" aria-live="polite">
-        <span className={cn('flex items-center gap-1.5 rounded-full px-2.5 py-0.5', running ? 'bg-accent-soft text-fg' : 'text-fg-subtle')}>
+      <div className="absolute left-1/2 top-1/2 flex max-w-[30%] -translate-x-1/2 -translate-y-1/2 items-center gap-1.5" aria-live="polite">
+        <span className={cn('flex min-w-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5', running ? 'bg-accent-soft text-fg' : 'text-fg-subtle')}>
           <StatusDot tone={running ? 'success' : 'neutral'} />
-          {status}
+          <span className="min-w-0 truncate">{status}</span>
         </span>
       </div>
-      <div className="ml-auto flex items-center" style={noDrag}>
+      <div className="ml-auto flex shrink-0 items-center" style={noDrag}>
         <UpdateButton />
         <ApprovalModeBadge />
       </div>

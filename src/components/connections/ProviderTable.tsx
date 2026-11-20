@@ -4,7 +4,12 @@ import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { CONNECTION_METHOD_LABEL, type AIProviderId, type ProviderState } from '@/types';
 import { Badge, Button, StatusDot } from '@/components/ui/primitives';
 import { fmtRelative } from '@/components/ui/helpers';
+import { cn } from '@/utils/cn';
 import { InstallActions } from './InstallActions';
+
+/** Columns that appear once the table has room. Everything stays in the provider's connect dialog. */
+const COLUMN = { method: 'hidden @3xl:table-cell', models: 'hidden @2xl:table-cell', verified: 'hidden @4xl:table-cell' };
+const TOOL_COLUMN = { signIn: 'hidden @4xl:table-cell' };
 
 function ProviderRow({ provider, onConnect }: { provider: ProviderState; onConnect: (id: AIProviderId) => void }) {
   const refresh = useConnectionsStore((s) => s.refresh);
@@ -18,25 +23,27 @@ function ProviderRow({ provider, onConnect }: { provider: ProviderState; onConne
 
   return (
     <tr className="border-b border-line align-top">
-      <td className="px-3 py-2">
-        <div className="font-medium">{provider.name}</div>
-        <div className="text-[11.5px] text-fg-subtle">{provider.methods.map((m) => CONNECTION_METHOD_LABEL[m]).join(' · ')}</div>
+      <td className="w-full max-w-0 px-3 py-2">
+        <div className="truncate font-medium">{provider.name}</div>
+        <div className="truncate text-[11.5px] text-fg-subtle">{provider.methods.map((m) => CONNECTION_METHOD_LABEL[m]).join(' · ')}</div>
+      </td>
+      <td className={cn('px-3 py-2', COLUMN.method)}>
+        <div className="max-w-48 truncate whitespace-nowrap">
+          {c ? CONNECTION_METHOD_LABEL[c.method] : '—'}
+          {c?.maskedKey ? <span className="ml-1 font-mono text-[11px] text-fg-subtle">{c.maskedKey}</span> : null}
+        </div>
       </td>
       <td className="px-3 py-2">
-        {c ? CONNECTION_METHOD_LABEL[c.method] : '—'}
-        {c?.maskedKey ? <span className="ml-1 font-mono text-[11px] text-fg-subtle">{c.maskedKey}</span> : null}
-      </td>
-      <td className="px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
           <StatusDot tone={c ? (c.lastError ? 'danger' : 'success') : 'neutral'} />
-          <span>{c ? (c.lastError ? 'Error' : 'Connected') : 'Not connected'}</span>
+          <span className="min-w-0 truncate">{c ? (c.lastError ? 'Error' : 'Connected') : 'Not connected'}</span>
           {exhausted ? <Badge tone="warning" title="Reached its credit or rate limit. Agents are rerouted to other providers.">Out of credit</Badge> : null}
         </div>
         {c?.lastError ? <p className="mt-0.5 max-w-xs break-words text-[11.5px] text-danger">{c.lastError}</p> : null}
         {msg ? <p className="mt-0.5 max-w-xs break-words text-[11.5px] text-fg-muted">{msg}</p> : null}
       </td>
-      <td className="px-3 py-2 tabular-nums">{c ? provider.models.length : '—'}</td>
-      <td className="px-3 py-2 text-fg-muted">{c ? fmtRelative(c.lastVerifiedAt ? Date.parse(c.lastVerifiedAt) : undefined) : '—'}</td>
+      <td className={cn('px-3 py-2 tabular-nums', COLUMN.models)}>{c ? provider.models.length : '—'}</td>
+      <td className={cn('whitespace-nowrap px-3 py-2 text-fg-muted', COLUMN.verified)}>{c ? fmtRelative(c.lastVerifiedAt ? Date.parse(c.lastVerifiedAt) : undefined) : '—'}</td>
       <td className="px-3 py-2">
         <div className="flex justify-end gap-1.5">
           {c ? (
@@ -69,12 +76,12 @@ export function ProviderTable({ onConnect }: { onConnect: (id: AIProviderId) => 
   const providers = useConnectionsStore((s) => s.providers);
   const loading = useConnectionsStore((s) => s.loading);
   return (
-    <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
+    <div className="@container overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
       <table className="w-full text-left text-[12.5px]">
         <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
           <tr>
-            {['Provider', 'Method', 'Status', 'Models', 'Last verified', ''].map((h, i) => (
-              <th key={i} className="px-3 py-1.5 font-medium">{h}</th>
+            {([['Provider', ''], ['Method', COLUMN.method], ['Status', ''], ['Models', COLUMN.models], ['Last verified', COLUMN.verified], ['', '']] as const).map(([h, column], i) => (
+              <th key={i} className={cn('px-3 py-1.5 font-medium', column)}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -95,20 +102,20 @@ export function LocalTools() {
   const detect = useConnectionsStore((s) => s.detect);
   return (
     <section className="mt-6">
-      <div className="mb-2 flex items-center justify-between">
-        <div>
-          <h2 className="text-[13px] font-semibold">Local tools</h2>
-          <p className="text-[12px] text-fg-muted">Detected on this computer. A signed-in CLI is the supported way to use an existing subscription.</p>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-[13px] font-semibold">Local tools</h2>
+          <p className="truncate text-[12px] text-fg-muted">Detected on this computer. A signed-in CLI is the supported way to use an existing subscription.</p>
         </div>
         <Button size="sm" icon={RefreshCw} loading={detecting} onClick={() => void detect()}>Re-detect</Button>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
+      <div className="@container overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
         <table className="w-full text-left text-[12.5px]">
           <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
             <tr>
               <th className="px-3 py-1.5 font-medium">Tool</th>
               <th className="px-3 py-1.5 font-medium">Status</th>
-              <th className="px-3 py-1.5 font-medium">Sign-in</th>
+              <th className={cn('px-3 py-1.5 font-medium', TOOL_COLUMN.signIn)}>Sign-in</th>
               <th className="px-3 py-1.5 font-medium">Used for</th>
               <th className="px-3 py-1.5 font-medium">Install</th>
             </tr>
@@ -118,44 +125,48 @@ export function LocalTools() {
               <tr key={cli.binary} className="border-b border-line last:border-0">
                 <td className="px-3 py-1.5 font-mono">{cli.binary}</td>
                 <td className="px-3 py-1.5">
-                  <span className="flex items-center gap-1.5">
+                  <span className="flex items-center gap-1.5 whitespace-nowrap">
                     <StatusDot tone={cli.detected ? 'success' : 'neutral'} />
-                    {cli.detected ? 'Installed' + (cli.version ? ' · ' + cli.version : '') : 'Not installed'}
+                    <span className="max-w-64 truncate">{cli.detected ? 'Installed' + (cli.version ? ' · ' + cli.version : '') : 'Not installed'}</span>
                   </span>
                 </td>
-                <td className="px-3 py-1.5 text-fg-muted">
-                  {cli.detected ? (cli.auth?.checked ? (cli.auth.detail ?? (cli.auth.ok ? 'Signed in' : 'Not signed in')) : 'Verified when you connect') : '—'}
+                <td className={cn('px-3 py-1.5 text-fg-muted', TOOL_COLUMN.signIn)}>
+                  <div className="max-w-56 truncate">{cli.detected ? (cli.auth?.checked ? (cli.auth.detail ?? (cli.auth.ok ? 'Signed in' : 'Not signed in')) : 'Verified when you connect') : '—'}</div>
                 </td>
-                <td className="px-3 py-1.5 text-fg-muted">{cli.purpose}{!cli.executionSupported ? ' (not supported for model calls)' : ''}</td>
+                <td className="w-full max-w-0 px-3 py-1.5 text-fg-muted"><div className="truncate">{cli.purpose}{!cli.executionSupported ? ' (not supported for model calls)' : ''}</div></td>
                 <td className="px-3 py-1.5">{!cli.detected && ['claude', 'codex', 'gemini'].includes(cli.binary) ? <InstallActions id={cli.binary} /> : <span className="text-fg-subtle">—</span>}</td>
               </tr>
             ))}
             <tr>
               <td className="px-3 py-1.5 font-mono">ollama</td>
-              <td className="px-3 py-1.5" colSpan={3}>
-                <span className="flex items-center gap-1.5">
+              <td className="px-3 py-1.5">
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
                   <StatusDot tone={detection?.ollama.reachable ? 'success' : 'neutral'} />
-                  {detection
+                  <span className="max-w-64 truncate">{detection
                     ? detection.ollama.reachable
                       ? 'Running at ' + detection.ollama.endpoint + ' · ' + (detection.ollama.models ?? 0) + ' models installed'
                       : 'Not reachable at ' + detection.ollama.endpoint
-                    : 'Detecting…'}
+                    : 'Detecting…'}</span>
                 </span>
               </td>
+              <td className={cn('px-3 py-1.5 text-fg-subtle', TOOL_COLUMN.signIn)}>—</td>
+              <td className="w-full max-w-0 px-3 py-1.5 text-fg-muted"><div className="truncate">Local model server, used through its HTTP endpoint</div></td>
               <td className="px-3 py-1.5">{detection && !detection.ollama.reachable && !detection.clis.find((c) => c.binary === 'ollama')?.detected ? <InstallActions id="ollama" /> : <span className="text-fg-subtle">—</span>}</td>
             </tr>
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono">magpie</td>
-              <td className="px-3 py-1.5" colSpan={3}>
-                <span className="flex items-center gap-1.5">
+              <td className="px-3 py-1.5">
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
                   <StatusDot tone={detection?.magpie?.reachable ? 'success' : 'neutral'} />
-                  {detection
+                  <span className="max-w-64 truncate">{detection
                     ? detection.magpie?.reachable
                       ? 'Gateway at ' + detection.magpie.endpoint + ' · ' + (detection.magpie.models ?? 0) + ' models and routing groups'
                       : 'Gateway not reachable' + (detection.magpie ? ' at ' + detection.magpie.endpoint : '')
-                    : 'Detecting…'}
+                    : 'Detecting…'}</span>
                 </span>
               </td>
+              <td className={cn('px-3 py-1.5 text-fg-subtle', TOOL_COLUMN.signIn)}>—</td>
+              <td className="w-full max-w-0 px-3 py-1.5 text-fg-muted"><div className="truncate">Magpie gateway — its models, routing groups and failover</div></td>
               <td className="px-3 py-1.5">{detection && !detection.magpie?.reachable ? <InstallActions id="magpie" /> : <span className="text-fg-subtle">—</span>}</td>
             </tr>
           </tbody>

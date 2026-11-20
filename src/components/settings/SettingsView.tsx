@@ -29,10 +29,10 @@ function Section({ id, children }: { id: string; children: ReactNode }) {
   return (
     <section id={`settings-${id}`} aria-labelledby={`settings-${id}-title`} className="scroll-mt-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
       <div className="flex items-center gap-3 border-b border-line px-5 py-3.5">
-        <IconTile icon={Icon} tint={meta.tint} />
-        <div>
-          <h2 id={`settings-${id}-title`} className="text-[13.5px] font-semibold tracking-tight">{meta.title}</h2>
-          <p className="text-[11.5px] text-fg-subtle">{meta.hint}</p>
+        <span className="shrink-0"><IconTile icon={Icon} tint={meta.tint} /></span>
+        <div className="min-w-0 flex-1">
+          <h2 id={`settings-${id}-title`} className="truncate text-[13.5px] font-semibold tracking-tight">{meta.title}</h2>
+          <p className="truncate text-[11.5px] text-fg-subtle">{meta.hint}</p>
         </div>
       </div>
       <div className="space-y-3 px-5 py-4">{children}</div>
@@ -94,8 +94,8 @@ export default function SettingsView() {
                   className={`relative flex h-8 w-full items-center gap-2.5 rounded-lg px-3 text-left text-[13px] transition-colors ${on ? 'bg-surface-2 text-fg' : 'text-fg-muted hover:bg-surface-2/60 hover:text-fg'}`}
                 >
                   <span aria-hidden className={`absolute left-0 h-4 w-0.5 rounded-full bg-gradient-to-b from-accent to-accent-2 transition-opacity ${on ? 'opacity-100' : 'opacity-0'}`} />
-                  <Icon className="h-4 w-4" />
-                  {sec.title}
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 truncate">{sec.title}</span>
                 </button>
               );
             })}
@@ -194,8 +194,8 @@ export default function SettingsView() {
           </Section>
 
           <Section id="shortcuts">
-            <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-[12.5px]">
-              {SHORTCUTS.map((s) => (<div key={s.keys} className="contents"><dt className="font-mono text-[12px] text-fg-muted">{s.keys}</dt><dd>{s.action}</dd></div>))}
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1 text-[12.5px]">
+              {SHORTCUTS.map((s) => (<div key={s.keys} className="contents"><dt className="whitespace-nowrap font-mono text-[12px] text-fg-muted">{s.keys}</dt><dd className="truncate">{s.action}</dd></div>))}
             </dl>
           </Section>
           </div>

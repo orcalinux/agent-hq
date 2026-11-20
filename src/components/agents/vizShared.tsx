@@ -75,15 +75,15 @@ export function VizSidebar({ flows }: { flows: AgentFlow[] }) {
     <aside className="flex w-full shrink-0 flex-col gap-3 overflow-y-auto border-t border-line bg-canvas p-3 lg:w-80 lg:border-l lg:border-t-0">
       <section className="rounded-xl border border-line bg-surface p-3 shadow-card">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <h3 className="text-[12px] font-semibold">Current run</h3>
+          <h3 className="truncate text-[12px] font-semibold">Current run</h3>
           {mission ? <Badge tone={mission.source === 'simulation' ? 'warning' : 'accent'}>{mission.source === 'simulation' ? 'demo' : 'live'} · {mission.status}</Badge> : null}
         </div>
         {mission ? (
           <>
-            <p className="mb-2 truncate text-[12.5px] text-fg-muted" title={mission.title}>{mission.title}</p>
-            <div className="mb-1 flex justify-between text-[11.5px] text-fg-subtle">
-              <span>{mission.currentStage}</span>
-              <span>{done}/{total} tasks</span>
+            <p className="mb-2 truncate text-[12.5px] text-fg-muted">{mission.title}</p>
+            <div className="mb-1 flex justify-between gap-2 text-[11.5px] text-fg-subtle">
+              <span className="min-w-0 truncate">{mission.currentStage}</span>
+              <span className="shrink-0 whitespace-nowrap">{done}/{total} tasks</span>
             </div>
             <ProgressLine value={total ? (done / total) * 100 : 0} />
           </>
@@ -101,7 +101,7 @@ export function VizSidebar({ flows }: { flows: AgentFlow[] }) {
               <li key={a.id} className="flex items-center gap-2">
                 <AgentAvatar agent={a} size={24} />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[12px] font-medium">{a.name} <span className="font-normal text-fg-subtle">· {a.status}</span></span>
+                  <span className="block truncate text-[12px] font-medium">{a.name} <span className="font-normal text-fg-subtle">· {a.status}</span></span>
                   <span className="block truncate text-[11.5px] text-fg-muted">{a.currentTask ?? '—'}</span>
                 </span>
               </li>

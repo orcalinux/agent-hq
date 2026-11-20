@@ -6,6 +6,10 @@ import { streamChat } from '@/api/client';
 import { CONNECTION_METHOD_LABEL, type AgentRole, type ModelInfo, type ProviderState } from '@/types';
 import { Badge, Button, EmptyState, Input, StatusDot } from '@/components/ui/primitives';
 import { ModelSelect } from '@/components/ui/helpers';
+import { cn } from '@/utils/cn';
+
+/** Columns that appear once the table has room, so model names never squeeze to nothing. */
+const COLUMN = { context: 'hidden @4xl:table-cell', capabilities: 'hidden @6xl:table-cell', pricing: 'hidden @2xl:table-cell', assigned: 'hidden @5xl:table-cell' };
 
 function ModelRow({ model, provider }: { model: ModelInfo; provider: ProviderState }) {
   const providers = useConnectionsStore((s) => s.providers);
@@ -47,21 +51,21 @@ function ModelRow({ model, provider }: { model: ModelInfo; provider: ProviderSta
 
   return (
     <tr className="border-b border-line align-top">
-      <td className="px-3 py-1.5">
-        <div className="font-medium">{model.name}</div>
-        <div className="font-mono text-[11px] text-fg-subtle">{model.ref}</div>
+      <td className="w-full max-w-0 px-3 py-1.5">
+        <div className="truncate font-medium">{model.name}</div>
+        <div className="truncate font-mono text-[11px] text-fg-subtle">{model.ref}</div>
       </td>
       <td className="px-3 py-1.5">
-        {provider.name}
-        <div className="text-[11px] text-fg-subtle">{CONNECTION_METHOD_LABEL[model.via]}</div>
+        <div className="max-w-40 truncate whitespace-nowrap">{provider.name}</div>
+        <div className="max-w-40 truncate text-[11px] text-fg-subtle">{CONNECTION_METHOD_LABEL[model.via]}</div>
       </td>
-      <td className="px-3 py-1.5 tabular-nums text-fg-muted">{model.contextWindow ? model.contextWindow.toLocaleString() : 'unknown'}</td>
-      <td className="px-3 py-1.5">
-        <div className="flex flex-wrap gap-1">
+      <td className={cn('whitespace-nowrap px-3 py-1.5 tabular-nums text-fg-muted', COLUMN.context)}>{model.contextWindow ? model.contextWindow.toLocaleString() : 'unknown'}</td>
+      <td className={cn('px-3 py-1.5', COLUMN.capabilities)}>
+        <div className="flex max-w-56 flex-wrap gap-1">
           {model.capabilities.length ? model.capabilities.map((c) => <Badge key={c}>{c}</Badge>) : <span className="text-fg-subtle">unknown</span>}
         </div>
       </td>
-      <td className="px-3 py-1.5">
+      <td className={cn('whitespace-nowrap px-3 py-1.5', COLUMN.pricing)}>
         {editing ? (
           <div className="flex items-center gap-1">
             <Input value={inp} onChange={(e) => setInp(e.target.value)} placeholder="in /1M" aria-label="Input price per million tokens" className="h-6 w-20" inputMode="decimal" />
@@ -84,10 +88,10 @@ function ModelRow({ model, provider }: { model: ModelInfo; provider: ProviderSta
           <button type="button" className="ml-2 text-[11.5px] text-fg-subtle hover:underline" onClick={() => setUserPricing(model.ref, null)}>Clear</button>
         ) : null}
       </td>
-      <td className="px-3 py-1.5 text-[12px] text-fg-muted">{[...roles, ...users].join(', ') || '—'}</td>
-      <td className="px-3 py-1.5">
+      <td className={cn('px-3 py-1.5 text-[12px] text-fg-muted', COLUMN.assigned)}><div className="max-w-48 truncate">{[...roles, ...users].join(', ') || '—'}</div></td>
+      <td className="whitespace-nowrap px-3 py-1.5">
         <Button size="sm" loading={testing} onClick={() => void runTest()}>Test</Button>
-        {testMsg ? <p className={'mt-1 max-w-48 break-words text-[11.5px] ' + (testMsg.ok ? 'text-success' : 'text-danger')}>{testMsg.text}</p> : null}
+        {testMsg ? <p className={'mt-1 max-w-48 whitespace-normal break-words text-[11.5px] ' + (testMsg.ok ? 'text-success' : 'text-danger')}>{testMsg.text}</p> : null}
       </td>
     </tr>
   );
@@ -110,12 +114,12 @@ export function ModelsPanel() {
   return (
     <div className="space-y-2">
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter models" aria-label="Filter models" className="max-w-xs" />
-      <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
+      <div className="@container overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
         <table className="w-full text-left text-[12.5px]">
           <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
             <tr>
-              {['Model', 'Provider', 'Context', 'Capabilities', 'Pricing (USD)', 'Assigned to', 'Inference'].map((h) => (
-                <th key={h} className="px-3 py-1.5 font-medium">{h}</th>
+              {([['Model', ''], ['Provider', ''], ['Context', COLUMN.context], ['Capabilities', COLUMN.capabilities], ['Pricing (USD)', COLUMN.pricing], ['Assigned to', COLUMN.assigned], ['Inference', '']] as const).map(([h, column]) => (
+                <th key={h} className={cn('px-3 py-1.5 font-medium', column)}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -158,7 +162,7 @@ export function RoleDefaults() {
     <section className="space-y-2">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-[13px] font-semibold">{empty.length === 0 ? 'Your team is ready' : 'Choose a model for each role'}</h2>
+          <h2 className="truncate text-[13px] font-semibold">{empty.length === 0 ? 'Your team is ready' : 'Choose a model for each role'}</h2>
           <p className="text-[12px] text-fg-muted">
             {empty.length === 0
               ? 'Every role has a model. Start a task from Workspace, or change any role below.'
@@ -167,19 +171,19 @@ export function RoleDefaults() {
                 : 'Connect a provider first, then its models appear here.'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           <RoleProgress done={done} total={ROLES.length} />
           {empty.length > 0 && firstModel ? (
             <Button size="sm" variant="primary" icon={Wand2} onClick={() => empty.forEach((r) => setRoleDefault(r.role, firstModel.ref))}>Fill empty roles</Button>
           ) : null}
         </div>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
+      <div className="@container overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
         <table className="w-full text-left text-[12.5px]">
           <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
             <tr>
-              {['Role', 'Agent', 'Status', 'Default model'].map((h) => (
-                <th key={h} className="px-3 py-1.5 font-medium">{h}</th>
+              {([['Role', ''], ['Agent', 'hidden @2xl:table-cell'], ['Status', ''], ['Default model', '']] as const).map(([h, column]) => (
+                <th key={h} className={cn('px-3 py-1.5 font-medium', column)}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -189,27 +193,27 @@ export function RoleDefaults() {
               const Icon = r.icon;
               return (
                 <tr key={r.role} className="border-b border-line last:border-b-0 hover:bg-surface-2/50">
-                  <td className="px-3 py-2">
+                  <td className="w-full max-w-0 px-3 py-2">
                     <div className="flex items-center gap-2.5">
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface-2 text-fg-muted">
                         <Icon className="h-3.5 w-3.5" />
                       </span>
                       <div className="min-w-0">
-                        <div className="font-medium">{r.label}</div>
-                        <div className="text-[11.5px] text-fg-subtle">{r.help}</div>
+                        <div className="truncate font-medium">{r.label}</div>
+                        <div className="truncate text-[11.5px] text-fg-subtle">{r.help}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-fg-muted">{r.agent}</td>
+                  <td className="hidden whitespace-nowrap px-3 py-2 text-fg-muted @2xl:table-cell">{r.agent}</td>
                   <td className="px-3 py-2">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
                       <StatusDot tone={assigned ? 'success' : 'warning'} />
                       <span>{assigned ? 'Ready' : 'Needs model'}</span>
                     </div>
                   </td>
-                  <td className="w-[38%] min-w-64 px-3 py-2">
+                  <td className="px-3 py-2"><div className="w-[clamp(13rem,40cqw,24rem)]">
                     <ModelSelect value={roleDefaults[r.role]} onChange={(ref) => setRoleDefault(r.role, ref)} className="w-full" aria-label={`Default model for ${r.label} (${r.agent})`} />
-                  </td>
+                  </div></td>
                 </tr>
               );
             })}

@@ -222,7 +222,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
         ref={triggerRef}
         id={id}
         type="button"
-        title={title ?? selected?.label}
+        title={title}
         disabled={disabled}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
@@ -237,7 +237,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
           className
         )}
       >
-        {selected?.group ? <span className="shrink-0 text-fg-subtle">{selected.group} ·</span> : null}
+        {selected?.group ? <span className="min-w-0 max-w-[45%] shrink-[3] truncate text-fg-subtle">{selected.group} ·</span> : null}
         <span className={cn('min-w-0 flex-1 truncate', !selected?.label && 'text-fg-subtle')}>{selected?.label || (value ? value : placeholder)}</span>
         <ChevronDown aria-hidden className={cn('h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform duration-150', open && 'rotate-180')} />
       </button>

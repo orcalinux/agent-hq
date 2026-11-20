@@ -101,15 +101,17 @@ function FolderBrowser({ browser, selected, onSelect, onOpen }: { browser: Retur
         </form>
         <IconButton size="sm" icon={RefreshCw} label="Refresh" onClick={() => void go(listing?.path)} />
       </div>
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-line px-2 py-1 text-[11.5px] text-fg-muted">
-        <button type="button" className="rounded px-1 hover:bg-surface-2 hover:text-fg" onClick={() => void go('/')}>/</button>
-        {crumbs.map((c, i) => (
-          <span key={i} className="flex items-center">
-            <button type="button" className="rounded px-1 hover:bg-surface-2 hover:text-fg" onClick={() => void go('/' + crumbs.slice(0, i + 1).join('/'))}>{c}</button>
-            {i < crumbs.length - 1 ? <span className="text-fg-subtle">/</span> : null}
-          </span>
-        ))}
-        <label className="ml-auto flex items-center gap-1.5 text-fg-subtle">
+      <div className="flex items-center gap-2 whitespace-nowrap border-b border-line px-2 py-1 text-[11.5px] text-fg-muted">
+        <nav aria-label="Folder path" className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
+          <button type="button" className="shrink-0 rounded px-1 hover:bg-surface-2 hover:text-fg" onClick={() => void go('/')}>/</button>
+          {crumbs.map((c, i) => (
+            <span key={i} className="flex min-w-0 items-center" style={{ flexShrink: crumbs.length - i, minWidth: i === crumbs.length - 1 ? '2.5rem' : '1.5rem' }}>
+              <button type="button" className="min-w-0 truncate rounded px-1 hover:bg-surface-2 hover:text-fg" onClick={() => void go('/' + crumbs.slice(0, i + 1).join('/'))}>{c}</button>
+              {i < crumbs.length - 1 ? <span className="shrink-0 text-fg-subtle">/</span> : null}
+            </span>
+          ))}
+        </nav>
+        <label className="ml-auto flex shrink-0 items-center gap-1.5 text-fg-subtle">
           <input type="checkbox" checked={hidden} onChange={toggleHidden} className="accent-[var(--accent)]" />
           Hidden
         </label>
@@ -227,8 +229,8 @@ export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () =>
           {error ? <span className="min-w-0 flex-1 truncate text-[12px] text-danger" title={error}>{error}</span> : blocked ? <span className="min-w-0 flex-1 truncate text-[12px] text-warning">{blocked}</span> : <span className="flex-1" />}
           <Button onClick={onClose}>Cancel</Button>
           {tab === 'open' ? (
-            <Button variant="primary" icon={FolderOpen} loading={busy} disabled={!target || Boolean(blocked) || target === root} onClick={() => void openFolder(target)}>
-              Open {target ? '“' + target.split('/').filter(Boolean).pop() + '”' : ''}
+            <Button variant="primary" icon={FolderOpen} loading={busy} className="min-w-0 max-w-[60%] shrink" disabled={!target || Boolean(blocked) || target === root} onClick={() => void openFolder(target)}>
+              {target ? `Open “${target.split('/').filter(Boolean).pop()}”` : 'Open'}
             </Button>
           ) : (
             <Button variant="primary" icon={FolderPlus} loading={busy} disabled={!name.trim() || !browser.listing || Boolean(blocked)} onClick={() => void create()}>

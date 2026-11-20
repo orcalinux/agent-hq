@@ -88,8 +88,8 @@ export function Dialog({ open, onClose, title, description, children, footer, wi
         className={cn('ahq-pop w-full overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-pop focus:outline-none', width)}
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
-          <div>
-            <h2 className="text-[14px] font-semibold text-fg">{title}</h2>
+          <div className="min-w-0">
+            <h2 className="truncate text-[14px] font-semibold text-fg">{title}</h2>
             {description ? <p className="mt-0.5 text-[12px] text-fg-muted">{description}</p> : null}
           </div>
           <IconButton icon={X} label="Close" size="sm" onClick={onClose} />
@@ -130,7 +130,7 @@ export function SidePanel({ open, onClose, title, subtitle, leading, meta, foote
     <aside
       aria-label={title}
       style={{ width }}
-      className="ahq-panel-in flex h-full max-w-[85vw] shrink-0 flex-col border-l border-line bg-canvas"
+      className="ahq-panel-in flex h-full min-w-0 max-w-[50%] shrink-0 flex-col border-l border-line bg-canvas"
     >
       <div
         className="relative border-b border-line bg-surface px-4 pb-3 pt-3.5"
@@ -140,7 +140,7 @@ export function SidePanel({ open, onClose, title, subtitle, leading, meta, foote
           {leading}
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[15px] font-semibold tracking-tight text-fg">{title}</h2>
-            {subtitle ? <div className="mt-0.5 text-[12px] text-fg-muted">{subtitle}</div> : null}
+            {subtitle ? <div className="mt-0.5 truncate text-[12px] text-fg-muted">{subtitle}</div> : null}
           </div>
           <IconButton icon={X} label="Close details" size="sm" onClick={onClose} />
         </div>

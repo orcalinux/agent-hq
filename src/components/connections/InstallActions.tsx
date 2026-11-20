@@ -33,8 +33,8 @@ export function InstallActions({ id }: { id: string }) {
 
   return (
     <div className="flex flex-col items-start gap-1">
-      {guide.command ? <code className="max-w-full truncate rounded-md bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] text-fg-muted" title={guide.command}>{guide.command}</code> : null}
-      <div className="flex flex-wrap items-center gap-1">
+      {guide.command ? <code className="block max-w-56 truncate rounded-md bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">{guide.command}</code> : null}
+      <div className="flex items-center gap-1 whitespace-nowrap">
         {guide.command ? (
           <>
             <Button size="sm" variant="primary" icon={SquareTerminal} loading={busy} onClick={() => void runInTerminal()} title="Opens your terminal in this project and runs the command; you see everything it does">

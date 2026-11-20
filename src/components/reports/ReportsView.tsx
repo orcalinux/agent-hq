@@ -4,16 +4,28 @@ import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { Badge, EmptyState, PageTitle, Section } from '@/components/ui/primitives';
 import { fmtCost, fmtDateTime, fmtDuration, fmtTokens, modelLabel, usageCostLabel } from '@/components/ui/helpers';
 
+/**
+ * Report tables keep every cell on one line. The first column takes the leftover width and ellipsises
+ * (see <FlexCell>); when even the numbers do not fit, the table scrolls inside its card.
+ */
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
-      <table className="w-full text-left text-[12.5px]">
+      <table className="w-full text-left text-[12.5px] [&_td]:whitespace-nowrap">
         <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
           <tr>{headers.map((h) => <th key={h} className="px-3 py-1.5 font-medium">{h}</th>)}</tr>
         </thead>
         <tbody>{children}</tbody>
       </table>
     </div>
+  );
+}
+
+function FlexCell({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <td className={'w-full max-w-0 px-3 py-1.5 ' + (className ?? '')}>
+      <div className="min-w-32 truncate">{children}</div>
+    </td>
   );
 }
 
@@ -68,7 +80,7 @@ export default function ReportsView() {
             ['Tokens', totals.calls ? fmtTokens(totals.tokens) : '—'],
             ['Estimated cost', totals.calls ? (totals.unpriced > 0 ? fmtCost(totals.cost) + '+' : fmtCost(totals.cost)) : '—'],
           ].map(([k, v]) => (
-            <div key={k}><dt className="text-fg-muted">{k}</dt><dd className="text-[18px] font-semibold tabular-nums">{v}</dd></div>
+            <div key={k} className="min-w-0"><dt className="truncate text-fg-muted">{k}</dt><dd className="truncate text-[18px] font-semibold tabular-nums">{v}</dd></div>
           ))}
         </dl>
         {totals.unpriced > 0 ? <p className="-mt-3 text-[11.5px] text-fg-subtle">Cost excludes {fmtTokens(totals.unpriced)} tokens from models with no known price. Subscription CLIs are not billed per token.</p> : null}
@@ -78,7 +90,7 @@ export default function ReportsView() {
             <Table headers={['Run', 'Type', 'Status', 'Started', 'Duration', 'Tasks', 'Tokens', 'Cost', 'QA', 'Files proposed / applied']}>
               {runs.map((r) => (
                 <tr key={r.id} className="border-b border-line last:border-0">
-                  <td className="max-w-64 truncate px-3 py-1.5 font-medium" title={r.title}>{r.title}</td>
+                  <FlexCell className="font-medium">{r.title}</FlexCell>
                   <td className="px-3 py-1.5">{r.source === 'live' ? <Badge tone="accent">Live</Badge> : <Badge tone="warning">Simulated</Badge>}</td>
                   <td className="px-3 py-1.5"><Badge tone={r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : 'neutral'}>{r.status}</Badge></td>
                   <td className="px-3 py-1.5 text-fg-muted">{fmtDateTime(r.startedAt)}</td>
@@ -98,7 +110,7 @@ export default function ReportsView() {
           <Table headers={['Agent', 'Calls', 'Input', 'Output', 'Total tokens', 'Est. cost', 'Tasks done', 'Tasks failed', 'Time on tasks']}>
             {Object.values(agents).map((a) => (
               <tr key={a.id} className="border-b border-line last:border-0">
-                <td className="px-3 py-1.5 font-medium">{a.name}<span className="ml-1.5 text-fg-subtle">{a.title}</span></td>
+                <FlexCell className="font-medium">{a.name}<span className="ml-1.5 text-fg-subtle">{a.title}</span></FlexCell>
                 <td className="px-3 py-1.5 tabular-nums">{a.tokenUsage.calls}</td>
                 <td className="px-3 py-1.5 tabular-nums">{a.tokenUsage.calls ? fmtTokens(a.tokenUsage.promptTokens) : '—'}</td>
                 <td className="px-3 py-1.5 tabular-nums">{a.tokenUsage.calls ? fmtTokens(a.tokenUsage.completionTokens) : '—'}</td>
@@ -117,7 +129,7 @@ export default function ReportsView() {
             <Table headers={['Model', 'Tasks', 'Failed', 'Tokens']}>
               {byModel.map(([ref, row]) => (
                 <tr key={ref} className="border-b border-line last:border-0">
-                  <td className="px-3 py-1.5 font-mono text-[12px]">{modelLabel(providers, ref)}</td>
+                  <FlexCell className="font-mono text-[12px]">{modelLabel(providers, ref)}</FlexCell>
                   <td className="px-3 py-1.5 tabular-nums">{row.tasks}</td>
                   <td className="px-3 py-1.5 tabular-nums">{row.failed}</td>
                   <td className="px-3 py-1.5 tabular-nums">{fmtTokens(row.tokens)}</td>
@@ -143,7 +155,7 @@ export default function ReportsView() {
               <div>
                 <div className="mb-1 text-fg-muted">Files proposed by agents</div>
                 {changes.length === 0 ? <p className="text-fg-subtle">None.</p> : changes.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between border-b border-line py-1 last:border-0"><span className="font-mono text-[12px]">{c.path}</span><Badge tone={c.status === 'applied' ? 'success' : c.status === 'discarded' ? 'neutral' : 'warning'}>{c.status}</Badge></div>
+                  <div key={c.id} className="flex items-center justify-between gap-2 border-b border-line py-1 last:border-0"><span className="min-w-0 truncate font-mono text-[12px]">{c.path}</span><Badge className="shrink-0" tone={c.status === 'applied' ? 'success' : c.status === 'discarded' ? 'neutral' : 'warning'}>{c.status}</Badge></div>
                 ))}
               </div>
               <div>

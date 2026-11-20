@@ -26,17 +26,17 @@ export function TaskDetail() {
       onClose={() => select(null)}
       width={width}
       title={task.title}
-      subtitle={<span className="flex flex-wrap items-center gap-1.5"><Badge tone={STATUS_TONE[task.status]}>{task.status.replace('_', ' ')}</Badge><Badge>{task.priority}</Badge><Badge>{task.stage}</Badge></span>}
+      subtitle={<span className="flex min-w-0 items-center gap-1.5 overflow-hidden"><Badge tone={STATUS_TONE[task.status]}>{task.status.replace('_', ' ')}</Badge><Badge>{task.priority}</Badge><Badge>{task.stage}</Badge></span>}
     >
       <div className="space-y-5">
         <p className="whitespace-pre-wrap text-[12.5px] text-fg-muted">{task.description}</p>
         <ProgressBar value={task.progress} tone={task.status === 'failed' ? 'danger' : 'accent'} />
 
         <Section title="Assignment">
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12.5px]">
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-[12.5px] [&_dd]:min-w-0 [&_dd]:truncate [&_dt]:whitespace-nowrap">
             <dt className="text-fg-muted">Agent</dt>
-            <dd className="text-right">{agent ? <button type="button" className="text-accent hover:underline" onClick={() => { selectAgent(agent.id); setView('agents'); }}>{agent.name}</button> : task.assignedAgentId}</dd>
-            <dt className="text-fg-muted">Model used</dt><dd className="truncate text-right font-mono text-[12px]">{task.model || '—'}</dd>
+            <dd className="text-right">{agent ? <button type="button" className="max-w-full truncate text-accent hover:underline" onClick={() => { selectAgent(agent.id); setView('agents'); }}>{agent.name}</button> : task.assignedAgentId}</dd>
+            <dt className="text-fg-muted">Model used</dt><dd className="text-right font-mono text-[12px]">{task.model || '—'}</dd>
             <dt className="text-fg-muted">Depends on</dt><dd className="text-right">{task.dependsOn?.length ? task.dependsOn.join(', ') : 'nothing'}</dd>
             <dt className="text-fg-muted">Attempts</dt><dd className="text-right tabular-nums">{task.attempts ?? 0}</dd>
             <dt className="text-fg-muted">Duration</dt><dd className="text-right tabular-nums">{fmtDuration(task.durationMs ?? 0)}</dd>

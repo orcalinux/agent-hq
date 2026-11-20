@@ -121,6 +121,14 @@
   button:not(:disabled) { cursor: pointer; }
   * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
   select { background-color: var(--surface); }
+
+  /* Shared overflow rules: single-line text ellipsises inside flex and grid parents instead of pushing
+     them wider, and table headers never break mid-label. The overflow tooltip reveals cut-off text. */
+  .truncate, [data-truncate] { min-width: 0; }
+  th { white-space: nowrap; }
+  [role="tab"], [role="menuitem"], kbd { white-space: nowrap; }
+  /* A label that may shrink, but not below a few readable characters (short labels keep their width). */
+  .ahq-min-label { min-width: 0; min-width: calc-size(max-content, min(size, 5ch)); }
 }
 
 @layer components {
@@ -267,3 +275,11 @@
 }
 .ahq-panel-in { animation: ahq-panel-in 220ms cubic-bezier(0.32, 0.72, 0, 1); }
 @media (prefers-reduced-motion: reduce) { .ahq-panel-in { animation: none; } }
+
+@keyframes ahq-tooltip-in {
+  from { opacity: 0; transform: translateY(var(--ahq-tip-shift, -2px)); }
+  to { opacity: 1; transform: none; }
+}
+.ahq-tooltip { animation: ahq-tooltip-in 120ms cubic-bezier(0.2, 0.9, 0.3, 1); }
+.ahq-tooltip[data-side="above"] { --ahq-tip-shift: 2px; }
+@media (prefers-reduced-motion: reduce) { .ahq-tooltip { animation: none; } }

@@ -23,16 +23,16 @@ export function StatusBar() {
   const done = mission ? mission.tasks.filter((t) => t.status === 'completed').length : 0;
 
   return (
-    <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-line bg-surface px-2.5 text-[11.5px] text-fg-muted">
-      <span className="truncate" title="Workspace folder">{workspaceName || 'No workspace'}</span>
+    <footer className="flex h-6 shrink-0 items-center gap-3 whitespace-nowrap border-t border-line bg-surface px-2.5 text-[11.5px] text-fg-muted">
+      <span className="min-w-0 shrink-[2] truncate">{workspaceName || 'No workspace'}</span>
       {branch ? (
-        <span className="flex items-center gap-1"><GitBranch className="h-3 w-3" />{branch}</span>
+        <span className="flex min-w-0 shrink-[3] items-center gap-1"><GitBranch className="h-3 w-3 shrink-0" /><span className="min-w-0 truncate">{branch}</span></span>
       ) : null}
-      <button type="button" onClick={() => setView('connections')} className="flex items-center gap-1.5 hover:text-fg" title="Open Connections & Models">
+      <button type="button" onClick={() => setView('connections')} className="flex min-w-0 items-center gap-1.5 hover:text-fg" title="Open Connections & Models">
         <StatusDot tone={connectedCount ? 'success' : 'warning'} />
-        {connectedCount ? `${connectedCount} provider${connectedCount === 1 ? '' : 's'} · ${modelCount} model${modelCount === 1 ? '' : 's'}` : 'No AI provider connected'}
+        <span className="min-w-0 truncate">{connectedCount ? `${connectedCount} provider${connectedCount === 1 ? '' : 's'} · ${modelCount} model${modelCount === 1 ? '' : 's'}` : 'No AI provider connected'}</span>
       </button>
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex shrink-0 items-center gap-3">
         <ApprovalModeBadge className="py-0" />
         <button
           type="button"

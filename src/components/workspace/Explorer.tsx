@@ -57,9 +57,9 @@ export function Explorer() {
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-surface">
-      <div className="flex h-8 shrink-0 items-center justify-between border-b border-line pl-3 pr-1.5">
-        <span className="truncate text-[11.5px] font-semibold uppercase tracking-wide text-fg-subtle" title={name}>{name || 'Explorer'}</span>
-        <div className="flex items-center">
+      <div className="flex h-8 shrink-0 items-center justify-between gap-1 border-b border-line pl-3 pr-1.5">
+        <span className="min-w-0 truncate text-[11.5px] font-semibold uppercase tracking-wide text-fg-subtle">{name || 'Explorer'}</span>
+        <div className="flex shrink-0 items-center">
           <IconButton icon={Upload} label="Upload files into the project root" size="sm" onClick={() => fileInput.current?.click()} />
           <IconButton icon={RefreshCw} label="Refresh files" size="sm" onClick={() => void useWorkspaceStore.getState().refreshTree()} />
         </div>
@@ -92,8 +92,8 @@ export function Explorer() {
             >
               {isDir ? (open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />) : <span className="w-3 shrink-0" />}
               {isDir ? (open ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-fg-subtle" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />) : <File className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />}
-              <span className="truncate">{node.name}</span>
-              {dirty ? <span className="ml-auto text-accent" aria-label="unsaved">●</span> : status ? <span className={cn('ml-auto font-mono text-[10.5px]', GIT_COLOR[status] ?? 'text-fg-subtle')}>{status}</span> : null}
+              <span className="min-w-0 truncate">{node.name}</span>
+              {dirty ? <span className="ml-auto shrink-0 text-accent" aria-label="unsaved">●</span> : status ? <span className={cn('ml-auto shrink-0 font-mono text-[10.5px]', GIT_COLOR[status] ?? 'text-fg-subtle')}>{status}</span> : null}
             </button>
           );
         })}

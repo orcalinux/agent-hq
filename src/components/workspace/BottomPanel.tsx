@@ -125,15 +125,15 @@ function ProblemsTab() {
     <div className="flex h-full flex-col">
       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line px-3 text-[12px] text-fg-muted">
         <Button size="sm" icon={Play} loading={running} onClick={() => void check()}>Run type check</Button>
-        <span>{checkedAt ? `${problems.length} problem${problems.length === 1 ? '' : 's'} · checked ${formatClock(checkedAt)}` : 'Runs npx tsc --noEmit in the project.'}</span>
+        <span className="min-w-0 truncate">{checkedAt ? `${problems.length} problem${problems.length === 1 ? '' : 's'} · checked ${formatClock(checkedAt)}` : 'Runs npx tsc --noEmit in the project.'}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {checkedAt && problems.length === 0 ? <EmptyState title="No problems found" /> : null}
         {problems.map((p) => (
           <button key={p.id} type="button" onClick={() => void openFile(p.file)} className="flex w-full items-baseline gap-2 px-3 py-1 text-left text-[12px] hover:bg-surface-2">
             <Badge tone={p.severity === 'error' ? 'danger' : 'warning'}>{p.rule}</Badge>
-            <span className="truncate text-fg">{p.message}</span>
-            <span className="ml-auto shrink-0 font-mono text-fg-subtle">{p.file}:{p.line}:{p.column}</span>
+            <span className="min-w-0 truncate text-fg">{p.message}</span>
+            <span className="ml-auto min-w-0 max-w-[45%] shrink-0 truncate font-mono text-fg-subtle">{p.file}:{p.line}:{p.column}</span>
           </button>
         ))}
       </div>
@@ -185,7 +185,7 @@ function ChangesTab() {
         return (
           <div key={p.id} className="border-b border-line px-3 py-1.5">
             <div className="flex items-center gap-2 text-[12px]">
-              <button type="button" onClick={() => setOpen(open === p.id ? null : p.id)} aria-label="Toggle preview" className="text-fg-subtle">
+              <button type="button" onClick={() => setOpen(open === p.id ? null : p.id)} aria-label="Toggle preview" className="shrink-0 text-fg-subtle">
                 {open === p.id ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               </button>
               <span className="min-w-0 flex-1 truncate font-mono">{p.path}</span>
@@ -204,8 +204,8 @@ function ChangesTab() {
           </div>
         );
       })}
-      <div className="flex items-center justify-between px-3 pb-1 pt-3">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">Working tree {git?.branch ? `· ${git.branch}` : ''}</span>
+      <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-3">
+        <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">Working tree {git?.branch ? `· ${git.branch}` : ''}</span>
         <Button size="sm" variant="ghost" onClick={() => void reload()}>Refresh</Button>
       </div>
       {!git ? <p className="px-3 pb-2 text-[12px] text-fg-subtle">Git status unavailable.</p> : null}
@@ -213,10 +213,10 @@ function ChangesTab() {
       {git?.isRepo && git.files.length === 0 ? <p className="px-3 pb-2 text-[12px] text-fg-subtle">No uncommitted changes.</p> : null}
       {git?.files.map((f) => (
         <button key={f.path} type="button" onClick={() => void openFile(f.path)} className="flex w-full items-center gap-2 px-3 py-0.5 text-left text-[12px] hover:bg-surface-2">
-          <span className="w-5 font-mono text-warning">{f.status.trim() || 'M'}</span>
-          <span className="truncate font-mono">{f.path}</span>
-          {f.additions !== undefined ? <span className="ml-auto text-success">+{f.additions}</span> : null}
-          {f.deletions !== undefined ? <span className="text-danger">−{f.deletions}</span> : null}
+          <span className="w-5 shrink-0 font-mono text-warning">{f.status.trim() || 'M'}</span>
+          <span className="min-w-0 truncate font-mono">{f.path}</span>
+          {f.additions !== undefined ? <span className="ml-auto shrink-0 text-success">+{f.additions}</span> : null}
+          {f.deletions !== undefined ? <span className="shrink-0 text-danger">−{f.deletions}</span> : null}
         </button>
       ))}
     </div>
@@ -231,7 +231,7 @@ export function BottomPanel() {
   const pendingChanges = useAgentStore((s) => (s.activeMission?.proposedChanges ?? []).filter((p) => p.status === 'pending').length);
   return (
     <div className="flex h-full min-w-0 flex-col bg-surface">
-      <div className="flex h-8 shrink-0 items-center justify-between border-b border-line px-1.5">
+      <div className="flex h-8 shrink-0 items-center justify-between gap-1 border-b border-line px-1.5">
         <Tabs<BottomTab>
           label="Panel"
           value={tab}
@@ -244,7 +244,7 @@ export function BottomPanel() {
             { id: 'changes', label: 'Changes', count: pendingChanges },
           ]}
         />
-        <div className="flex items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-0.5">
           <IconButton icon={SquareTerminal} label="Open in external terminal app" size="sm" onClick={() => void api.openTerminal().catch(() => undefined)} />
           <IconButton icon={X} label="Hide panel" size="sm" onClick={() => toggle('bottomVisible')} />
         </div>

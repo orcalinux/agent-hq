@@ -141,7 +141,7 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => setView(running ? 'tasks' : 'connections')}
-          title={footer.text}
+          title={collapsed ? footer.text : undefined}
           aria-label={footer.text}
           className={cn(ROW, 'text-[11.5px] text-fg-muted hover:bg-surface-2 hover:text-fg')}
         >

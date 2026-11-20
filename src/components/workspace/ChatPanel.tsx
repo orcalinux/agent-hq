@@ -59,26 +59,26 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
     <div className="mt-2 overflow-hidden rounded-xl border border-line bg-surface-2 shadow-card">
       <div className="border-b border-line px-3 py-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[12px] font-semibold">Proposed plan · {plan.tasks.length} tasks</span>
-          <Badge tone={plan.status === 'executed' ? 'success' : plan.status === 'discarded' ? 'neutral' : 'accent'}>{plan.status}</Badge>
+          <span className="min-w-0 truncate text-[12px] font-semibold">Proposed plan · {plan.tasks.length} tasks</span>
+          <Badge className="shrink-0" tone={plan.status === 'executed' ? 'success' : plan.status === 'discarded' ? 'neutral' : 'accent'}>{plan.status}</Badge>
         </div>
         {plan.summary ? <p className="mt-1 text-[12px] text-fg-muted">{plan.summary}</p> : null}
       </div>
       {newAgents.length ? (
         <div className="border-b border-line bg-accent-soft/40 px-3 py-2">
-          <div className="mb-1.5 text-[12px] font-semibold">Sovereign wants to add {newAgents.length === 1 ? 'an agent' : `${newAgents.length} agents`} for this project</div>
+          <div className="mb-1.5 truncate text-[12px] font-semibold">Sovereign wants to add {newAgents.length === 1 ? 'an agent' : `${newAgents.length} agents`} for this project</div>
           <ul className="space-y-1.5">
             {newAgents.map((n) => (
               <li key={n.key} className="rounded-lg border border-line bg-surface px-2 py-1.5">
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="text-[12.5px] font-medium">{n.name} <span className="font-normal text-fg-muted">· {n.title}</span> <Badge>{n.role}</Badge></div>
+                    <div className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[12.5px] font-medium"><span className="min-w-0 truncate">{n.name} <span className="font-normal text-fg-muted">· {n.title}</span></span> <Badge className="shrink-0">{n.role}</Badge></div>
                     {n.reason ? <p className="text-[11.5px] text-fg-muted">{n.reason}</p> : null}
                   </div>
                   {editable ? <IconButton icon={X} label={`Don't add ${n.name}`} size="sm" onClick={() => dropNewAgent(n.key)} /> : null}
                 </div>
                 <div className="mt-1 flex items-center gap-2">
-                  <span className="text-[11px] text-fg-subtle">Model</span>
+                  <span className="shrink-0 text-[11px] text-fg-subtle">Model</span>
                   <ModelSelect value={n.model ?? ''} onChange={(ref) => setNewAgentModel(n.key, ref)} emptyLabel={`${n.role} default`} disabled={!editable} className="h-6 flex-1" aria-label={`Model for ${n.name}`} />
                 </div>
               </li>
@@ -93,7 +93,7 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
             <div className="flex items-start gap-2">
               <span className="mt-0.5 font-mono text-[11px] text-fg-subtle">{i + 1}</span>
               <div className="min-w-0 flex-1">
-                <div className="text-[12.5px] font-medium">{t.title}</div>
+                <div className="truncate text-[12.5px] font-medium">{t.title}</div>
                 <p className="text-[12px] text-fg-muted">{t.description}</p>
               </div>
               {editable ? <IconButton icon={X} label={`Remove task ${t.title}`} size="sm" onClick={() => removeTask(t.id)} /> : null}
@@ -101,7 +101,7 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
             <div className="flex flex-wrap items-center gap-2 pl-4 text-[11.5px] text-fg-subtle">
               <Badge>{t.stage}</Badge>
               <Badge tone={t.priority === 'critical' || t.priority === 'high' ? 'warning' : 'neutral'}>{t.priority}</Badge>
-              {t.dependsOn.length ? <span>after {t.dependsOn.join(', ')}</span> : null}
+              {t.dependsOn.length ? <span className="whitespace-nowrap">after {t.dependsOn.join(', ')}</span> : null}
               <Select
                 aria-label={`Agent for ${t.title}`}
                 value={t.agentId}
@@ -127,8 +127,8 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
       </ol>
       {editable ? (
         <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2">
-          <span className="text-[11.5px] text-fg-subtle">{running ? 'Another run is in progress.' : 'Nothing runs until you approve.'}</span>
-          <div className="flex gap-2">
+          <span className="min-w-0 truncate text-[11.5px] text-fg-subtle">{running ? 'Another run is in progress.' : 'Nothing runs until you approve.'}</span>
+          <div className="flex shrink-0 gap-2">
             <Button size="sm" onClick={() => updatePlan(message.id, { ...plan, status: 'discarded' })}>Discard</Button>
             <Button size="sm" variant="primary" disabled={running || plan.tasks.length === 0} onClick={() => void run()}>{'Approve & run'}</Button>
           </div>
@@ -165,7 +165,7 @@ function Message({ message }: { message: ManagerChatMessage }) {
       <div className="flex items-center gap-2 text-[11.5px] text-fg-subtle">
         <span className="font-semibold text-fg-muted">Sovereign</span>
         {message.mode ? <span>{message.mode}</span> : null}
-        {message.model ? <span className="truncate font-mono">{modelLabel(providers, message.model)}</span> : null}
+        {message.model ? <span className="min-w-0 truncate font-mono">{modelLabel(providers, message.model)}</span> : null}
       </div>
       {showText && text ? <Markdown text={text} /> : null}
       {message.streaming && !text ? <p className="text-[12.5px] text-fg-subtle">Thinking…</p> : null}
@@ -265,12 +265,12 @@ export function ChatPanel() {
         <IconButton icon={Trash2} label="Clear conversation" size="sm" disabled={messages.length === 0 || streaming} onClick={clearChat} />
       </div>
       <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-1.5">
-        <span className="text-[11.5px] text-fg-subtle">Sovereign model</span>
+        <span className="shrink-0 whitespace-nowrap text-[11.5px] text-fg-subtle">Sovereign model</span>
         <ModelSelect value={model} onChange={(ref) => reassign('agent-manager', ref)} emptyLabel="Choose a model" className="h-6 flex-1" aria-label="Sovereign model" />
       </div>
       {mode !== 'ask' ? (
         <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-1.5">
-          <span className="text-[11.5px] text-fg-subtle">Team</span>
+          <span className="shrink-0 whitespace-nowrap text-[11.5px] text-fg-subtle">Team</span>
           <Select value={teamStrategy} onChange={(e) => setTeamStrategy(e.target.value as TeamStrategy)} aria-label="Team strategy" className="h-6 flex-1">
             <option value="adaptive">Sovereign designs the team for this project</option>
             <option value="fixed">Only use my existing agents</option>
@@ -279,14 +279,14 @@ export function ChatPanel() {
       ) : null}
       {mode !== 'ask' ? (
         <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-1.5">
-          <span className="text-[11.5px] text-fg-subtle">Approval</span>
+          <span className="shrink-0 whitespace-nowrap text-[11.5px] text-fg-subtle">Approval</span>
           <ApprovalModeSelect className="h-6 flex-1" />
         </div>
       ) : null}
       {live && (liveRunning || live.status === 'paused' || live.status === 'failed' || live.status === 'cancelled') ? (
         <div className="shrink-0 space-y-1 border-b border-line bg-surface-2 px-3 py-1.5">
-          <div className="flex items-center justify-between text-[12px]">
-            <span className="truncate">{live.title}</span>
+          <div className="flex items-center justify-between gap-2 text-[12px]">
+            <span className="min-w-0 truncate">{live.title}</span>
             <span className="shrink-0 text-fg-muted">{done}/{live.tasks.length} · {live.status}</span>
           </div>
           <ProgressBar value={live.tasks.length ? (done / live.tasks.length) * 100 : 0} />
@@ -317,7 +317,7 @@ export function ChatPanel() {
         {loaded && !modelOk ? (
           <div className="mb-2 flex items-center gap-2 rounded-md border border-warning/30 bg-warning-soft px-2 py-1.5 text-[12px] text-warning">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            <span className="flex-1">{model ? 'The selected model is not available.' : 'Pick a model for Sovereign to start.'}</span>
+            <span className="min-w-0 flex-1 truncate">{model ? 'The selected model is not available.' : 'Pick a model for Sovereign to start.'}</span>
             <Button size="sm" onClick={() => setView('connections')}>Connections</Button>
           </div>
         ) : null}
@@ -325,8 +325,8 @@ export function ChatPanel() {
           <div className="mb-1.5 flex flex-wrap gap-1">
             {attachments.map((a) => (
               <Badge key={a} tone="accent" className="gap-1">
-                {a}
-                <button type="button" aria-label={`Remove ${a}`} onClick={() => setAttachments((x) => x.filter((p) => p !== a))}><X className="h-3 w-3" /></button>
+                <span className="min-w-0 truncate">{a}</span>
+                <button type="button" className="shrink-0" aria-label={`Remove ${a}`} onClick={() => setAttachments((x) => x.filter((p) => p !== a))}><X className="h-3 w-3" /></button>
               </Badge>
             ))}
           </div>
@@ -347,10 +347,10 @@ export function ChatPanel() {
             aria-label="Message Sovereign"
             className="block w-full resize-none bg-transparent px-2.5 pt-2 text-[13px] placeholder:text-fg-subtle focus:outline-none"
           />
-          <div className="flex items-center justify-between px-1.5 pb-1.5">
+          <div className="flex items-center justify-between gap-2 px-1.5 pb-1.5">
             <AttachPicker onPick={(p) => setAttachments((x) => (x.includes(p) ? x : [...x, p]))} />
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-fg-subtle" title={hint}>{hint?.split('.')[0]}</span>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="min-w-0 truncate text-[11px] text-fg-subtle" title={hint}>{hint?.split('.')[0]}</span>
               {streaming ? (
                 <Button size="sm" variant="danger" icon={Square} onClick={stopChat}>Stop</Button>
               ) : (

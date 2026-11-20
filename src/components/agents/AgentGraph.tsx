@@ -176,7 +176,7 @@ export function AgentGraph() {
                 <span className={cn('block truncate font-mono text-[10.5px]', model ? 'text-fg-subtle' : 'text-warning')}>{model ? modelLabel(providers, model) : 'no model assigned'}</span>
                 {agent.currentTask ? (
                   <span className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-fg-muted" title={agent.currentTask}>{agent.currentTask}</span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-fg-muted">{agent.currentTask}</span>
                     <span className="w-10 shrink-0"><ProgressLine value={agent.taskProgress} /></span>
                   </span>
                 ) : null}

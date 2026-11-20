@@ -74,7 +74,7 @@ export function TrayPanel() {
                     <Button size="sm" variant="ghost" onClick={() => act({ type: 'open', view: 'tasks' })}>View tasks <ChevronRight aria-hidden className="h-3 w-3" /></Button>
                   </div>
                   <div className="space-y-2.5 p-3">
-                    <p className="line-clamp-3 break-words text-[13px] font-medium [overflow-wrap:anywhere]" title={mission?.title}>{mission?.title || 'Ready when you are'}</p>
+                    <p className="line-clamp-3 break-words text-[13px] font-medium [overflow-wrap:anywhere]">{mission?.title || 'Ready when you are'}</p>
                     {mission ? (
                       <>
                         <div className="flex flex-wrap justify-between gap-2 text-[11.5px] text-fg-muted">
@@ -130,8 +130,8 @@ export function TrayPanel() {
                         <span className="truncate text-[12.5px] font-medium">{agent.name}</span>
                         <span className="flex shrink-0 items-center gap-1 text-[10.5px] text-fg-muted"><StatusDot tone={statusTone(agent.status)} />{agent.status}</span>
                       </span>
-                      <span className="mt-0.5 block truncate text-[11.5px] text-fg-muted" title={agent.model}>{agent.model}</span>
-                      {agent.task ? <span className="mt-0.5 block truncate text-[11px] text-fg-subtle" title={agent.task}>{agent.task}</span> : null}
+                      <span className="mt-0.5 block truncate text-[11.5px] text-fg-muted">{agent.model}</span>
+                      {agent.task ? <span className="mt-0.5 block truncate text-[11px] text-fg-subtle">{agent.task}</span> : null}
                     </span>
                     <ChevronRight aria-hidden className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
                   </button>

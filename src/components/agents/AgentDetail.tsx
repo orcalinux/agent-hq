@@ -141,7 +141,7 @@ export function AgentDetail() {
           <Badge tone={tone === 'neutral' ? 'neutral' : tone}><StatusDot tone={tone} pulse={tone === 'accent'} /> {agent.status}</Badge>
           <Badge>{agent.autonomyLevel}</Badge>
           <Badge tone={effective ? 'neutral' : 'warning'} title="Model">
-            <Cpu className="h-3 w-3" /> {effective ? modelLabel(providers, effective) : 'No model'}
+            <Cpu className="h-3 w-3 shrink-0" /> <span className="min-w-0 truncate">{effective ? modelLabel(providers, effective) : 'No model'}</span>
           </Badge>
           {agent.currentTask ? <span className="w-full truncate text-[12px] text-fg-muted">Working on: {agent.currentTask}</span> : null}
         </>
@@ -173,10 +173,10 @@ export function AgentDetail() {
             {agent.taskHistory.slice(-8).reverse().map((t) => (
               <li key={t.runId + t.taskId + t.timestamp} className="px-3.5 py-2 text-[12px]">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium">{t.title}</span>
-                  <Badge tone={t.status === 'completed' ? 'success' : t.status === 'failed' ? 'danger' : 'neutral'}>{t.status}</Badge>
+                  <span className="min-w-0 truncate font-medium">{t.title}</span>
+                  <Badge className="shrink-0" tone={t.status === 'completed' ? 'success' : t.status === 'failed' ? 'danger' : 'neutral'}>{t.status}</Badge>
                 </div>
-                <div className="mt-0.5 text-[11.5px] text-fg-subtle">{t.model} · {fmtDuration(t.durationMs)} · {fmtTokens(t.tokens)} tokens · {fmtRelative(t.timestamp)}</div>
+                <div className="mt-0.5 truncate text-[11.5px] text-fg-subtle">{t.model} · {fmtDuration(t.durationMs)} · {fmtTokens(t.tokens)} tokens · {fmtRelative(t.timestamp)}</div>
                 {t.error ? <div className="mt-0.5 text-[11.5px] text-danger">{t.error}</div> : null}
               </li>
             ))}

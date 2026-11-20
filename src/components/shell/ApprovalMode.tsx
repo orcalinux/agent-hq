@@ -88,15 +88,15 @@ export function ApprovalModeCards() {
             aria-checked={selected}
             onClick={() => request(m.id)}
             className={cn(
-              'flex flex-col gap-1.5 rounded-xl border p-3 text-left transition-colors',
+              'flex min-w-0 flex-col gap-1.5 rounded-xl border p-3 text-left transition-colors',
               selected ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2'
             )}
           >
-            <span className="flex items-center gap-1.5 text-[13px] font-medium text-fg">
-              <Icon className={cn('h-4 w-4', m.id === 'full' ? 'text-warning' : 'text-accent')} />
-              {m.label}
+            <span className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[13px] font-medium text-fg">
+              <Icon className={cn('h-4 w-4 shrink-0', m.id === 'full' ? 'text-warning' : 'text-accent')} />
+              <span className="min-w-0 truncate">{m.label}</span>
             </span>
-            <span className="text-[12px] leading-snug text-fg-muted">{m.description}</span>
+            <span data-multiline="" className="text-[12px] leading-snug text-fg-muted">{m.description}</span>
           </button>
         );
       })}

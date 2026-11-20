@@ -19,24 +19,24 @@ function TaskCard({ task, selected, onSelect }: { task: KanbanTaskCard; selected
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        'w-full rounded-xl border bg-surface p-3 text-left shadow-card transition-colors hover:border-line-strong hover:bg-surface-2',
+        '@container w-full rounded-xl border bg-surface p-3 text-left shadow-card transition-colors hover:border-line-strong hover:bg-surface-2',
         selected ? 'border-accent' : problem ? 'border-danger/40' : 'border-line'
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[12.5px] font-medium leading-snug">{task.title}</span>
-        <Badge tone={STATUS_TONE[task.status]}>{task.status.replace('_', ' ')}</Badge>
+      <div className="flex min-w-0 flex-col items-start gap-1 @[15rem]:flex-row @[15rem]:items-center @[15rem]:justify-between @[15rem]:gap-2">
+        <span className="min-w-0 max-w-full truncate text-[12.5px] font-medium leading-snug">{task.title}</span>
+        <Badge className="shrink-0" tone={STATUS_TONE[task.status]}>{task.status.replace('_', ' ')}</Badge>
       </div>
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-fg-muted">
-        <span>{agent?.name ?? task.assignedAgentId}</span>
-        <Badge tone={task.priority === 'critical' || task.priority === 'high' ? 'warning' : 'neutral'}>{task.priority}</Badge>
-        {task.dependsOn?.length ? <span title={'Depends on ' + task.dependsOn.join(', ')}>needs {task.dependsOn.length}</span> : null}
+      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 whitespace-nowrap text-[11.5px] text-fg-muted">
+        <span className="min-w-0 max-w-full truncate">{agent?.name ?? task.assignedAgentId}</span>
+        <Badge className="shrink-0" tone={task.priority === 'critical' || task.priority === 'high' ? 'warning' : 'neutral'}>{task.priority}</Badge>
+        {task.dependsOn?.length ? <span className="shrink-0" title={'Depends on ' + task.dependsOn.join(', ')}>needs {task.dependsOn.length}</span> : null}
         {task.n1ReviewerId ? <Badge tone={task.n1ReviewStatus === 'approved' || task.n1ReviewStatus === 'bug_fixed' ? 'success' : 'neutral'} title="Senior review required">N+1 {task.n1ReviewStatus?.replace('_', ' ')}</Badge> : null}
       </div>
       {task.status === 'in_progress' || (task.progress > 0 && task.progress < 100) ? <div className="mt-2"><ProgressBar value={task.progress} /></div> : null}
       {task.error ? <p className="mt-1.5 line-clamp-2 flex gap-1 text-[11.5px] text-danger"><AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />{task.error}</p> : null}
       {task.qaFeedback && !task.error ? <p className="mt-1.5 line-clamp-2 text-[11.5px] text-warning">QA: {task.qaFeedback}</p> : null}
-      {task.waitingReason ? <p className="mt-1.5 text-[11.5px] text-fg-subtle">Waiting: {task.waitingReason}</p> : null}
+      {task.waitingReason ? <p className="mt-1.5 line-clamp-2 text-[11.5px] text-fg-subtle">Waiting: {task.waitingReason}</p> : null}
     </button>
   );
 }
@@ -83,13 +83,13 @@ export default function TasksView() {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-surface/70 px-5 py-2 backdrop-blur">
+      <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface/70 px-5 py-2 backdrop-blur">
         <PageTitle
           group="Work"
           title="Tasks"
           subtitle={mission ? mission.title + ' · ' + done + '/' + mission.tasks.length + ' done · ' + mission.status : 'No run yet'}
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {mission ? <Badge tone={isLive ? 'accent' : 'warning'}>{isLive ? 'Live run' : 'Simulated demo'}</Badge> : null}
           {isLive && liveRunning ? <Button variant="danger" icon={Square} onClick={stopRun}>Stop</Button> : null}
           {isLive && !liveRunning && (mission.status === 'cancelled' || mission.status === 'failed' || mission.status === 'paused') ? <Button icon={RotateCcw} onClick={() => void resumeRun()}>Resume</Button> : null}
@@ -99,26 +99,26 @@ export default function TasksView() {
         </div>
       </header>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-4 py-1.5">
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks" aria-label="Search tasks" className="w-48" />
-        <Select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} aria-label="Filter by agent" className="w-36">
+      <div className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-1.5">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks" aria-label="Search tasks" className="w-48 min-w-24 shrink" />
+        <Select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} aria-label="Filter by agent" className="w-36 min-w-20 shrink">
           <option value="">All agents</option>
           {Object.values(agents).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </Select>
-        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status" className="w-36">
+        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status" className="w-36 min-w-20 shrink">
           <option value="">All statuses</option>
           {Object.keys(STATUS_TONE).map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
         </Select>
-        <Select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} aria-label="Filter by priority" className="w-32">
+        <Select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} aria-label="Filter by priority" className="w-32 min-w-20 shrink">
           <option value="">All priorities</option>
           {Object.keys(PRIORITY_ORDER).map((p) => <option key={p}>{p}</option>)}
         </Select>
-        <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort tasks" className="w-36">
+        <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort tasks" className="w-36 min-w-20 shrink">
           <option value="priority">Sort: priority</option>
           <option value="updated">Sort: recently updated</option>
           <option value="progress">Sort: progress</option>
         </Select>
-        {rejected > 0 ? <Badge tone="danger">{rejected} with QA feedback or rejection</Badge> : null}
+        {rejected > 0 ? <Badge className="shrink-[2]" tone="danger">{rejected} with QA feedback or rejection</Badge> : null}
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -129,7 +129,7 @@ export default function TasksView() {
               action={
                 <div className="flex flex-col items-center gap-3">
                   <Button variant="primary" icon={Play} onClick={() => setView('workspace')}>Ask Sovereign to plan work</Button>
-                  <div className="flex items-center gap-2 text-[12px] text-fg-subtle">
+                  <div className="flex flex-wrap items-center justify-center gap-2 text-[12px] text-fg-subtle">
                     <span>or try a scripted demo (no models are called):</span>
                     <Select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Demo scenario" className="w-48">
                       <option value="">Choose scenario</option>
@@ -143,14 +143,14 @@ export default function TasksView() {
               Tasks appear here when you approve a plan from the orchestrator chat. Each task moves through Briefing, Architecture, Implementation, Code Review and QA, and Shipped.
             </EmptyState>
           ) : (
-            <div className="grid h-full min-w-[1000px] grid-cols-5 gap-3 p-3">
+            <div className="grid h-full grid-cols-[repeat(5,minmax(9rem,1fr))] gap-3 p-3">
               {SOP_STAGES.map((s) => {
                 const col = stageOf(s.id);
                 return (
                   <section key={s.id} className="flex min-h-0 flex-col rounded-md bg-surface-2" aria-label={s.shortLabel}>
-                    <h2 className="flex items-center justify-between px-2.5 py-2 text-[12px] font-semibold">
-                      {s.shortLabel}
-                      <span className="rounded bg-surface-3 px-1.5 text-[11px] font-normal text-fg-muted">{col?.tasks.length ?? 0}</span>
+                    <h2 className="flex items-center justify-between gap-2 whitespace-nowrap px-2.5 py-2 text-[12px] font-semibold">
+                      <span className="min-w-0 truncate">{s.shortLabel}</span>
+                      <span className="shrink-0 rounded bg-surface-3 px-1.5 text-[11px] font-normal text-fg-muted">{col?.tasks.length ?? 0}</span>
                     </h2>
                     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-2">
                       {col?.tasks.map((t) => <TaskCard key={t.id} task={t} selected={selectedTaskId === t.id} onSelect={() => select(selectedTaskId === t.id ? null : t.id)} />)}

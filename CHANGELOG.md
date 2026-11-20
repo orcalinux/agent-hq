@@ -11,6 +11,19 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.4.1] — 2026-11-20
+
+### Changed
+- **Responsive text everywhere**: single-line labels (tabs, sidebar and settings navigation, buttons, badges, breadcrumbs, table headers and cells, card titles, dropdowns, toolbars, dialogs and the tray panel) stay on one line and end in an ellipsis when the window is too narrow. They show in full again as soon as there is room.
+- **Overflow tooltip**: hovering or keyboard-focusing cut-off text shows the full text after a short delay. It only appears when text is actually cut off, never gets clipped by its container, can be selected, and closes on Escape, scroll or click.
+- Workspace panes fit the window: the chat narrows first, then the explorer, so the editor keeps at least 320 px. Your saved widths come back when the window grows.
+- Tables on Agents, Connections, Models and Tasks hide their lowest-priority columns in narrow windows instead of scrolling the page. The data stays available in each detail panel.
+- The task board, tab strips and window title bar no longer force a minimum width or overlap at 1024 px.
+
+### Tested
+- New layout audit of 20 screens and dialogs at 1024, 1280 and 1920 px, with normal and artificially widened text. It checks for wrapped labels, text that spills or is cut off without an ellipsis, and page-level horizontal scroll.
+- Tooltip tests (only when cut off, keyboard focus, Escape, inside the window) and a live-resize test that confirms truncation follows the window without a reload.
+
 ## [0.4.0] — 2026-11-20
 
 ### Added
