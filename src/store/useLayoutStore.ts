@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { safeStorage } from './storage';
 
-export type BottomTab = 'terminal' | 'logs' | 'problems' | 'changes';
+export type BottomTab = 'terminal' | 'commands' | 'logs' | 'problems' | 'changes';
 export type WorkspaceLayout = 'code' | 'chat';
 export type AgentsViewMode = 'list' | 'graph' | 'office';
 

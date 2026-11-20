@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Play, SquareTerminal, Trash2, X } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useAgentStore, formatClock } from '@/store/useAgentStore';
@@ -8,9 +8,10 @@ import { canRevert } from '@/engine/approval';
 import { api } from '@/api/client';
 import { Badge, Button, EmptyState, IconButton, Spinner, Tabs } from '@/components/ui/primitives';
 import { fmtDuration } from '@/components/ui/helpers';
+const TerminalPane = lazy(() => import('./TerminalPane').then((m) => ({ default: m.TerminalPane })));
 import { cn } from '@/utils/cn';
 
-function TerminalTab() {
+function CommandsTab() {
   const entries = useWorkspaceStore((s) => s.terminal);
   const run = useWorkspaceStore((s) => s.runCommand);
   const clear = useWorkspaceStore((s) => s.clearTerminal);
@@ -234,18 +235,24 @@ export function BottomPanel() {
           onChange={(t) => setLayout({ bottomTab: t })}
           items={[
             { id: 'terminal', label: 'Terminal' },
+            { id: 'commands', label: 'Agent commands' },
             { id: 'logs', label: 'Agent logs' },
             { id: 'problems', label: 'Problems', count: problemCount },
             { id: 'changes', label: 'Changes', count: pendingChanges },
           ]}
         />
         <div className="flex items-center gap-0.5">
-          <IconButton icon={SquareTerminal} label="Open in system terminal" size="sm" onClick={() => void api.openTerminal().catch(() => undefined)} />
+          <IconButton icon={SquareTerminal} label="Open in external terminal app" size="sm" onClick={() => void api.openTerminal().catch(() => undefined)} />
           <IconButton icon={X} label="Hide panel" size="sm" onClick={() => toggle('bottomVisible')} />
         </div>
       </div>
       <div className="min-h-0 flex-1">
-        {tab === 'terminal' && <TerminalTab />}
+        <div className={tab === 'terminal' ? 'h-full' : 'hidden'}>
+          <Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
+            <TerminalPane />
+          </Suspense>
+        </div>
+        {tab === 'commands' && <CommandsTab />}
         {tab === 'logs' && <LogsTab />}
         {tab === 'problems' && <ProblemsTab />}
         {tab === 'changes' && <ChangesTab />}

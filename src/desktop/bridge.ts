@@ -3,6 +3,7 @@ import { api } from '@/api/client';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import type { ViewMode } from '@/types';
+import { openIntegratedTerminal } from '@/utils/terminalActions';
 import type { DesktopApi, DesktopCommand, DesktopStatus } from './types';
 
 const VIEWS: ViewMode[] = ['workspace', 'agents', 'tasks', 'reports', 'connections', 'settings'];
@@ -46,7 +47,7 @@ function handleCommand(command: DesktopCommand): void {
       store.toggleThemeMode();
       break;
     case 'open-terminal':
-      void api.openTerminal().catch(() => undefined);
+      openIntegratedTerminal();
       break;
   }
 }

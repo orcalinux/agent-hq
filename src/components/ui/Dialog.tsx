@@ -9,6 +9,8 @@ function useEscape(open: boolean, onClose: () => void) {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement | null)?.closest?.('[data-ahq-popover]')) return;
+      const target = e.target as HTMLInputElement | null;
+      if (e.key === 'Escape' && target?.hasAttribute?.('data-escape-clears') && target.value) return;
       if (e.key === 'Escape') {
         e.stopPropagation();
         onClose();
@@ -27,8 +29,13 @@ function useRestoreFocus(open: boolean, containerRef: React.RefObject<HTMLElemen
     const root = document.getElementById('root');
     const wasInert = root?.inert ?? false;
     if (root) root.inert = true;
-    const focusable = node?.querySelector<HTMLElement>('input, select, textarea, button:not([aria-label="Close"])');
-    (focusable ?? node)?.focus();
+    const wanted = node?.querySelector<HTMLElement>('[data-autofocus]');
+    const alreadyInside = node && document.activeElement && document.activeElement !== node && node.contains(document.activeElement);
+    if (wanted) wanted.focus();
+    else if (!alreadyInside) {
+      const focusable = node?.querySelector<HTMLElement>('input, select, textarea, button:not([aria-label="Close"])');
+      (focusable ?? node)?.focus();
+    }
     const trapFocus = (event: KeyboardEvent) => {
       if (event.key !== 'Tab' || (event.target as HTMLElement)?.closest('[data-ahq-popover]')) return;
       const elements = Array.from(node?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') ?? [])

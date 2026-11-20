@@ -13,6 +13,7 @@ import {
   updateConfig,
 } from './config';
 import { ALLOWED_COMMANDS, isLoopbackRequest, parseAllowedCommand, resolveInside } from './security';
+import { TerminalError, closeTerminal, createTerminal, listTerminals, resizeTerminal, streamTerminal, writeTerminal } from './pty';
 import {
   chat,
   ChatMessage,
@@ -225,6 +226,57 @@ const routes: Record<string, Handler> = {
       Object.values(INSTALL_GUIDES).map((g) => [g.id, { name: g.name, command: installCommandFor(g.id, process.platform), url: g.url }])
     );
     send(res, 200, { ok: true, clis, ollama, magpie, installs });
+  },
+
+  'GET /api/terminal/sessions': async (_req, res) => {
+    send(res, 200, { ok: true, sessions: listTerminals(), root: getWorkspaceRoot() });
+  },
+
+  'POST /api/terminal/sessions': async (req, res) => {
+    const body = await readTerminalJson(req);
+    try {
+      send(res, 200, { ok: true, session: await createTerminal({ cwd: getWorkspaceRoot(), cols: body.cols, rows: body.rows }) });
+    } catch (err) {
+      throw asHttpError(err);
+    }
+  },
+
+  'GET /api/terminal/stream': async (req, res, url) => {
+    try {
+      streamTerminal(req, res, url.searchParams.get('id'));
+    } catch (err) {
+      throw asHttpError(err);
+    }
+  },
+
+  'POST /api/terminal/input': async (req, res) => {
+    const body = await readTerminalJson(req);
+    try {
+      writeTerminal(body.id, body.data);
+    } catch (err) {
+      throw asHttpError(err);
+    }
+    send(res, 200, { ok: true });
+  },
+
+  'POST /api/terminal/resize': async (req, res) => {
+    const body = await readTerminalJson(req);
+    try {
+      resizeTerminal(body.id, body.cols, body.rows);
+    } catch (err) {
+      throw asHttpError(err);
+    }
+    send(res, 200, { ok: true });
+  },
+
+  'POST /api/terminal/close': async (req, res) => {
+    const body = await readTerminalJson(req);
+    try {
+      closeTerminal(body.id);
+    } catch (err) {
+      throw asHttpError(err);
+    }
+    send(res, 200, { ok: true });
   },
 
   'POST /api/workspace/open-terminal': async (req, res) => {
@@ -540,6 +592,17 @@ const routes: Record<string, Handler> = {
     });
   },
 };
+
+function asHttpError(err: unknown): Error {
+  return err instanceof TerminalError ? new HttpError(err.status, err.message) : (err as Error);
+}
+
+async function readTerminalJson(req: IncomingMessage) {
+  if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
+    throw new HttpError(415, 'Terminal requests must be sent as JSON.');
+  }
+  return readJson(req);
+}
 
 export function createApiMiddleware() {
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {

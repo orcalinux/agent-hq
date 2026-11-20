@@ -53,7 +53,7 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
 - **Local and bring-your-own-model.** Claude Code, Codex, Gemini, Ollama and the Magpie gateway, with automatic failover when a provider runs out of credit.
 - **Looks right on your system.** The theme is **System** by default (light or dark, following your OS live) and can be pinned to Light or Dark. The sidebar glides open and shut, and the editor has modern file tabs with an unsaved dot.
 - **Installs the missing pieces for you.** In **Connections → Local tools**, every missing tool (Claude Code, Codex, Gemini CLI, Ollama, Magpie) has an **Install** button that opens your own terminal in the project and runs the official command, plus **Copy** and **Docs**.
-- **Your terminal, your shell.** **Open in system terminal** (bottom panel, command palette, or `Ctrl+Shift+T` in the desktop menu) opens your preferred terminal emulator in the current project with your `$SHELL`.
+- **A real terminal built in, like VS Code.** The bottom panel's **Terminal** tab is a full interactive shell (your `$SHELL`, colors, `Ctrl+C`, resize, multiple tabs) that starts in the project folder. Open it with `` Ctrl+` `` or the command palette; shells survive panel switches and window reloads, and stop when the app quits. Prefer your own emulator? **Open in external terminal app** is still in the panel header and the command palette.
 - **A real desktop app.** `.deb`, `.rpm`, AppImage, Windows and macOS installers, with a tray icon that shows the run, notifications, `agenthq://` links and auto-update.
 
 <table>
@@ -112,7 +112,7 @@ Turning on a more permissive mode asks for confirmation first. Auto mode never w
 
 | Area | What you get |
 | --- | --- |
-| **Workspace** | File explorer, multi-tab editor, one-click open in your system terminal, diff view, terminal (allow-listed commands, no shell), agent logs, problems, and the orchestrator chat. Resizable panels, code and chat layouts. |
+| **Workspace** | File explorer, multi-tab editor, integrated terminal with tabs, diff view, an **Agent commands** runner (allow-listed commands, no shell), agent logs, problems, and the orchestrator chat. Resizable panels, code and chat layouts. |
 | **Orchestrator** | Ask, Plan and Build modes. Plans list tasks, assigned agents and models; you can edit, remove or reassign before approving. Runs execute in dependency waves, up to 3 tasks at once and never two at once for the same agent. Each task receives the current contents of the files attached to the request and of the workspace files its description names, so agents edit existing code instead of rewriting it. |
 | **Adaptive team** | Sovereign can design the team for the project, including new agents, or you can restrict it to your own agents. |
 | **Agents** | Graph, Office and List views. The graph supports zoom, pan, dragging nodes and reset. The Office is a live floor plan with a glass HUD, minimap, daylight that fades to night, animated avatars and speech bubbles; monitors light up while an agent works. Change models, add agents, onboard juniors. |
@@ -199,7 +199,7 @@ To publish a release, bump `version` in `package.json` and push a tag such as `v
 
 `npm run test:e2e` starts its own server on `127.0.0.1:5180` (override with `AGENT_HQ_E2E_PORT`) against a throwaway project in the system temp folder, with a separate config folder, so it never touches your projects or connections. The model provider is replaced by scripted responses, so no account is needed. The suite covers every view, the terminal allowlist, and a full plan → approve → run → QA → apply flow, including parallel tasks and file context.
 
-The UI regression suite also checks role assignment and persistence, System/Light/Dark themes, permission confirmation and cancellation, QA settings, editor save/revert and keyboard shortcuts, sidebar collapse, Office lighting, and recovery from a missing view module without clearing saved data. The project picker is checked above the full app with both expanded and collapsed sidebars, including keyboard focus, folder selection and project creation. Installer and terminal-launch requests are mocked so tests do not install tools or open terminals.
+The UI regression suite also checks role assignment and persistence, System/Light/Dark themes, permission confirmation and cancellation, QA settings, editor save/revert and keyboard shortcuts, sidebar collapse, Office lighting, and recovery from a missing view module without clearing saved data. The project picker is checked above the full app with both expanded and collapsed sidebars, including keyboard focus, folder selection and project creation. Installer and external-terminal requests are mocked so tests do not install tools or open terminal windows. The integrated terminal is tested against real shells in the browser and inside Electron, including cleanup on quit, and the project picker's type-to-filter is covered too.
 
 Run `npm run build && AGENT_HQ_E2E_BUILT=1 npm run test:e2e` to exercise the production bundle rather than the development server. CI runs both modes. Layout checks capture Role defaults and Settings at 1000px and 1440px in light and dark themes with reduced motion; screenshots stay in `test-results/`.
 
@@ -219,7 +219,7 @@ To regenerate the README screenshots: `AGENT_HQ_SCREENSHOTS=1 npm run test:e2e -
 - `server/` API served as Vite middleware in development, and by `server/standalone.ts` (a small Node HTTP server that also serves the built UI) in `npm start` and the desktop app: provider connections, chat streaming, project filesystem, git and the restricted command runner. Server code does not hot-reload; restart `npm run dev` after changing it.
 - `electron/` the desktop shell. The page runs sandboxed with context isolation and no Node access; it only gets a small preload bridge (status, notifications, commands). Navigation away from the app opens in your browser instead, permissions other than notifications are refused, and the built UI is served with a strict Content Security Policy.
 - Agents run only inside the opened project folder. File access resolves symlinks, so a link inside the project cannot reach files outside it.
-- The terminal runs allow-listed programs without a shell. Git options that write files or run helpers (`--output`, `--ext-diff`, `--textconv`, …) are refused, paths outside the project are refused (including in `--option=value`), and `npx` only runs packages that are already installed.
+- The integrated terminal is a real shell for *you*; it is only reachable from this machine and is never available to agents. Agents and the **Agent commands** tab run allow-listed programs without a shell. Git options that write files or run helpers (`--output`, `--ext-diff`, `--textconv`, …) are refused, paths outside the project are refused (including in `--option=value`), and `npx` only runs packages that are already installed.
 - The dev server listens on `127.0.0.1` only. `npm run dev:lan` also listens on the LAN; the API still accepts only loopback requests, but do not use it on an untrusted network.
 
 ## Limitations

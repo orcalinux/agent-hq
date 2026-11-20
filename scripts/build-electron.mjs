@@ -18,10 +18,13 @@ const common = {
   absWorkingDir: root,
 };
 
+// Native PTY bindings load prebuilt binaries at runtime, so they stay out of the bundle.
+const nativeModules = ['@lydell/node-pty'];
+
 await Promise.all([
-  build({ ...common, entryPoints: ['electron/main.ts'], outfile: 'dist-electron/main.cjs', external: ['electron', 'electron-updater'] }),
+  build({ ...common, entryPoints: ['electron/main.ts'], outfile: 'dist-electron/main.cjs', external: ['electron', 'electron-updater', ...nativeModules] }),
   build({ ...common, entryPoints: ['electron/preload.ts'], outfile: 'dist-electron/preload.cjs', external: ['electron'], sourcemap: false }),
-  build({ ...common, entryPoints: ['server/start.ts'], outfile: 'dist-electron/server.cjs' }),
+  build({ ...common, entryPoints: ['server/start.ts'], outfile: 'dist-electron/server.cjs', external: nativeModules }),
 ]);
 
 fs.cpSync(path.join(root, 'electron/assets'), path.join(out, 'assets'), { recursive: true });

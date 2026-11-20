@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, ChevronsUpDown, Folder, FolderGit2, FolderOpen, FolderPlus, Home, RefreshCw } from 'lucide-react';
+import { ArrowUp, ChevronsUpDown, Folder, FolderGit2, FolderOpen, FolderPlus, Home, RefreshCw, Search } from 'lucide-react';
 import { api } from '@/api/client';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useAgentStore } from '@/store/useAgentStore';
@@ -44,12 +44,49 @@ function useBrowser(initial: string) {
 function FolderBrowser({ browser, selected, onSelect, onOpen }: { browser: ReturnType<typeof useBrowser>; selected: string | null; onSelect: (p: string) => void; onOpen?: (p: string) => void }) {
   const { listing, error, loading, go, hidden, toggleHidden } = browser;
   const [typed, setTyped] = useState('');
+  const [filter, setFilter] = useState('');
+  const [active, setActive] = useState(0);
+  const filterRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (listing) setTyped(listing.path);
+    if (listing) {
+      setTyped(listing.path);
+      setFilter('');
+      setActive(0);
+    }
   }, [listing]);
+  const needle = filter.trim().toLowerCase();
+  const dirs = (listing?.dirs ?? []).filter((d) => !needle || d.name.toLowerCase().includes(needle));
+  const activeDir = dirs[Math.min(active, dirs.length - 1)];
+  const onFilterKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const next = Math.max(0, Math.min(dirs.length - 1, active + (event.key === 'ArrowDown' ? 1 : -1)));
+      setActive(next);
+      if (dirs[next]) onSelect(dirs[next].path);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (filter.startsWith('/') || filter.startsWith('~')) {
+        void go(filter.startsWith('~') ? (listing?.home ?? '') + filter.slice(1) : filter);
+      } else if (activeDir) {
+        if (event.ctrlKey || event.metaKey) onOpen?.(activeDir.path);
+        else void go(activeDir.path);
+      }
+    } else if (event.key === 'Backspace' && !filter && listing?.parent) {
+      void go(listing.parent);
+    } else if (event.key === 'Escape' && filter) {
+      event.preventDefault();
+      event.stopPropagation();
+      setFilter('');
+    }
+  };
+  const typeAhead = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
+    filterRef.current?.focus();
+  };
   const crumbs = listing ? listing.path.split('/').filter(Boolean) : [];
   return (
-    <div className="rounded-md border border-line">
+    <div className="rounded-md border border-line" onKeyDownCapture={typeAhead}>
       <div className="flex items-center gap-1 border-b border-line p-1.5">
         <IconButton size="sm" icon={ArrowUp} label="Parent folder" disabled={!listing?.parent} onClick={() => void go(listing?.parent ?? undefined)} />
         <IconButton size="sm" icon={Home} label="Home folder" onClick={() => void go(listing?.home)} />
@@ -77,17 +114,35 @@ function FolderBrowser({ browser, selected, onSelect, onOpen }: { browser: Retur
           Hidden
         </label>
       </div>
+      <div className="relative border-b border-line p-1.5">
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-subtle" />
+        <Input
+          ref={filterRef}
+          data-autofocus
+          data-escape-clears
+          value={filter}
+          onChange={(e) => {
+            setFilter(e.target.value);
+            setActive(0);
+          }}
+          onKeyDown={onFilterKey}
+          placeholder="Type to filter folders, or paste a path"
+          aria-label="Filter folders"
+          className="pl-7 text-[12.5px]"
+        />
+      </div>
       <ul role="listbox" aria-label="Folders" className="h-64 overflow-y-auto p-1">
         {loading && !listing ? <li className="flex justify-center p-4"><Spinner /></li> : null}
         {error ? <li className="p-2 text-[12px] text-danger">{error}</li> : null}
-        {listing && listing.dirs.length === 0 && !error ? <li className="p-2 text-[12px] text-fg-subtle">No sub-folders here.</li> : null}
-        {listing?.dirs.map((d) => (
+        {listing && dirs.length === 0 && !error ? <li className="p-2 text-[12px] text-fg-subtle">{needle ? 'No folder matches “' + filter.trim() + '”.' : 'No sub-folders here.'}</li> : null}
+        {dirs.map((d) => (
           <li key={d.path} role="option" aria-selected={selected === d.path}>
             <button
               type="button"
               onClick={() => onSelect(d.path)}
               onDoubleClick={() => (onOpen ? onOpen(d.path) : void go(d.path))}
-              className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[12.5px]', selected === d.path ? 'bg-accent-soft text-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg')}
+              tabIndex={-1}
+              className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[12.5px]', selected === d.path || (needle && activeDir?.path === d.path) ? 'bg-accent-soft text-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg')}
             >
               {d.isProject ? <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-accent" /> : <Folder className="h-3.5 w-3.5 shrink-0" />}
               <span className="min-w-0 flex-1 truncate">{d.name}</span>

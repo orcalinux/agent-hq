@@ -110,7 +110,7 @@ test('install helpers and system terminal send the intended requests without run
     await route.fulfill({ json: { ok: true, terminal: 'mock-terminal', cwd: E2E_WORKSPACE, command: null } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open in system terminal', exact: true }).click();
+  await page.getByRole('button', { name: 'Open in external terminal app', exact: true }).click();
   await expect.poll(() => bodies).toEqual([{}]);
   await go(page, 'Connections');
   const row = page.getByRole('row').filter({ hasText: 'npm i -g @google/gemini-cli' });
@@ -226,3 +226,32 @@ for (const width of [1000, 1440]) {
     });
   }
 }
+
+test('typing in the project dialog filters folders and Enter goes into the match', async ({ page }) => {
+  const errors = trapErrors(page);
+  const parent = path.dirname(E2E_WORKSPACE);
+  for (const name of ['alpha-lib', 'beta-app', 'alpine-notes']) fs.mkdirSync(path.join(parent, name), { recursive: true });
+  await mockProvider(page);
+  await page.goto('/');
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: /demo-app/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Project', exact: true });
+  const folders = dialog.getByRole('listbox', { name: 'Folders' });
+  await expect(dialog.getByRole('textbox', { name: 'Filter folders' })).toBeFocused();
+  await expect(folders.getByRole('option')).toHaveCount(4);
+  await page.keyboard.type('alp');
+  await expect(folders.getByRole('option')).toHaveCount(2);
+  await expect(folders).not.toContainText('beta-app');
+  await page.keyboard.type('ine');
+  await expect(folders.getByRole('option')).toHaveCount(1);
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByRole('textbox', { name: 'Folder path' })).toHaveValue(path.join(parent, 'alpine-notes'));
+  await expect(dialog.getByRole('textbox', { name: 'Filter folders' })).toHaveValue('');
+  await page.keyboard.press('Backspace');
+  await expect(dialog.getByRole('textbox', { name: 'Folder path' })).toHaveValue(parent);
+  await page.keyboard.type('zzz');
+  await expect(folders).toContainText('No folder matches');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('textbox', { name: 'Filter folders' })).toHaveValue('');
+  expect(errors).toEqual([]);
+});

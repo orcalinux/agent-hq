@@ -9,6 +9,17 @@ import type {
   WorkspaceTreeEntry,
 } from '@/types';
 
+export interface TerminalInfo {
+  id: string;
+  title: string;
+  shell: string;
+  cwd: string;
+  pid: number;
+  createdAt: number;
+  exited: boolean;
+  exitCode: number | null;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -77,7 +88,14 @@ export const api = {
   disconnect: (providerId: AIProviderId) => call<{ ok: boolean }>('POST', '/api/connections/disconnect', { providerId }),
   refresh: (providerId: AIProviderId) => call<TestResult>('POST', '/api/connections/refresh', { providerId }),
 
-  /** Opens the user's own terminal in the workspace; `install` runs that tool's official install command in it. */
+  terminalSessions: () => call<{ sessions: TerminalInfo[]; root: string }>('GET', '/api/terminal/sessions'),
+  createTerminal: (cols: number, rows: number) => call<{ session: TerminalInfo }>('POST', '/api/terminal/sessions', { cols, rows }),
+  terminalInput: (id: string, data: string) => call<{ ok: true }>('POST', '/api/terminal/input', { id, data }),
+  terminalResize: (id: string, cols: number, rows: number) => call<{ ok: true }>('POST', '/api/terminal/resize', { id, cols, rows }),
+  closeTerminal: (id: string) => call<{ ok: true }>('POST', '/api/terminal/close', { id }),
+  terminalStreamUrl: (id: string) => `/api/terminal/stream?id=${encodeURIComponent(id)}`,
+
+  /** Opens the user's own external terminal in the workspace; `install` runs that tool's official install command in it. */
   openTerminal: (install?: string) => call<{ terminal: string; cwd: string; command: string | null }>('POST', '/api/workspace/open-terminal', install ? { install } : {}),
   workspace: () => call<{ root: string; name: string; lockedByEnv: boolean; recent: string[] }>('GET', '/api/workspace'),
   setWorkspaceRoot: (path: string) => call<{ root: string; name: string }>('POST', '/api/workspace/root', { path }),

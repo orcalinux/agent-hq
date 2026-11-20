@@ -3,6 +3,7 @@ import http from 'http';
 import type { AddressInfo } from 'net';
 import path from 'path';
 import { createApiMiddleware } from './api';
+import { closeAllTerminals } from './pty';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -114,7 +115,13 @@ export async function startStandaloneServer(opts: StandaloneOptions): Promise<St
       return {
         port,
         url: `http://${host}:${port}`,
-        close: () => new Promise((resolve) => server.close(() => resolve())),
+        close: () => {
+          closeAllTerminals();
+          return new Promise((resolve) => {
+            server.close(() => resolve());
+            server.closeAllConnections();
+          });
+        },
       };
     } catch (err) {
       lastError = err;

@@ -197,3 +197,38 @@ test('built desktop recovers from a missing view chunk without clearing settings
     await app.close();
   }
 });
+
+test('built desktop opens an integrated terminal in the project and stops its shells on quit', async () => {
+  const { app, page, errors } = await launch();
+  let pid = 0;
+  try {
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('desktop:command', { type: 'open-terminal' }));
+    const terminal = page.getByTestId('integrated-terminal');
+    await expect(terminal.getByRole('tab')).toHaveCount(1);
+    const rows = terminal.locator('.xterm-rows');
+    await terminal.locator('.xterm-helper-textarea').focus();
+    await page.keyboard.type('pwd && echo $((6*7))-from-electron');
+    await page.keyboard.press('Enter');
+    await expect(rows).toContainText('42-from-electron');
+    await expect(rows).toContainText(path.basename(dirs.workspace));
+    await page.keyboard.type('stty size');
+    await page.keyboard.press('Enter');
+    await expect(rows).toContainText(/\d+ \d+/);
+    pid = (await page.evaluate(async () => (await (await fetch('/api/terminal/sessions')).json()).sessions[0].pid)) as number;
+    expect(pid).toBeGreaterThan(0);
+    expect(() => process.kill(pid, 0)).not.toThrow();
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+  await expect
+    .poll(() => {
+      try {
+        process.kill(pid, 0);
+        return 'alive';
+      } catch {
+        return 'stopped';
+      }
+    })
+    .toBe('stopped');
+});

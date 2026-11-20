@@ -22,10 +22,11 @@ test('every view opens without errors', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('terminal runs allow-listed commands and refuses shell syntax', async ({ page }) => {
+test('agent command runner runs allow-listed commands and refuses shell syntax', async ({ page }) => {
   const errors = trapErrors(page);
   await mockProvider(page);
   await page.goto('/');
+  await page.getByRole('tab', { name: 'Agent commands' }).click();
   const input = page.getByRole('textbox', { name: 'Terminal command' });
   await input.fill('ls src');
   await input.press('Enter');

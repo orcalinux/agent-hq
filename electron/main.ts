@@ -169,7 +169,7 @@ function buildMenu(): void {
         { type: 'separator' },
         { label: 'Command Palette', accelerator: 'CmdOrCtrl+K', registerAccelerator: false, click: () => send({ type: 'command-palette' }) },
         { label: 'Switch Theme (System, Light, Dark)', click: () => send({ type: 'toggle-theme' }) },
-        { label: 'Open Project in Terminal', accelerator: 'CmdOrCtrl+Shift+T', registerAccelerator: false, click: () => send({ type: 'open-terminal' }) },
+        { label: 'Open Integrated Terminal', accelerator: 'CmdOrCtrl+`', registerAccelerator: false, click: () => send({ type: 'open-terminal' }) },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
