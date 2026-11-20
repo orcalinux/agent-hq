@@ -20,6 +20,9 @@ function agentHqApiPlugin(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [tailwindcss(), react(), agentHqApiPlugin()],
+  build: {
+    emptyOutDir: false,
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

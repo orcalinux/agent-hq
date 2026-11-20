@@ -39,22 +39,25 @@ export class ErrorBoundary extends Component<Props, State> {
     const { error } = this.state;
     if (!error) return this.props.children;
     const full = !this.props.scope;
+    const missingModule = /Failed to fetch dynamically imported module|Importing a module script failed|Failed to load module script/i.test(error.message);
     return (
       <div role="alert" className={full ? 'flex h-screen items-center justify-center bg-canvas p-6 text-fg' : 'flex h-full items-center justify-center p-6 text-fg'}>
         <div className="w-full max-w-xl rounded-lg border border-danger/40 bg-surface p-5">
-          <h1 className="mb-1 text-[14px] font-semibold text-danger">{this.props.scope ? this.props.scope + ' failed to render' : 'Agent HQ failed to start'}</h1>
-          <p className="mb-3 text-[12.5px] text-fg-muted">The error below is what went wrong. Saved browser state from an older version is the usual cause.</p>
+          <h1 className="mb-1 text-[14px] font-semibold text-danger">{missingModule ? 'Reload to load this view' : this.props.scope ? this.props.scope + ' failed to render' : 'Agent HQ failed to start'}</h1>
+          <p className="mb-3 text-[12.5px] text-fg-muted">{missingModule ? 'A view could not be downloaded. This can happen after an update or a connection failure. Reload the app to try again. Your saved agents, conversations and settings will be kept.' : 'This view encountered an error. Try again, or inspect the details below before resetting any saved data.'}</p>
           <pre className="mb-4 max-h-48 overflow-auto rounded-md border border-line bg-canvas p-3 font-mono text-[11.5px] whitespace-pre-wrap text-fg">{error.message + '\n' + (error.stack ?? '').split('\n').slice(1, 6).join('\n')}</pre>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => (full ? window.location.reload() : this.setState({ error: null }))} className="h-7 rounded-md border border-line bg-surface-2 px-3 text-[12.5px] hover:bg-surface-3">
-              Try again
+            <button type="button" onClick={() => (full || missingModule ? window.location.reload() : this.setState({ error: null }))} className="h-7 rounded-md border border-line bg-surface-2 px-3 text-[12.5px] hover:bg-surface-3">
+              {missingModule ? 'Reload app' : 'Try again'}
             </button>
+            {!missingModule ? <>
             <button type="button" onClick={this.resetLayout} className="h-7 rounded-md border border-line bg-surface-2 px-3 text-[12.5px] hover:bg-surface-3">
               Reset layout and reload
             </button>
             <button type="button" onClick={this.resetAll} className="h-7 rounded-md border border-danger/40 bg-danger-soft px-3 text-[12.5px] text-danger hover:bg-danger/20">
               Clear saved browser data
             </button>
+            </> : null}
           </div>
         </div>
       </div>

@@ -199,9 +199,17 @@ To publish a release, bump `version` in `package.json` and push a tag such as `v
 
 `npm run test:e2e` starts its own server on `127.0.0.1:5180` (override with `AGENT_HQ_E2E_PORT`) against a throwaway project in the system temp folder, with a separate config folder, so it never touches your projects or connections. The model provider is replaced by scripted responses, so no account is needed. The suite covers every view, the terminal allowlist, and a full plan → approve → run → QA → apply flow, including parallel tasks and file context.
 
+The UI regression suite also checks role assignment and persistence, System/Light/Dark themes, permission confirmation and cancellation, QA settings, editor save/revert and keyboard shortcuts, sidebar collapse, Office lighting, and recovery from a missing view module without clearing saved data. The project picker is checked above the full app with both expanded and collapsed sidebars, including keyboard focus, folder selection and project creation. Installer and terminal-launch requests are mocked so tests do not install tools or open terminals.
+
+Run `npm run build && AGENT_HQ_E2E_BUILT=1 npm run test:e2e` to exercise the production bundle rather than the development server. CI runs both modes. Layout checks capture Role defaults and Settings at 1000px and 1440px in light and dark themes with reduced motion; screenshots stay in `test-results/`.
+
+Local builds retain existing hashed assets so an open desktop window can still load its views during a rebuild. If a module is unavailable, **Reload app** loads the latest entry point without clearing saved agents, conversations or settings.
+
 To run the same flow against a real model with nothing mocked, pass an installed Ollama model: `AGENT_HQ_E2E_LIVE_MODEL=qwen2.5:7b npm run test:e2e -- live-provider` (set `AGENT_HQ_E2E_OLLAMA` if Ollama is not on `127.0.0.1:11434`), or a Magpie model: `AGENT_HQ_E2E_LIVE_PROVIDER=magpie AGENT_HQ_E2E_LIVE_MODEL=claude/claude-haiku-5-5 npm run test:e2e -- live-provider`. Without the variable the live test is skipped. Ollama answers parallel requests one at a time unless `OLLAMA_NUM_PARALLEL` is raised.
 
 `npm run test:desktop` builds the desktop app and drives it with Playwright: its own server, the preload bridge (with no Node access in the page), menus, external links opening outside the app, remembered window size, and hiding to the tray during a run. It uses throwaway folders for the project, config and app data.
+
+Desktop tests also open every view from the built app, check the role cards and Settings navigation, and simulate a missing JavaScript module to verify reload recovery. Desktop traces are stored separately in `test-results-desktop/`.
 
 To regenerate the README screenshots: `AGENT_HQ_SCREENSHOTS=1 npm run test:e2e -- screenshots`. After changing the logo, `npm run icons` renders the app, installer and tray icons. CI (`.github/workflows/ci.yml`) runs typecheck, unit tests, build, the e2e suite and the desktop tests on every push and pull request.
 

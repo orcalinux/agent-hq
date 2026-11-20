@@ -135,3 +135,65 @@ test('closing the window during a run keeps the app running in the tray', async 
     throw err;
   }
 });
+
+test('built desktop opens every view, role cards, settings sections and Office lighting', async () => {
+  const { app, page, errors } = await launch();
+  try {
+    const nav = page.getByRole('navigation', { name: 'Primary' });
+    for (const view of ['Workspace', 'Tasks', 'Reports', 'Connections', 'Settings', 'Agents']) {
+      await nav.getByRole('button', { name: view, exact: true }).click();
+      const main = page.getByRole('main', { name: view.toLowerCase(), exact: true });
+      await expect(main).toBeVisible();
+      if (view !== 'Workspace') await expect(main.getByRole('heading', { level: 1 })).toContainText(view);
+      await expect(main.getByRole('alert')).toHaveCount(0);
+      if (view === 'Connections') {
+        await page.getByRole('tab', { name: 'Role defaults' }).click();
+        await expect(page.getByRole('button', { name: /^Default model for/ })).toHaveCount(6);
+      }
+      if (view === 'Settings') {
+        const sections = page.getByRole('navigation', { name: 'Settings sections' });
+        await sections.getByRole('button', { name: 'Keyboard shortcuts' }).click();
+        await expect(page.getByRole('heading', { name: 'Keyboard shortcuts', exact: true })).toBeInViewport();
+        await sections.getByRole('button', { name: 'Appearance', exact: true }).click();
+        await expect(page.getByRole('tablist', { name: 'Theme', exact: true })).toBeInViewport();
+      }
+      if (view === 'Agents') {
+        await page.getByRole('tab', { name: 'Office', exact: true }).click();
+        await expect(page.getByRole('img', { name: 'Office floor plan' })).toBeVisible();
+        await page.getByRole('radio', { name: 'Night', exact: true }).click();
+        await expect(page.getByRole('radio', { name: 'Night', exact: true })).toHaveAttribute('aria-checked', 'true');
+      }
+    }
+    await page.reload();
+    await expect(page.getByRole('main', { name: 'agents', exact: true }).getByRole('heading', { level: 1 })).toContainText('Agents');
+    await nav.getByRole('button', { name: /demo-app/ }).click();
+    const picker = page.getByRole('dialog', { name: 'Project', exact: true });
+    await expect(picker).toBeVisible();
+    const bounds = await picker.boundingBox();
+    expect(bounds!.width).toBeGreaterThan(600);
+    const viewportWidth = await page.evaluate(() => innerWidth);
+    expect(Math.abs(bounds!.x + bounds!.width / 2 - viewportWidth / 2)).toBeLessThan(2);
+    await picker.getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
+test('built desktop recovers from a missing view chunk without clearing settings', async () => {
+  const { app, page } = await launch();
+  try {
+    await page.evaluate(() => localStorage.setItem('agent-hq.recovery-test', 'preserve desktop state'));
+    const chunk = /\/assets\/TasksView[^/?]*\.js(?:\?|$)/;
+    await page.route(chunk, (route) => route.abort('failed'));
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Tasks', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Reload to load this view' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Clear saved browser data' })).toHaveCount(0);
+    await page.unroute(chunk);
+    await page.getByRole('button', { name: 'Reload app' }).click();
+    await expect(page.getByRole('main', { name: 'tasks', exact: true }).getByRole('heading', { level: 1 })).toContainText('Tasks');
+    expect(await page.evaluate(() => localStorage.getItem('agent-hq.recovery-test'))).toBe('preserve desktop state');
+  } finally {
+    await app.close();
+  }
+});

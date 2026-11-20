@@ -14,7 +14,8 @@ test('every view opens without errors', async ({ page }) => {
   for (const view of ['Workspace', 'Agents', 'Tasks', 'Reports', 'Connections', 'Settings']) {
     await nav.getByRole('button', { name: view, exact: true }).click();
     await expect(page.getByRole('main')).toHaveAttribute('aria-label', view.toLowerCase());
-    await expect(page.getByText('Something went wrong')).toHaveCount(0);
+    await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+    if (view !== 'Workspace') await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toContainText(view);
   }
   await page.keyboard.press('Alt+2');
   await expect(page.getByRole('main')).toHaveAttribute('aria-label', 'agents');

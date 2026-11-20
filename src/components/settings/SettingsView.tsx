@@ -126,7 +126,8 @@ export default function SettingsView() {
           </Section>
 
           <Section id="appearance">
-            <Field label="Theme">
+            <div className="space-y-1">
+              <p className="text-[12px] font-medium text-fg-muted">Theme</p>
               <Tabs<ThemePreference>
                 label="Theme"
                 value={themePreference}
@@ -139,7 +140,7 @@ export default function SettingsView() {
                 ]}
               />
               <p className="text-[11.5px] text-fg-subtle">System follows your operating system and switches when it does.</p>
-            </Field>
+            </div>
             <Button onClick={resetLayout}>Reset panel layout</Button>
           </Section>
 

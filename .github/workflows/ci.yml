@@ -20,6 +20,10 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Built UI regression tests
+        run: npm run test:e2e
+        env:
+          AGENT_HQ_E2E_BUILT: '1'
       - run: npm run build:electron
       - name: Download the Electron binary
         run: node node_modules/electron/install.js
@@ -29,4 +33,6 @@ jobs:
         if: failure()
         with:
           name: playwright-results
-          path: test-results/
+          path: |
+            test-results/
+            test-results-desktop/

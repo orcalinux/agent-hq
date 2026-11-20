@@ -29,7 +29,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `npx vite --port ${E2E_PORT} --strictPort --host 127.0.0.1`,
+    command: `npx vite ${process.env.AGENT_HQ_E2E_BUILT ? 'preview' : ''} --port ${E2E_PORT} --strictPort --host 127.0.0.1`,
     url: BASE_URL,
     reuseExistingServer: false,
     env: { AGENT_HQ_WORKSPACE: E2E_WORKSPACE, AGENT_HQ_CONFIG_DIR: E2E_CONFIG_DIR },

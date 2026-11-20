@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { IconButton } from './primitives';
@@ -23,9 +24,34 @@ function useRestoreFocus(open: boolean, containerRef: React.RefObject<HTMLElemen
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
     const node = containerRef.current;
+    const root = document.getElementById('root');
+    const wasInert = root?.inert ?? false;
+    if (root) root.inert = true;
     const focusable = node?.querySelector<HTMLElement>('input, select, textarea, button:not([aria-label="Close"])');
     (focusable ?? node)?.focus();
-    return () => previous?.focus?.();
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || (event.target as HTMLElement)?.closest('[data-ahq-popover]')) return;
+      const elements = Array.from(node?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') ?? [])
+        .filter((element) => element.getClientRects().length > 0);
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (!first || !last) {
+        event.preventDefault();
+        node?.focus();
+      } else if (event.shiftKey && (document.activeElement === first || !node?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !node?.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', trapFocus);
+    return () => {
+      window.removeEventListener('keydown', trapFocus);
+      if (root) root.inert = wasInert;
+      previous?.focus?.();
+    };
   }, [open, containerRef]);
 }
 
@@ -44,7 +70,7 @@ export function Dialog({ open, onClose, title, description, children, footer, wi
   useEscape(open, onClose);
   useRestoreFocus(open, ref);
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-overlay p-4 pt-[10vh] backdrop-blur-[2px]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={ref}
@@ -64,7 +90,8 @@ export function Dialog({ open, onClose, title, description, children, footer, wi
         <div className="max-h-[65vh] overflow-y-auto px-4 py-3">{children}</div>
         {footer ? <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-2.5">{footer}</div> : null}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
