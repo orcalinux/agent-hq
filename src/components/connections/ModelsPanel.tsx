@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plug } from 'lucide-react';
+import { Compass, Crown, Palette, Plug, Server, ShieldCheck, Sprout, Wand2, type LucideIcon } from 'lucide-react';
 import { useConnectionsStore, pricingFor } from '@/store/useConnectionsStore';
 import { useAgentStore } from '@/store/useAgentStore';
 import { streamChat } from '@/api/client';
@@ -127,14 +127,34 @@ export function ModelsPanel() {
   );
 }
 
-const ROLES: Array<{ role: AgentRole; label: string; help: string }> = [
-  { role: 'manager', label: 'Orchestrator (Sovereign)', help: 'Plans work and talks to you.' },
-  { role: 'architect', label: 'Architect (Aegis)', help: 'System design and decisions.' },
-  { role: 'frontend', label: 'Frontend (Pulse)', help: 'UI implementation.' },
-  { role: 'backend', label: 'Backend (Titan)', help: 'APIs, data and services.' },
-  { role: 'qa', label: 'QA and security (Sentinel)', help: 'Reviews output and gates the release.' },
-  { role: 'intern', label: 'Junior agents (Nova, Byte)', help: 'Small scoped tasks, reviewed by a senior.' },
+const ROLES: Array<{ role: AgentRole; label: string; agent: string; help: string; icon: LucideIcon; color: string }> = [
+  { role: 'manager', label: 'Orchestrator', agent: 'Sovereign', help: 'Plans the work and talks to you.', icon: Crown, color: '#D97706' },
+  { role: 'architect', label: 'Architect', agent: 'Aegis', help: 'System design and decisions.', icon: Compass, color: '#7C3AED' },
+  { role: 'frontend', label: 'Frontend', agent: 'Pulse', help: 'Builds the user interface.', icon: Palette, color: '#2563EB' },
+  { role: 'backend', label: 'Backend', agent: 'Titan', help: 'APIs, data and services.', icon: Server, color: '#0D9488' },
+  { role: 'qa', label: 'QA and security', agent: 'Sentinel', help: 'Reviews output and gates the release.', icon: ShieldCheck, color: '#DC2626' },
+  { role: 'intern', label: 'Junior agents', agent: 'Nova, Byte', help: 'Small scoped tasks, reviewed by a senior.', icon: Sprout, color: '#DB2777' },
 ];
+
+function ProgressRing({ done, total }: { done: number; total: number }) {
+  const r = 22;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="relative h-14 w-14 shrink-0" role="img" aria-label={`${done} of ${total} roles ready`}>
+      <svg viewBox="0 0 56 56" className="h-14 w-14 -rotate-90">
+        <circle cx="28" cy="28" r={r} fill="none" stroke="var(--line-strong)" strokeWidth="5" />
+        <circle cx="28" cy="28" r={r} fill="none" stroke="url(#ahq-ring-grad)" strokeWidth="5" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - done / total)} style={{ transition: 'stroke-dashoffset 700ms cubic-bezier(.32,.72,0,1)' }} />
+        <defs>
+          <linearGradient id="ahq-ring-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="var(--accent)" />
+            <stop offset="1" stopColor="var(--accent-2)" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[13px] font-semibold tabular-nums">{done}/{total}</span>
+    </div>
+  );
+}
 
 export function RoleDefaults() {
   const roleDefaults = useAgentStore((s) => s.roleDefaults);
@@ -142,26 +162,59 @@ export function RoleDefaults() {
   const providers = useConnectionsStore((s) => s.providers);
   const firstModel = providers.filter((p) => p.connection).flatMap((p) => p.models)[0];
   const empty = ROLES.filter((r) => !roleDefaults[r.role]);
+  const done = ROLES.length - empty.length;
   return (
-    <div className="max-w-2xl space-y-1">
-      <p className="text-[12.5px] text-fg-muted">
-        Agents without their own model use the default for their role. You can give each agent its own model in Agents. If a provider runs out of credit during a run, the orchestrator reroutes the affected agents to another connected provider and logs the switch.
-      </p>
-      {empty.length > 0 && firstModel ? (
-        <div className="mb-3 mt-2 flex items-center gap-3 rounded-md border border-line bg-surface-2 px-3 py-2">
-          <span className="min-w-0 flex-1 text-[12.5px] text-fg-muted">{empty.length} roles have no default. Fill them with <span className="font-mono text-fg">{firstModel.name}</span>, then change any you like.</span>
-          <Button size="sm" onClick={() => empty.forEach((r) => setRoleDefault(r.role, firstModel.ref))}>Fill empty roles</Button>
-        </div>
-      ) : <div className="mb-3" />}
-      {ROLES.map((r) => (
-        <div key={r.role} className="flex items-center justify-between gap-4 border-b border-line py-2">
-          <div>
-            <div className="text-[13px] font-medium">{r.label}</div>
-            <div className="text-[12px] text-fg-subtle">{r.help}</div>
+    <div className="mx-auto max-w-5xl space-y-4">
+      <section className="relative overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-card">
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-accent/20 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-accent-2/15 blur-3xl" />
+        <div className="relative flex flex-wrap items-center gap-4">
+          <ProgressRing done={done} total={ROLES.length} />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[15px] font-semibold tracking-tight">{empty.length === 0 ? 'Your team is ready' : 'Choose a model for each role'}</h2>
+            <p className="mt-0.5 max-w-xl text-[12.5px] leading-relaxed text-fg-muted">
+              {empty.length === 0
+                ? 'Every role has a model. Start a task from Workspace, or fine-tune any role below.'
+                : firstModel
+                  ? <>One click fills the {empty.length} empty {empty.length === 1 ? 'role' : 'roles'} with <span className="font-mono text-fg">{firstModel.name}</span>. You can change any of them afterwards.</>
+                  : 'Connect a provider first, then models appear here.'}
+            </p>
           </div>
-          <ModelSelect value={roleDefaults[r.role]} onChange={(ref) => setRoleDefault(r.role, ref)} className="w-64" aria-label={'Default model for ' + r.label} />
+          {empty.length > 0 && firstModel ? (
+            <Button variant="primary" size="md" icon={Wand2} className="h-8 px-3.5" onClick={() => empty.forEach((r) => setRoleDefault(r.role, firstModel.ref))}>Fill empty roles</Button>
+          ) : null}
         </div>
-      ))}
+      </section>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {ROLES.map((r) => {
+          const assigned = Boolean(roleDefaults[r.role]);
+          const Icon = r.icon;
+          return (
+            <div key={r.role} className="group relative overflow-hidden rounded-2xl border border-line bg-surface p-4 shadow-card transition-[border-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-pop">
+              <div aria-hidden className="absolute inset-x-0 top-0 h-px opacity-70" style={{ background: `linear-gradient(90deg, transparent, ${r.color}, transparent)` }} />
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ color: r.color, background: `color-mix(in srgb, ${r.color} 16%, var(--surface))`, boxShadow: `0 0 0 1px color-mix(in srgb, ${r.color} 35%, transparent), 0 6px 18px -8px ${r.color}` }}>
+                  <Icon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="truncate text-[13.5px] font-semibold">{r.label}</h3>
+                    <span className="text-[11.5px] text-fg-subtle">{r.agent}</span>
+                  </div>
+                  <p className="text-[12px] text-fg-muted">{r.help}</p>
+                </div>
+                <span className={assigned ? 'inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-px text-[11px] font-medium text-success' : 'inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-px text-[11px] font-medium text-warning'}>
+                  <span className={assigned ? 'h-1.5 w-1.5 rounded-full bg-success' : 'h-1.5 w-1.5 rounded-full bg-warning'} />
+                  {assigned ? 'Ready' : 'Needs model'}
+                </span>
+              </div>
+              <ModelSelect value={roleDefaults[r.role]} onChange={(ref) => setRoleDefault(r.role, ref)} className="mt-3 w-full" aria-label={`Default model for ${r.label} (${r.agent})`} />
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[11.5px] text-fg-subtle">Agents without their own model use their role's default. If a provider runs out of credit during a run, affected agents are rerouted to another connected provider and the switch is logged.</p>
     </div>
   );
 }

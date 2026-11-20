@@ -1,14 +1,45 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Bell, Database, FolderOpen, Keyboard, Palette, ShieldCheck, TestTube2, type LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
-import { Badge, Button, Field, Input, PageTitle, Section, Select, Tabs } from '@/components/ui/primitives';
+import { Badge, Button, Field, Input, PageTitle, Tabs } from '@/components/ui/primitives';
 import type { ThemePreference } from '@/types';
 import { fmtDateTime } from '@/components/ui/helpers';
 import { SHORTCUTS } from '@/components/shell/useShortcuts';
 import { ApprovalModeCards } from '@/components/shell/ApprovalMode';
 
+const SECTIONS: Array<{ id: string; title: string; hint: string; icon: LucideIcon; tint: string }> = [
+  { id: 'project', title: 'Project', hint: 'The folder agents work in', icon: FolderOpen, tint: '#2563EB' },
+  { id: 'permissions', title: 'Agent permissions', hint: 'How much they may do alone', icon: ShieldCheck, tint: '#16A34A' },
+  { id: 'appearance', title: 'Appearance', hint: 'Theme and layout', icon: Palette, tint: '#DB2777' },
+  { id: 'qa', title: 'QA verification', hint: 'Checks run after each task', icon: TestTube2, tint: '#D97706' },
+  { id: 'notifications', title: 'Notifications', hint: 'Local outbox', icon: Bell, tint: '#7C3AED' },
+  { id: 'data', title: 'Data', hint: 'History and counters', icon: Database, tint: '#0D9488' },
+  { id: 'shortcuts', title: 'Keyboard shortcuts', hint: 'Move faster', icon: Keyboard, tint: '#6B7280' },
+];
+
+function Section({ id, children }: { id: string; children: ReactNode }) {
+  const meta = SECTIONS.find((x) => x.id === id)!;
+  const Icon = meta.icon;
+  return (
+    <section id={`settings-${id}`} aria-labelledby={`settings-${id}-title`} className="scroll-mt-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
+      <div className="flex items-center gap-3 border-b border-line px-5 py-3.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ color: meta.tint, background: `color-mix(in srgb, ${meta.tint} 15%, var(--surface))`, boxShadow: `0 0 0 1px color-mix(in srgb, ${meta.tint} 30%, transparent)` }}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <div>
+          <h2 id={`settings-${id}-title`} className="text-[13.5px] font-semibold tracking-tight">{meta.title}</h2>
+          <p className="text-[11.5px] text-fg-subtle">{meta.hint}</p>
+        </div>
+      </div>
+      <div className="space-y-3 px-5 py-4">{children}</div>
+    </section>
+  );
+}
+
 export default function SettingsView() {
+  const [active, setActive] = useState('project');
   const themePreference = useAgentStore((s) => s.themePreference);
   const setThemePreference = useAgentStore((s) => s.setThemePreference);
   const verification = useAgentStore((s) => s.verificationCommand);
@@ -46,8 +77,28 @@ export default function SettingsView() {
         <PageTitle group="App" title="Settings" subtitle="Project folder, agent permissions, appearance and QA." />
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <div className="max-w-2xl space-y-8">
-          <Section title="Project">
+        <div className="mx-auto flex max-w-5xl items-start gap-8">
+          <nav aria-label="Settings sections" className="sticky top-0 hidden w-52 shrink-0 space-y-0.5 lg:block">
+            {SECTIONS.map((sec) => {
+              const Icon = sec.icon;
+              const on = active === sec.id;
+              return (
+                <button
+                  key={sec.id}
+                  type="button"
+                  aria-current={on || undefined}
+                  onClick={() => { setActive(sec.id); document.getElementById(`settings-${sec.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+                  className={`relative flex h-8 w-full items-center gap-2.5 rounded-lg px-3 text-left text-[13px] transition-colors ${on ? 'bg-surface-2 text-fg' : 'text-fg-muted hover:bg-surface-2/60 hover:text-fg'}`}
+                >
+                  <span aria-hidden className={`absolute left-0 h-4 w-0.5 rounded-full bg-gradient-to-b from-accent to-accent-2 transition-opacity ${on ? 'opacity-100' : 'opacity-0'}`} />
+                  <Icon className="h-4 w-4" />
+                  {sec.title}
+                </button>
+              );
+            })}
+          </nav>
+          <div className="min-w-0 flex-1 space-y-5 pb-10">
+          <Section id="project">
             <p className="text-[12.5px]">Current folder: <code className="font-mono text-[12px]">{root || 'none'}</code></p>
             {locked ? <p className="text-[12px] text-fg-subtle">The folder is fixed by the AGENT_HQ_WORKSPACE environment variable.</p> : (
               <>
@@ -69,12 +120,12 @@ export default function SettingsView() {
             <p className="text-[11.5px] text-fg-subtle">Agents and the editor can only read and write inside this folder.</p>
           </Section>
 
-          <Section title="Agent permissions">
+          <Section id="permissions">
             <p className="text-[12.5px] text-fg-muted">Choose how much the agents may do without asking. Changes are always reviewed by QA first, stay inside the project folder, and can be undone from the Changes panel.</p>
             <ApprovalModeCards />
           </Section>
 
-          <Section title="Appearance">
+          <Section id="appearance">
             <Field label="Theme">
               <Tabs<ThemePreference>
                 label="Theme"
@@ -92,7 +143,7 @@ export default function SettingsView() {
             <Button onClick={resetLayout}>Reset panel layout</Button>
           </Section>
 
-          <Section title="QA verification">
+          <Section id="qa">
             <Field label="Verification command" hint="Run after agents finish so QA sees real results, for example npm test or npx tsc --noEmit. Must be an allowed command; see the terminal.">
               <div className="flex gap-2">
                 <Input value={verify} onChange={(e) => { setVerify(e.target.value); setSaved(false); }} placeholder="npm test" />
@@ -102,7 +153,7 @@ export default function SettingsView() {
             {saved ? <p className="text-[12px] text-success" role="status">Saved</p> : null}
           </Section>
 
-          <Section title="Notifications">
+          <Section id="notifications">
             <p className="text-[12px] text-fg-muted">
               <Badge tone="warning">Not delivered</Badge> Agent HQ has no mail server. Messages are written to a local outbox below and never sent.
             </p>
@@ -117,7 +168,7 @@ export default function SettingsView() {
             ) : null}
           </Section>
 
-          <Section title="Data">
+          <Section id="data">
             <div className="flex flex-wrap gap-2">
               <Button onClick={clearChat}>Clear conversation</Button>
               <Button onClick={clearRunHistory}>Clear run history</Button>
@@ -126,11 +177,12 @@ export default function SettingsView() {
             <p className="text-[11.5px] text-fg-subtle">API keys are not stored in the browser. They live in the local config file managed by the Agent HQ server.</p>
           </Section>
 
-          <Section title="Keyboard shortcuts">
+          <Section id="shortcuts">
             <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-[12.5px]">
               {SHORTCUTS.map((s) => (<div key={s.keys} className="contents"><dt className="font-mono text-[12px] text-fg-muted">{s.keys}</dt><dd>{s.action}</dd></div>))}
             </dl>
           </Section>
+          </div>
         </div>
       </div>
     </div>

@@ -23,6 +23,8 @@ test('capture README screenshots', async ({ page }) => {
   await page.waitForTimeout(400);
   await shot(page, 'connections');
   await page.getByRole('tab', { name: 'Role defaults' }).click();
+  await page.waitForTimeout(300);
+  await shot(page, 'role-defaults');
   await page.getByRole('button', { name: 'Fill empty roles' }).click();
   await go('Workspace');
 
