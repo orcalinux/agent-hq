@@ -8,6 +8,7 @@ import { IconTile } from '@/components/ui/Card';
 import { fmtRelative, fmtTokens, isBusy, modelLabel, providerName, statusTone, usageCostLabel } from '@/components/ui/helpers';
 import { cn } from '@/utils/cn';
 import { AgentDetail } from './AgentDetail';
+import { Presence } from '@/components/ui/motion';
 import { AgentGraph } from './AgentGraph';
 import { AgentOffice } from './AgentOffice';
 import { AddAgentDialog, OnboardInternDialog } from './AgentDialogs';
@@ -144,7 +145,7 @@ export default function AgentsView() {
           {view === 'graph' && <AgentGraph />}
           {view === 'office' && <AgentOffice />}
         </div>
-        {selected ? <AgentDetail /> : null}
+        <Presence value={selected}>{(id, open) => <AgentDetail selectedId={id} open={open} />}</Presence>
       </div>
       <AddAgentDialog open={addOpen} onClose={() => setAddOpen(false)} />
       <OnboardInternDialog open={internOpen} onClose={() => setInternOpen(false)} />

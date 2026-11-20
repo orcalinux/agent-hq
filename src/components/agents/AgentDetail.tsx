@@ -104,9 +104,8 @@ function ConfigForm({ agent }: { agent: AgentProfile }) {
   );
 }
 
-export function AgentDetail() {
-  const selectedId = useAgentStore((s) => s.selectedAgentId);
-  const agent = useAgentStore((s) => (s.selectedAgentId ? s.agents[s.selectedAgentId] : undefined));
+export function AgentDetail({ selectedId, open }: { selectedId: string; open: boolean }) {
+  const agent = useAgentStore((s) => s.agents[selectedId]);
   const agents = useAgentStore((s) => s.agents);
   const activity = useAgentStore((s) => s.activity);
   const roleDefaults = useAgentStore((s) => s.roleDefaults);
@@ -129,7 +128,7 @@ export function AgentDetail() {
 
   return (
     <SidePanel
-      open
+      open={open}
       onClose={() => select(null)}
       width={width}
       tint={agent.accentColor}

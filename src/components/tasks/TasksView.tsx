@@ -6,6 +6,7 @@ import { SOP_STAGES, type KanbanTaskCard, type SOPStage } from '@/types';
 import { Badge, Button, EmptyState, Input, PageTitle, ProgressBar, Select } from '@/components/ui/primitives';
 import { cn } from '@/utils/cn';
 import { TaskDetail } from './TaskDetail';
+import { Presence } from '@/components/ui/motion';
 import { PRIORITY_ORDER, STATUS_TONE } from './taskUi';
 
 type SortKey = 'priority' | 'updated' | 'progress';
@@ -162,7 +163,7 @@ export default function TasksView() {
             </div>
           )}
         </div>
-        {selectedTaskId ? <TaskDetail /> : null}
+        <Presence value={selectedTaskId}>{(id, open) => <TaskDetail selectedId={id} open={open} />}</Presence>
       </div>
     </div>
   );

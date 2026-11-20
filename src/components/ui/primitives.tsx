@@ -1,7 +1,8 @@
-import { forwardRef, useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, useEffect, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { useSelectionIndicator } from './motion';
 
 type TruncateTag = 'span' | 'div' | 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'strong' | 'code';
 
@@ -51,7 +52,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex max-w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-[background-color,border-color,color,filter] duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50',
+        'ahq-button inline-flex max-w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium disabled:cursor-not-allowed disabled:opacity-50',
         size === 'sm' ? 'h-6 px-2 text-[12px]' : 'h-7 px-2.5 text-[12.5px]',
         VARIANT[variant],
         className
@@ -83,7 +84,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       title={label}
       aria-pressed={active}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40',
+        'ahq-icon-button inline-flex shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-3 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40',
         size === 'sm' ? 'h-6 w-6' : 'h-7 w-7',
         active && 'bg-surface-3 text-fg',
         className
@@ -126,7 +127,7 @@ export function StatusDot({ tone = 'neutral', pulse, className }: { tone?: Tone;
 }
 
 const FIELD =
-  'w-full rounded-md border border-line bg-surface px-2 text-[12.5px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none disabled:opacity-50';
+  'ahq-field w-full rounded-md border border-line bg-surface px-2 text-[12.5px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none disabled:opacity-50';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...rest }, ref) {
   return <input ref={ref} className={cn(FIELD, 'h-7', className)} {...rest} />;
@@ -176,7 +177,7 @@ export interface TabItem<T extends string> {
  * the bar scrolls sideways (without a scrollbar) and keeps the selected tab in view.
  */
 export function Tabs<T extends string>({ items, value, onChange, className, label }: { items: TabItem<T>[]; value: T; onChange: (id: T) => void; className?: string; label: string }) {
-  const listRef = useRef<HTMLDivElement>(null);
+  const { containerRef: listRef, indicatorRef } = useSelectionIndicator(value, '[aria-selected="true"]');
   useEffect(() => {
     const list = listRef.current;
     const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]');
@@ -185,7 +186,8 @@ export function Tabs<T extends string>({ items, value, onChange, className, labe
     if (left < list.scrollLeft || left + tab.offsetWidth > list.scrollLeft + list.clientWidth) list.scrollTo({ left: Math.max(0, left - 8) });
   }, [value]);
   return (
-    <div ref={listRef} role="tablist" aria-label={label} className={cn('flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-lg bg-surface-2/60 p-0.5 [scrollbar-width:none]', className)}>
+    <div ref={listRef} role="tablist" aria-label={label} className={cn('relative isolate flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-lg bg-surface-2/60 p-0.5 [scrollbar-width:none]', className)}>
+      <span ref={indicatorRef} aria-hidden="true" data-selection-indicator="" className="ahq-selection rounded-md bg-surface-3 shadow-card" />
       {items.map((item) => (
         <button
           key={item.id}
@@ -194,8 +196,8 @@ export function Tabs<T extends string>({ items, value, onChange, className, labe
           aria-selected={value === item.id}
           onClick={() => onChange(item.id)}
           className={cn(
-            'inline-flex h-6 shrink items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[12.5px] transition-colors',
-            value === item.id ? 'bg-surface-3 text-fg shadow-card' : 'text-fg-muted hover:text-fg'
+            'relative inline-flex h-6 shrink items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[12.5px] transition-colors',
+            value === item.id ? 'text-fg' : 'text-fg-muted hover:text-fg'
           )}
         >
           <span className="ahq-min-label truncate">{item.label}</span>

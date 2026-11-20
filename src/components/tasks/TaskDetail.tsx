@@ -6,8 +6,7 @@ import { fmtDuration, fmtTokens } from '@/components/ui/helpers';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { STATUS_TONE } from './taskUi';
 
-export function TaskDetail() {
-  const selectedId = useAgentStore((s) => s.selectedTaskId);
+export function TaskDetail({ selectedId, open }: { selectedId: string; open: boolean }) {
   const mission = useAgentStore((s) => s.activeMission);
   const agents = useAgentStore((s) => s.agents);
   const running = useAgentStore((s) => s.isLiveRunning);
@@ -22,7 +21,7 @@ export function TaskDetail() {
 
   return (
     <SidePanel
-      open
+      open={open}
       onClose={() => select(null)}
       width={width}
       title={task.title}

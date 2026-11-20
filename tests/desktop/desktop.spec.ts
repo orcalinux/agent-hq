@@ -71,6 +71,48 @@ test('agent detail cards support editing and discarding in the desktop shell', a
   }
 });
 
+test('shared dialog motion runs in Electron and retains modality until exit completes', async () => {
+  const { app, page, errors } = await launch();
+  try {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Agents', exact: true }).click();
+    const opener = page.getByRole('button', { name: 'Add agent', exact: true });
+    await opener.focus();
+    const entering = await opener.evaluate(async (button) => {
+      (button as HTMLButtonElement).click();
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      const surface = document.querySelector('.ahq-dialog-surface')!;
+      const animations = surface.getAnimations();
+      const moving = animations.some((animation) => (animation.effect as KeyframeEffect | null)?.getKeyframes().some((frame) => 'transform' in frame));
+      await Promise.all(animations.map((animation) => animation.finished));
+      return moving;
+    });
+    expect(entering).toBe(true);
+    const dialog = page.getByRole('dialog', { name: 'Add agent', exact: true });
+    const exiting = await dialog.getByRole('button', { name: 'Cancel', exact: true }).evaluate(async (button) => {
+      (button as HTMLButtonElement).click();
+      await Promise.resolve();
+      return {
+        retained: !!document.querySelector('.ahq-dialog-overlay[data-open="false"]'),
+        inert: document.getElementById('root')!.inert,
+      };
+    });
+    expect(exiting).toEqual({ retained: true, inert: true });
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await opener.click();
+    await expect(dialog).toHaveCSS('transform', 'none');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
 test('Linux window buttons sit inside the title bar and minimize, maximize, restore and close', async () => {
   test.skip(process.platform !== 'linux', 'Linux draws its own window buttons');
   const { app, page, errors } = await launch();

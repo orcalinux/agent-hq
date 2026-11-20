@@ -11,6 +11,19 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.5.0] — 2026-11-20
+
+### Changed
+- Shared motion timings across buttons, icon buttons, text fields, tabs, navigation, dialogs, dropdowns and details panels, informed by a comparison with Magpie's open-source UI.
+- Tab and sidebar selections now slide between items and refit immediately when the window or their contents resize.
+- Dialogs fade their scrim independently from the surface. Dialogs, dropdowns and details panels remain mounted briefly to finish closing; reopening interrupts the exit.
+- Sidebar labels fade during collapse without stretching, and controls give restrained press feedback. Existing colors, typography and content remain unchanged.
+- Reduced motion disables positional movement and closes overlays immediately. Dialog focus trapping and background inertness remain active until the overlay is removed.
+
+### Verification
+- Added interaction checks for selection alignment at 880, 1280 and 1920 px, repeated sidebar toggles, overlay keyboard behavior, focus restoration, reduced motion and interrupted dropdown closing.
+- Documented the source comparison and shared motion conventions in `docs/ui-motion.md`.
+
 ## [0.4.3] — 2026-11-20
 
 ### Fixed

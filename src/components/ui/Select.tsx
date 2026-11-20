@@ -17,6 +17,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { usePresence } from './motion';
 
 export interface SelectChangeEvent {
   target: { value: string };
@@ -71,6 +72,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
 ) {
   const items = useMemo(() => parseItems(children), [children]);
   const [open, setOpen] = useState(false);
+  const present = usePresence(open);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [pos, setPos] = useState<{ top: number; left: number; width: number; up: boolean } | null>(null);
@@ -241,14 +243,18 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
         <span className={cn('min-w-0 flex-1 truncate', !selected?.label && 'text-fg-subtle')}>{selected?.label || (value ? value : placeholder)}</span>
         <ChevronDown aria-hidden className={cn('h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform duration-150', open && 'rotate-180')} />
       </button>
-      {open && pos
+      {present && pos
         ? createPortal(
             <div
               ref={menuRef}
               data-ahq-popover=""
+              data-open={open}
+              data-direction={pos.up ? 'up' : 'down'}
+              aria-hidden={!open || undefined}
+              inert={!open}
               onKeyDown={onMenuKey}
               style={{ position: 'fixed', left: pos.left, width: pos.width, maxWidth: 440, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
-              className={cn('ahq-pop z-[70] flex flex-col overflow-hidden rounded-lg border border-line-strong bg-surface shadow-[0_8px_28px_rgba(0,0,0,0.28)]', pos.up ? 'origin-bottom' : 'origin-top')}
+              className={cn('ahq-menu-surface z-[70] flex flex-col overflow-hidden rounded-lg border border-line-strong bg-surface shadow-[0_8px_28px_rgba(0,0,0,0.28)]', pos.up ? 'origin-bottom' : 'origin-top')}
             >
               {searchable ? (
                 <div className="flex items-center gap-1.5 border-b border-line px-2">

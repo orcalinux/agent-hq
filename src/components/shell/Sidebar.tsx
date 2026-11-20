@@ -7,6 +7,7 @@ import type { ThemePreference, ViewMode } from '@/types';
 import { StatusDot } from '@/components/ui/primitives';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { SideLabel } from './SideLabel';
+import { useSelectionIndicator } from '@/components/ui/motion';
 
 interface NavItem {
   id: ViewMode;
@@ -49,14 +50,14 @@ function NavButton({ item, collapsed, active, badge }: { item: NavItem; collapse
       aria-current={active ? 'page' : undefined}
       aria-label={item.label}
       title={collapsed ? `${item.label}${item.shortcut ? ` (${item.shortcut})` : ''}` : item.shortcut}
-      className={cn(ROW, active ? 'ahq-nav-active font-medium text-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg')}
+      className={cn(ROW, active ? 'font-medium text-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg')}
     >
       <Icon className={cn('h-4 w-4 shrink-0 transition-colors', active && 'text-accent')} />
       <SideLabel collapsed={collapsed} className="flex-1 text-left">{item.label}</SideLabel>
       {badge ? (
         <StatusDot
           tone={badge === 'ok' ? 'success' : 'warning'}
-          className={cn('absolute transition-all duration-300', collapsed ? 'left-[26px] top-1.5' : 'right-3 top-1/2 -translate-y-1/2')}
+          className={cn('absolute', collapsed ? 'left-[26px] top-1.5' : 'right-3 top-1/2 -translate-y-1/2')}
         />
       ) : null}
     </button>
@@ -89,17 +90,20 @@ export function Sidebar() {
   const theme = THEME[themePreference] ?? THEME.system;
   const next = THEME[NEXT_THEME[themePreference] ?? 'light'];
   const ThemeIcon = theme.icon;
+  const { containerRef, indicatorRef } = useSelectionIndicator<HTMLElement>(activeView, '[aria-current="page"]');
 
   return (
     <nav
+      ref={containerRef}
       aria-label="Primary"
       data-collapsed={collapsed || undefined}
       className={cn(
-        'flex shrink-0 flex-col overflow-hidden border-r border-line bg-surface/80 p-2 backdrop-blur',
-        'transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
+        'relative isolate flex shrink-0 flex-col overflow-hidden border-r border-line bg-surface/80 p-2 backdrop-blur',
+        'ahq-sidebar-motion',
         collapsed ? 'w-14' : 'w-56'
       )}
     >
+      <span ref={indicatorRef} aria-hidden="true" data-selection-indicator="" className="ahq-selection ahq-nav-active rounded-lg" />
       <div className="mb-2 flex h-9 items-center gap-2.5 px-1.5">
         <img src="/logo.svg" alt="" className="h-7 w-7 shrink-0 drop-shadow-[0_2px_6px_rgba(91,155,255,0.35)]" />
         <SideLabel collapsed={collapsed} className="ahq-brand-text text-[14px] font-semibold tracking-tight">Agent HQ</SideLabel>

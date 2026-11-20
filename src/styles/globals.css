@@ -2,6 +2,73 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+:root {
+  --motion-feedback: 140ms;
+  --motion-selection: 240ms;
+  --motion-enter: 280ms;
+  --motion-exit: 160ms;
+  --ease-ui: cubic-bezier(.2, .8, .2, 1);
+  --ease-settle: cubic-bezier(.23, 1, .32, 1);
+  --ease-morph: cubic-bezier(.77, 0, .175, 1);
+}
+
+.ahq-button, .ahq-icon-button {
+  transition-property: background-color, border-color, color, filter, transform;
+  transition-duration: var(--motion-feedback);
+  transition-timing-function: var(--ease-ui);
+}
+.ahq-button:active:not(:disabled) { transform: scale(.97); }
+.ahq-icon-button:active:not(:disabled) { transform: scale(.92); }
+.ahq-field { transition: border-color var(--motion-feedback) var(--ease-ui); }
+.ahq-selection {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: transform var(--motion-selection) var(--ease-settle), opacity var(--motion-feedback) var(--ease-ui);
+}
+.ahq-sidebar-motion { transition: width var(--motion-enter) var(--ease-morph); }
+.ahq-side-label {
+  transition: opacity var(--motion-feedback) var(--ease-ui), transform var(--motion-enter) var(--ease-settle);
+}
+.ahq-side-label:not([aria-hidden="true"]) { transition-delay: 60ms; }
+.ahq-dialog-scrim {
+  opacity: 1;
+  transition: opacity var(--motion-exit) var(--ease-ui);
+}
+.ahq-dialog-surface, .ahq-menu-surface, .ahq-detail-surface {
+  opacity: 1;
+  transform: none;
+  transition: opacity var(--motion-feedback) var(--ease-ui), transform var(--motion-enter) var(--ease-settle);
+}
+.ahq-menu-surface { --menu-offset: -4px; }
+.ahq-menu-surface[data-direction="up"] { --menu-offset: 4px; }
+.ahq-dialog-overlay[data-open="false"] .ahq-dialog-scrim { opacity: 0; }
+.ahq-dialog-overlay[data-open="false"] .ahq-dialog-surface {
+  opacity: 0;
+  transform: translateY(10px) scale(.98);
+}
+.ahq-menu-surface[data-open="false"] { opacity: 0; transform: translateY(var(--menu-offset)) scale(.98); }
+.ahq-detail-surface[data-open="false"] { opacity: 0; transform: translateX(12px); }
+.ahq-dialog-overlay[data-open="false"] .ahq-dialog-surface,
+.ahq-menu-surface[data-open="false"], .ahq-detail-surface[data-open="false"] {
+  transition-duration: var(--motion-exit);
+  pointer-events: none;
+}
+@starting-style {
+  .ahq-dialog-scrim { opacity: 0; }
+  .ahq-dialog-surface { opacity: 0; transform: translateY(14px) scale(.97); }
+  .ahq-menu-surface { opacity: 0; transform: translateY(var(--menu-offset)) scale(.97); }
+  .ahq-detail-surface { opacity: 0; transform: translateX(12px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ahq-button:active, .ahq-icon-button:active,
+  .ahq-dialog-surface, .ahq-menu-surface, .ahq-detail-surface { transform: none !important; }
+  .ahq-side-label { transform: none !important; transition-delay: 0ms !important; }
+}
+
 /* Semantic tokens. Components use these via Tailwind (bg-surface, text-fg-muted, border-line ...). */
 :root,
 [data-theme="dark"] {
@@ -200,7 +267,7 @@
   from { opacity: 0; transform: scale(0.97) translateY(-2px); }
   to { opacity: 1; transform: none; }
 }
-.ahq-pop { animation: ahq-pop-in 120ms cubic-bezier(0.2, 0.9, 0.3, 1); }
+.ahq-pop { animation: ahq-pop-in var(--motion-feedback) var(--ease-settle); }
 
 @keyframes ahq-dash { to { stroke-dashoffset: -20; } }
 .ahq-flow-line { stroke-dasharray: 6 4; animation: ahq-dash 0.9s linear infinite; }
@@ -276,12 +343,6 @@
 .ahq-update-in { animation: ahq-update-in 300ms cubic-bezier(0.2, 0.9, 0.3, 1.2); }
 @media (prefers-reduced-motion: reduce) { .ahq-update-in { animation: none; } }
 
-@keyframes ahq-panel-in {
-  from { opacity: 0; transform: translateX(12px); }
-  to { opacity: 1; transform: none; }
-}
-.ahq-panel-in { animation: ahq-panel-in 220ms cubic-bezier(0.32, 0.72, 0, 1); }
-@media (prefers-reduced-motion: reduce) { .ahq-panel-in { animation: none; } }
 
 @keyframes ahq-tooltip-in {
   from { opacity: 0; transform: translateY(var(--ahq-tip-shift, -2px)); }

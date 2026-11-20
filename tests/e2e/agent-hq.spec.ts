@@ -99,9 +99,12 @@ test('full access: runs without plan approval, auto-applies QA-approved changes,
   const confirm = page.getByRole('dialog', { name: /Turn on full access/ });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: 'Allow full access' }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(page.locator('#root')).toHaveJSProperty('inert', false);
   await expect(page.getByTestId('approval-mode-badge')).toHaveText('Full access');
 
   await page.getByRole('textbox', { name: 'Message Sovereign' }).fill('Greet the user and add subtraction.');
+  await expect(page.getByRole('textbox', { name: 'Message Sovereign' })).toHaveValue('Greet the user and add subtraction.');
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(page.getByText('Full access is on: running the plan without waiting for approval.')).toBeVisible();
   await expect(page.getByText(/Auto mode wrote 3 file\(s\) to the project\./)).toBeVisible({ timeout: 30_000 });

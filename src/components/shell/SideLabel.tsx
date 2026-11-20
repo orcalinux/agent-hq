@@ -10,8 +10,8 @@ export function SideLabel({ collapsed, children, className }: { collapsed: boole
     <span
       aria-hidden={collapsed || undefined}
       className={cn(
-        'min-w-0 truncate whitespace-nowrap transition-[opacity,transform] duration-200 ease-out',
-        collapsed ? 'pointer-events-none -translate-x-1.5 opacity-0' : 'translate-x-0 opacity-100 delay-75',
+        'ahq-side-label min-w-0 truncate whitespace-nowrap',
+        collapsed ? 'pointer-events-none -translate-x-1.5 opacity-0' : 'translate-x-0 opacity-100',
         className
       )}
     >

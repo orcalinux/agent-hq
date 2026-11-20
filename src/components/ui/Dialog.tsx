@@ -1,8 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { IconButton } from './primitives';
+import { usePresence } from './motion';
 
 function useEscape(open: boolean, onClose: () => void) {
   useEffect(() => {
@@ -22,9 +23,9 @@ function useEscape(open: boolean, onClose: () => void) {
 }
 
 function useRestoreFocus(open: boolean, containerRef: React.RefObject<HTMLElement | null>) {
-  useEffect(() => {
+  const previous = document.activeElement as HTMLElement | null;
+  useLayoutEffect(() => {
     if (!open) return;
-    const previous = document.activeElement as HTMLElement | null;
     const node = containerRef.current;
     const root = document.getElementById('root');
     const wasInert = root?.inert ?? false;
@@ -74,28 +75,35 @@ interface DialogProps {
 
 export function Dialog({ open, onClose, title, description, children, footer, width = 'max-w-lg' }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const present = usePresence(open);
+  const lastContent = useRef({ title, description, children, footer });
+  useLayoutEffect(() => {
+    if (open) lastContent.current = { title, description, children, footer };
+  }, [open, title, description, children, footer]);
+  const content = open ? { title, description, children, footer } : lastContent.current;
   useEscape(open, onClose);
-  useRestoreFocus(open, ref);
-  if (!open) return null;
+  useRestoreFocus(present, ref);
+  if (!present) return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-overlay p-4 pt-[10vh] backdrop-blur-[2px]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div data-open={open} className="ahq-dialog-overlay fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-[10vh]" onMouseDown={(e) => open && e.target === e.currentTarget && onClose()}>
+      <div aria-hidden="true" className="ahq-dialog-scrim pointer-events-none fixed inset-0 bg-overlay backdrop-blur-[2px]" />
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-label={content.title}
         tabIndex={-1}
-        className={cn('ahq-pop w-full overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-pop focus:outline-none', width)}
+        className={cn('ahq-dialog-surface relative w-full overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-pop focus:outline-none', width)}
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
           <div className="min-w-0">
-            <h2 className="truncate text-[14px] font-semibold text-fg">{title}</h2>
-            {description ? <p className="mt-0.5 text-[12px] text-fg-muted">{description}</p> : null}
+            <h2 className="truncate text-[14px] font-semibold text-fg">{content.title}</h2>
+            {content.description ? <p className="mt-0.5 text-[12px] text-fg-muted">{content.description}</p> : null}
           </div>
           <IconButton icon={X} label="Close" size="sm" onClick={onClose} />
         </div>
-        <div className="max-h-[65vh] overflow-y-auto px-4 py-3">{children}</div>
-        {footer ? <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-2.5">{footer}</div> : null}
+        <div className="max-h-[65vh] overflow-y-auto px-4 py-3">{content.children}</div>
+        {content.footer ? <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-2.5">{content.footer}</div> : null}
       </div>
     </div>,
     document.body
@@ -117,6 +125,7 @@ interface SidePanelProps {
 
 /** Right-hand details panel that sits inside the content area (not modal). */
 export function SidePanel({ open, onClose, title, subtitle, leading, meta, footer, children, width = 420, tint }: SidePanelProps) {
+  const present = usePresence(open);
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -125,12 +134,15 @@ export function SidePanel({ open, onClose, title, subtitle, leading, meta, foote
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
-  if (!open) return null;
+  if (!present) return null;
   return (
     <aside
       aria-label={title}
+      aria-hidden={!open || undefined}
+      inert={!open}
+      data-open={open}
       style={{ width }}
-      className="ahq-panel-in flex h-full min-w-0 max-w-[50%] shrink-0 flex-col border-l border-line bg-canvas"
+      className="ahq-detail-surface flex h-full min-w-0 max-w-[50%] shrink-0 flex-col border-l border-line bg-canvas"
     >
       <div
         className="relative border-b border-line bg-surface px-4 pb-3 pt-3.5"

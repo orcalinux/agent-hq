@@ -120,6 +120,7 @@ test.describe('overflow tooltip', () => {
   });
 
   test('opens on keyboard focus, closes on Escape and stays inside the window', async ({ page }) => {
+    await page.locator('tbody tr').filter({ hasText: LONG_AGENT }).scrollIntoViewIfNeeded();
     await page.locator('tbody tr').filter({ hasText: LONG_AGENT }).focus();
     await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('Tab');
