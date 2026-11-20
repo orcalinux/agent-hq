@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
+import { readFileSync } from 'fs';
 import { createApiMiddleware } from './server/api';
 
 function agentHqApiPlugin(): Plugin {
@@ -20,6 +21,9 @@ function agentHqApiPlugin(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [tailwindcss(), react(), agentHqApiPlugin()],
+  define: {
+    __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')).version),
+  },
   build: {
     emptyOutDir: false,
   },

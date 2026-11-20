@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://github.com/orcalinux/agent-hq/actions/workflows/ci.yml"><img src="https://github.com/orcalinux/agent-hq/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/version-0.1.0-2563eb" alt="Version 0.1.0" />
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/package-json/v/orcalinux/agent-hq?label=version&color=2563eb" alt="Version" /></a>
   <img src="https://img.shields.io/badge/React-19-149eca?logo=react&amp;logoColor=white" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-5.8-3178c6?logo=typescript&amp;logoColor=white" alt="TypeScript 5.8" />
   <img src="https://img.shields.io/badge/Vite-6-646cff?logo=vite&amp;logoColor=white" alt="Vite 6" />

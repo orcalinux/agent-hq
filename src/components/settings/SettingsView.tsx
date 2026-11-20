@@ -96,6 +96,15 @@ export default function SettingsView() {
                 </button>
               );
             })}
+            <a
+              href="https://github.com/orcalinux/agent-hq/blob/main/CHANGELOG.md"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 flex h-8 items-center gap-2 rounded-lg px-3 text-[12px] text-fg-subtle transition-colors hover:text-fg"
+            >
+              <span className="rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">v{__APP_VERSION__}</span>
+              What's new
+            </a>
           </nav>
           <div className="min-w-0 flex-1 space-y-5 pb-10">
           <Section id="project">
