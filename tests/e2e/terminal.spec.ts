@@ -67,7 +67,7 @@ test('integrated terminal is a real shell in the project folder with tabs, resiz
   await expect(terminal.getByRole('tab')).toHaveCount(2);
   await expect(screen(page)).toContainText('after-interrupt');
 
-  await typeLine(page, 'exit');
+  await typeLine(page, 'exit 0');
   await expect(terminal.getByText(/Process exited with code 0/)).toBeVisible();
   await terminal.getByRole('button', { name: 'Restart' }).click();
   await expect(terminal.getByText(/Process exited/)).toHaveCount(0);
