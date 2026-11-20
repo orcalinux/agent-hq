@@ -49,9 +49,9 @@ export function FlowLegend({ className }: { className?: string }) {
 export function FlowFeed({ flows, nameOf }: { flows: AgentFlow[]; nameOf: (id: string) => string }) {
   return (
     <div className="rounded-md border border-line bg-surface">
-      <div className="flex items-center justify-between border-b border-line px-3 py-1.5">
-        <h3 className="text-[12px] font-semibold">Live communication</h3>
-        <span className="text-[11px] text-fg-subtle">From engine events</span>
+      <div className="flex min-w-0 items-center justify-between gap-2 border-b border-line px-3 py-1.5">
+        <h3 className="min-w-0 truncate text-[12px] font-semibold">Live communication</h3>
+        <span className="min-w-0 shrink truncate text-[11px] text-fg-subtle">From engine events</span>
       </div>
       {flows.length === 0 ? (
         <p className="px-3 py-2.5 text-[12px] text-fg-muted">Quiet right now. Messages appear here as Sovereign delegates, agents hand off work, mentors review and QA reports.</p>

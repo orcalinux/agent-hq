@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.5.1] — 2026-11-20
+
+### Fixed
+- The "Live communication" panel header in the agent graph and office views no longer wraps when the side panel is narrow or fonts render wider; its title and subtitle now truncate with an ellipsis like the rest of the app. This was the one layout check failing in CI since 0.4.3, so the CI workflow is green again.
+
 ## [0.5.0] — 2026-11-20
 
 ### Changed
