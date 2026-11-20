@@ -5,7 +5,7 @@ import { useAgentStore } from '@/store/useAgentStore';
 import { streamChat } from '@/api/client';
 import { CONNECTION_METHOD_LABEL, type AgentRole, type ModelInfo, type ProviderState } from '@/types';
 import { Badge, Button, EmptyState, Input, StatusDot } from '@/components/ui/primitives';
-import { ModelSelect } from '@/components/ui/helpers';
+import { fmtRate, fmtTokens, ModelSelect, PRICING_SOURCE } from '@/components/ui/helpers';
 import { cn } from '@/utils/cn';
 
 /** Columns that appear once the table has room, so model names never squeeze to nothing. */
@@ -47,7 +47,7 @@ function ModelRow({ model, provider }: { model: ModelInfo; provider: ProviderSta
     setEditing(false);
   };
 
-  const editable = pricing?.source !== 'provider' && pricing?.source !== 'local';
+  const editable = pricing?.source !== 'provider' && pricing?.source !== 'local' && pricing?.source !== 'account';
 
   return (
     <tr className="border-b border-line align-top">
@@ -73,8 +73,19 @@ function ModelRow({ model, provider }: { model: ModelInfo; provider: ProviderSta
             <Button size="sm" variant="primary" onClick={savePricing}>Save</Button>
           </div>
         ) : pricing ? (
-          <span className="tabular-nums">
-            {'$' + pricing.inputPerM + ' in / $' + pricing.outputPerM + ' out'} <span className="text-fg-subtle">per 1M ({pricing.source})</span>
+          <span className="inline-flex min-w-0 flex-col" data-testid="model-pricing">
+            <span className="tabular-nums">
+              {fmtRate(pricing.inputPerM) + ' in / ' + fmtRate(pricing.outputPerM) + ' out'} <span className="text-fg-subtle">per 1M · {PRICING_SOURCE[pricing.source]}</span>
+            </span>
+            {pricing.cacheReadPerM !== undefined || pricing.cacheWritePerM !== undefined || pricing.longPrompt ? (
+              <span className="text-[11px] tabular-nums text-fg-subtle">
+                {[
+                  pricing.cacheReadPerM !== undefined ? `cache read ${fmtRate(pricing.cacheReadPerM)}` : '',
+                  pricing.cacheWritePerM !== undefined ? `write ${fmtRate(pricing.cacheWritePerM)}` : '',
+                  pricing.longPrompt ? `${fmtRate(pricing.longPrompt.inputPerM)} / ${fmtRate(pricing.longPrompt.outputPerM)} above ${fmtTokens(pricing.longPrompt.abovePromptTokens)} prompt` : '',
+                ].filter(Boolean).join(' · ')}
+              </span>
+            ) : null}
           </span>
         ) : (
           <span className="text-fg-subtle">not set</span>
@@ -104,7 +115,7 @@ export function ModelsPanel() {
     const needle = q.toLowerCase();
     return providers
       .filter((p) => p.connection)
-      .flatMap((p) => p.models.map((m) => ({ model: m, provider: p })))
+      .flatMap((p) => p.models.filter((model) => model.selectable !== false).map((m) => ({ model: m, provider: p })))
       .filter(({ model }) => !needle || model.ref.toLowerCase().includes(needle) || model.name.toLowerCase().includes(needle));
   }, [providers, q]);
 
@@ -126,7 +137,7 @@ export function ModelsPanel() {
           <tbody>{rows.map(({ model, provider }) => <ModelRow key={model.ref} model={model} provider={provider} />)}</tbody>
         </table>
       </div>
-      <p className="text-[11.5px] text-fg-subtle">Context size, capabilities and pricing come from the provider when it reports them. Prices you enter yourself are used only to estimate cost.</p>
+      <p className="text-[11.5px] text-fg-subtle">Context size, capabilities and pricing come from the provider when it reports them. Claude account rates are the API rate card the signed-in Claude Code CLI caches for your account; on a subscription they value usage at API prices and are not a bill. Prices you enter yourself are used only to estimate cost.</p>
     </div>
   );
 }
@@ -155,7 +166,7 @@ export function RoleDefaults() {
   const roleDefaults = useAgentStore((s) => s.roleDefaults);
   const setRoleDefault = useAgentStore((s) => s.setRoleDefault);
   const providers = useConnectionsStore((s) => s.providers);
-  const firstModel = providers.filter((p) => p.connection).flatMap((p) => p.models)[0];
+  const firstModel = providers.filter((p) => p.connection).flatMap((p) => p.models.filter((model) => model.selectable !== false))[0];
   const empty = ROLES.filter((r) => !roleDefaults[r.role]);
   const done = ROLES.length - empty.length;
   return (

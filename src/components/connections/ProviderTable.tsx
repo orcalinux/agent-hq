@@ -42,7 +42,7 @@ function ProviderRow({ provider, onConnect }: { provider: ProviderState; onConne
         {c?.lastError ? <p className="mt-0.5 max-w-xs break-words text-[11.5px] text-danger">{c.lastError}</p> : null}
         {msg ? <p className="mt-0.5 max-w-xs break-words text-[11.5px] text-fg-muted">{msg}</p> : null}
       </td>
-      <td className={cn('px-3 py-2 tabular-nums', COLUMN.models)}>{c ? provider.models.length : '—'}</td>
+      <td className={cn('px-3 py-2 tabular-nums', COLUMN.models)}>{c ? provider.models.filter((model) => model.selectable !== false).length : '—'}</td>
       <td className={cn('whitespace-nowrap px-3 py-2 text-fg-muted', COLUMN.verified)}>{c ? fmtRelative(c.lastVerifiedAt ? Date.parse(c.lastVerifiedAt) : undefined) : '—'}</td>
       <td className="px-3 py-2">
         <div className="flex justify-end gap-1.5">

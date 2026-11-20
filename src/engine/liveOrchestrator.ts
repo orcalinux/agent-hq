@@ -1,5 +1,5 @@
 import { api, streamChat } from '@/api/client';
-import { resolveAgentModel, useAgentStore } from '@/store/useAgentStore';
+import { canonicalizeAgentModels, resolveAgentModel, useAgentStore } from '@/store/useAgentStore';
 import { pricingFor, useConnectionsStore } from '@/store/useConnectionsStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import {
@@ -108,6 +108,7 @@ async function callAgent(
         useConnectionsStore.setState((state) => ({
           providers: state.providers.map((provider) => provider.id === providerId ? { ...provider, models: result.models! } : provider),
         }));
+        canonicalizeAgentModels(result.models);
       }
       break;
     } catch (err) {
@@ -120,10 +121,11 @@ async function callAgent(
   }
   const { providers, userPricing } = useConnectionsStore.getState();
   const usage = result.usage;
+  const pricing = pricingFor(providers, userPricing, model);
   const cost = usage
-    ? calculateTokenCostUSD(pricingFor(providers, userPricing, model), usage.inputTokens ?? 0, usage.outputTokens ?? 0)
+    ? calculateTokenCostUSD(pricing, usage.inputTokens ?? 0, usage.outputTokens ?? 0, usage)
     : null;
-  agentsState().recordAgentCall(agent.id, { model, usage, costUSD: usage ? cost : null, note: args.note });
+  agentsState().recordAgentCall(agent.id, { model, usage, costUSD: usage ? cost : null, referenceCost: pricing?.source === 'account', note: args.note });
   if (args.countInRun) {
     runTotals.promptTokens += usage?.inputTokens ?? 0;
     runTotals.completionTokens += usage?.outputTokens ?? 0;
@@ -221,7 +223,7 @@ function availableModels(): Array<{ ref: string; name: string; provider: string;
   const { providers, exhausted } = useConnectionsStore.getState();
   return providers
     .filter((p) => p.connection && !isProviderExhausted(exhausted, p.id))
-    .flatMap((p) => p.models.map((m) => ({ ref: m.ref, name: m.name, provider: p.name, contextWindow: m.contextWindow })));
+    .flatMap((p) => p.models.filter((model) => model.selectable !== false).map((m) => ({ ref: m.ref, name: m.name, provider: p.name, contextWindow: m.contextWindow })));
 }
 
 function modelCatalog(): string {

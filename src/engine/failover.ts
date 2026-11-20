@@ -41,7 +41,7 @@ export function pickFallbackModel(
 ): AIModelId | null {
   const failedProvider = providerOfRef(failedRef);
   const candidates = providers
-    .filter((p) => p.connection && p.id !== failedProvider && !isProviderExhausted(exhausted, p.id, now) && p.models.length > 0)
+    .filter((p) => p.connection && p.id !== failedProvider && !isProviderExhausted(exhausted, p.id, now) && p.models.some((model) => model.selectable !== false))
     .sort((a, b) => Number(a.id === 'ollama') - Number(b.id === 'ollama'));
-  return candidates[0]?.models[0]?.ref ?? null;
+  return candidates[0]?.models.find((model) => model.selectable !== false)?.ref ?? null;
 }

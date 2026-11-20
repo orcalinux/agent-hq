@@ -11,6 +11,24 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.5.4] — 2026-11-20
+
+### Fixed
+- Claude model pickers now list exact names and versions from Claude Code's account-specific local catalog, following the discovery approach in Magpie's open-source implementation.
+- Removed aliases and automatic entries from model choices, model tables, model counts, new role assignments and orchestration suggestions. Choices pass explicit model IDs to Claude Code.
+- Previously saved assignments migrate to exact IDs when their model is known. Unknown old assignments ask for an exact model instead of guessing a version.
+- Catalog discovery matches the signed-in account, supports older model caches, respects explicit access denials and requires no model-generation call.
+
+### Added
+- Claude models show prices automatically, read from the API rate card Claude Code caches for the signed-in account, as Magpie does. The Models table shows input, output and cache rates and the long-prompt tier where one applies.
+- Cost estimates count Claude cache reads and 5-minute and 1-hour cache writes at their own rates. The whole call is priced at the long-prompt tier once the full prompt crosses it.
+- Reports and agent details label Claude Code subscription usage as valued at API rates, not a bill. Invalid, zero or missing rates are skipped, so those models stay unpriced.
+
+### Verification
+- Added account isolation, cache format, denied-model and malformed-cache tests.
+- Added rate-card parsing, malformed-rate, cache-token and tiered cost tests, plus browser checks for the pricing column and the Reports cost note.
+- Updated the browser regression to check exact-only choices, assignment migration, explicit execution IDs, persistence and model counts.
+
 ## [0.5.3] — 2026-11-20
 
 ### Fixed

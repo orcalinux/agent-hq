@@ -42,6 +42,7 @@ export default function ReportsView() {
     return {
       tokens: all.reduce((n, a) => n + a.tokenUsage.totalTokens, 0),
       cost: all.reduce((n, a) => n + a.tokenUsage.estimatedCostUSD, 0),
+      reference: all.reduce((n, a) => n + (a.tokenUsage.referenceCostUSD ?? 0), 0),
       unpriced: all.reduce((n, a) => n + a.tokenUsage.unpricedTokens, 0),
       calls: all.reduce((n, a) => n + a.tokenUsage.calls, 0),
     };
@@ -84,7 +85,12 @@ export default function ReportsView() {
             <div key={k} className="min-w-0"><dt className="truncate text-fg-muted">{k}</dt><dd className="truncate text-[18px] font-semibold tabular-nums">{v}</dd></div>
           ))}
         </dl>
-        {totals.unpriced > 0 ? <p className="-mt-3 text-[11.5px] text-fg-subtle">Cost excludes {fmtTokens(totals.unpriced)} tokens from models with no known price. Subscription CLIs are not billed per token.</p> : null}
+        {totals.unpriced > 0 || totals.reference > 0 ? (
+          <p className="-mt-3 text-[11.5px] text-fg-subtle" data-testid="cost-note">
+            {totals.reference > 0 ? `Includes ${fmtCost(totals.reference)} of Claude Code usage valued at your account's API rates; a subscription is not billed per token. ` : ''}
+            {totals.unpriced > 0 ? `Cost excludes ${fmtTokens(totals.unpriced)} tokens from models with no known price.` : ''}
+          </p>
+        ) : null}
 
         <Section title="Run history">
           {runs.length === 0 ? <EmptyState title="No runs yet">Approve a plan in Workspace to create the first real run.</EmptyState> : (

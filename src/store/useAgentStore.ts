@@ -9,6 +9,7 @@ import type {
   AgentRole,
   AgentStatus,
   AIModelId,
+  ModelInfo,
   AutonomyLevel,
   ChatUsage,
   EmailNotificationConfig,
@@ -142,7 +143,7 @@ export interface AgentStoreState {
   updateMission: (patch: Partial<MissionState>) => void;
   updateTask: (taskId: string, patch: Partial<KanbanTaskCard>) => void;
   setAgentStatus: (agentId: string, status: AgentStatus, currentTask?: string, waitingFor?: AgentProfile['waitingFor'] | null) => void;
-  recordAgentCall: (agentId: string, args: { model: string; usage?: ChatUsage; costUSD: number | null; note?: string }) => void;
+  recordAgentCall: (agentId: string, args: { model: string; usage?: ChatUsage; costUSD: number | null; referenceCost?: boolean; note?: string }) => void;
   recordAgentTask: (agentId: string, record: AgentProfile['taskHistory'][number]) => void;
   logActivity: (event: Omit<ActivityEvent, 'id' | 'timestamp'>) => void;
   setProposedChangeStatus: (changeId: string, status: ProposedFileChange['status']) => void;
@@ -457,7 +458,7 @@ export const useAgentStore = create<AgentStoreState>()(
               },
             };
           }),
-        recordAgentCall: (agentId, { usage, costUSD, note }) =>
+        recordAgentCall: (agentId, { usage, costUSD, referenceCost, note }) =>
           set((s) => {
             const a = s.agents[agentId];
             if (!a) return s;
@@ -476,6 +477,9 @@ export const useAgentStore = create<AgentStoreState>()(
                     completionTokens: u.completionTokens + outT,
                     totalTokens: u.totalTokens + total,
                     estimatedCostUSD: u.estimatedCostUSD + (costUSD ?? 0),
+                    ...(referenceCost || u.referenceCostUSD
+                      ? { referenceCostUSD: (u.referenceCostUSD ?? 0) + (referenceCost ? costUSD ?? 0 : 0) }
+                      : {}),
                     unpricedTokens: u.unpricedTokens + (costUSD === null ? total : 0),
                     calls: u.calls + 1,
                   },
@@ -856,6 +860,22 @@ export const useAgentStore = create<AgentStoreState>()(
     }
   )
 );
+
+export function canonicalizeAgentModels(models: ModelInfo[]): void {
+  const redirects = new Map(models.filter((model) => model.canonicalRef).map((model) => [model.ref, model.canonicalRef!]));
+  if (redirects.size === 0) return;
+  useAgentStore.setState((state) => {
+    let changed = false;
+    const resolve = (ref: AIModelId) => {
+      const next = redirects.get(ref) ?? ref;
+      if (next !== ref) changed = true;
+      return next;
+    };
+    const agents = Object.fromEntries(Object.entries(state.agents).map(([id, agent]) => [id, { ...agent, model: resolve(agent.model) }]));
+    const roleDefaults = Object.fromEntries(Object.entries(state.roleDefaults).map(([role, ref]) => [role, resolve(ref)])) as Record<AgentRole, AIModelId>;
+    return changed ? { agents, roleDefaults } : state;
+  });
+}
 
 systemQuery()?.addEventListener('change', () => {
   const state = useAgentStore.getState();

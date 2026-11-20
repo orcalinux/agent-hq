@@ -3,7 +3,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import type { ConnectionMethod, ProviderId, StoredConnection } from './config';
-import { claudeModelChoices, observeCliModels, reportedClaudeModels } from './cliModelIdentity';
+import { claudeCliUsage, claudeModelChoices, observeCliModels, reportedClaudeModels, type ClaudeCliUsage } from './cliModelIdentity';
+import type { ClaudePricing } from './claudeCatalog';
 
 export interface ModelInfo {
   ref: string;
@@ -11,9 +12,11 @@ export interface ModelInfo {
   id: string;
   name: string;
   via: ConnectionMethod;
+  selectable?: boolean;
+  canonicalRef?: string;
   contextWindow?: number;
   capabilities: string[];
-  pricing?: { inputPerM: number; outputPerM: number; source: 'provider' | 'local' };
+  pricing?: { inputPerM: number; outputPerM: number; source: 'provider' | 'local' } | ClaudePricing;
 }
 
 export interface ChatMessage {
@@ -25,6 +28,9 @@ export interface ChatUsage {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  cacheWrite1hTokens?: number;
 }
 
 export interface ChatResult {
@@ -547,9 +553,14 @@ function codexCachedModels(): Array<[string, string, number | undefined]> {
 }
 
 function cliModels(conn: StoredConnection, cwd: string): ModelInfo[] {
+  if (conn.providerId === 'anthropic') {
+    return claudeModelChoices(conn, cwd).map((model) => ({
+      ...model, ref: `anthropic:cli:${model.id}`, id: `cli:${model.id}`,
+      providerId: 'anthropic', via: 'cli',
+    }));
+  }
   const codex = conn.providerId === 'openai' ? codexCachedModels() : [];
   const aliases: Partial<Record<ProviderId, Array<[string, string]>>> = {
-    anthropic: claudeModelChoices(conn, cwd),
     openai: [['default', 'Codex CLI (configured default model)'], ...codex.map(([id, name]) => [id, name] as [string, string])],
     google: [['default', 'Gemini CLI (configured default model)']],
   };
@@ -632,7 +643,7 @@ async function chatViaCli(req: ChatRequest): Promise<ChatResult> {
     const args = ['-p', '--output-format', 'json'];
     if (alias && alias !== 'default') args.push('--model', alias);
     const out = await runCliStreaming(binary, args, prompt, req.cwd, req.signal);
-    let parsed: { result?: string; is_error?: boolean; modelUsage?: unknown; usage?: { input_tokens?: number; output_tokens?: number } } | undefined;
+    let parsed: { result?: string; is_error?: boolean; modelUsage?: unknown; usage?: ClaudeCliUsage } | undefined;
     try {
       parsed = JSON.parse(out.stdout.trim().split('\n').filter(Boolean).pop() || '');
     } catch {
@@ -646,7 +657,7 @@ async function chatViaCli(req: ChatRequest): Promise<ChatResult> {
     return {
       text,
       resolvedModels: reportedClaudeModels(parsed),
-      usage: parsed.usage ? { inputTokens: parsed.usage.input_tokens, outputTokens: parsed.usage.output_tokens } : undefined,
+      usage: parsed.usage ? claudeCliUsage(parsed.usage) : undefined,
       latencyMs: Date.now() - start,
     };
   }

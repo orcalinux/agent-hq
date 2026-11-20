@@ -16,10 +16,27 @@ export const CONNECTION_METHOD_LABEL: Record<ConnectionMethod, string> = {
   local_endpoint: 'Local endpoint',
 };
 
-export interface ModelPricing {
+export interface TokenRates {
   inputPerM: number;
   outputPerM: number;
-  source: 'provider' | 'local' | 'user';
+  cacheReadPerM?: number;
+  cacheWritePerM?: number;
+  cacheWrite1hPerM?: number;
+}
+
+/**
+ * `account` rates are the API rate card the signed-in Claude Code CLI caches for the account.
+ * Subscription plans are not billed per token, so costs at these rates are API-equivalent values.
+ */
+export interface ModelPricing extends TokenRates {
+  source: 'provider' | 'local' | 'user' | 'account';
+  longPrompt?: TokenRates & { abovePromptTokens: number };
+}
+
+export interface CacheTokens {
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  cacheWrite1hTokens?: number;
 }
 
 export interface ModelInfo {
@@ -28,6 +45,8 @@ export interface ModelInfo {
   id: string;
   name: string;
   via: ConnectionMethod;
+  selectable?: boolean;
+  canonicalRef?: AIModelId;
   contextWindow?: number;
   capabilities: string[];
   pricing?: ModelPricing;
@@ -94,9 +113,22 @@ export function shortModelLabel(ref: AIModelId | undefined): string {
 export function calculateTokenCostUSD(
   pricing: ModelPricing | undefined,
   promptTokens: number,
-  completionTokens: number
+  completionTokens: number,
+  cache: CacheTokens = {}
 ): number | null {
   if (!pricing) return null;
-  const cost = (promptTokens / 1_000_000) * pricing.inputPerM + (completionTokens / 1_000_000) * pricing.outputPerM;
+  const read = Math.max(cache.cacheReadTokens ?? 0, 0);
+  const write = Math.max(cache.cacheWriteTokens ?? 0, 0);
+  const write1h = Math.min(Math.max(cache.cacheWrite1hTokens ?? 0, 0), write);
+  const long = pricing.longPrompt;
+  const r: TokenRates = long && promptTokens + read + write > long.abovePromptTokens ? long : pricing;
+  const writeRate = r.cacheWritePerM ?? r.inputPerM;
+  const cost =
+    (promptTokens * r.inputPerM +
+      completionTokens * r.outputPerM +
+      read * (r.cacheReadPerM ?? r.inputPerM) +
+      (write - write1h) * writeRate +
+      write1h * (r.cacheWrite1hPerM ?? writeRate)) /
+    1_000_000;
   return Number(cost.toFixed(6));
 }

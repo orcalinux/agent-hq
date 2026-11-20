@@ -140,7 +140,9 @@ Agent HQ only uses supported mechanisms. It never reads or reuses another tool's
 
 Agent HQ talks to models as plain text and tells every model that it has no tools, because gateways that wrap an agent account (Magpie with Claude Code or Codex) may otherwise let a model try a tool call and leak it into the answer.
 
-CLIs are looked up on `PATH` plus common install locations (nvm, npm global, bun, volta, `~/.claude/local`). A connection is only marked connected after a real test call succeeds. Codex models are read from the CLI's own model cache. For Claude Code, **Verify** runs a short test prompt and reads the actual model IDs from the CLI's JSON response. Automatic selections and aliases show their **last used** model; reported IDs also become explicit model choices. Existing role and agent assignments keep working. Each subsequent call updates these labels, and observations are scoped to the project folder. Unverified aliases stay labeled as aliases rather than guessing a model version.
+CLIs are looked up on `PATH` plus common install locations (nvm, npm global, bun, volta, `~/.claude/local`). A connection is only marked connected after a real test call succeeds. Codex models are read from the CLI's own model cache.
+
+Claude Code models come from the signed-in account's local catalog, matched to its account and organization, plus the older model caches in `.claude.json`. Pickers show exact model names and versions, such as **Claude Opus 5.5**, and selections pass the explicit model ID to the CLI. Account-denied models are excluded. No aliases are offered as model choices. Previously saved automatic assignments migrate to the exact ID once a verification or run has identified it; unresolved assignments ask you to choose an exact model. **Verify** runs a short test prompt, and a subsequent response can add a newly reported model when no local catalog exists.
 
 ## Quick start
 
@@ -228,5 +230,5 @@ To regenerate the README screenshots: `AGENT_HQ_SCREENSHOTS=1 npm run test:e2e -
 
 - Agent file changes are not written automatically; apply them from the **Changes** tab.
 - A demo run exists for exploring the visualizations and is labelled `demo` everywhere it appears.
-- Cost is only shown for models with verified pricing; otherwise tokens are shown without a price.
+- Cost is only shown for models with verified pricing; otherwise tokens are shown without a price. Claude Code models are priced from the API rate card the CLI caches for your account, including cache reads and writes. On a subscription this values usage at API rates and is not a bill.
 - Gemini CLI integration is untested on this machine (the CLI is not installed).

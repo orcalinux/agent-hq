@@ -1,7 +1,7 @@
 import { Bot, ChevronsLeft, Code2, FileBarChart, KanbanSquare, Monitor, Moon, Plug, Settings, Sun, type LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
-import { useConnectionsStore } from '@/store/useConnectionsStore';
+import { selectAllModels, useConnectionsStore } from '@/store/useConnectionsStore';
 import { cn } from '@/utils/cn';
 import type { ThemePreference, ViewMode } from '@/types';
 import { StatusDot } from '@/components/ui/primitives';
@@ -73,7 +73,7 @@ export function Sidebar() {
   const collapsed = useLayoutStore((s) => s.sidebarCollapsed);
   const toggle = useLayoutStore((s) => s.toggle);
   const providerCount = useConnectionsStore((s) => s.providers.filter((p) => p.connection).length);
-  const modelCount = useConnectionsStore((s) => s.providers.reduce((n, p) => n + (p.connection ? p.models.length : 0), 0));
+  const modelCount = useConnectionsStore((s) => selectAllModels(s.providers).length);
   const magpie = useConnectionsStore((s) => s.providers.some((p) => p.id === 'magpie' && p.connection));
   const loaded = useConnectionsStore((s) => s.loaded);
   const connected = providerCount > 0;

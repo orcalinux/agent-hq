@@ -148,7 +148,7 @@ export function AgentDetail({ selectedId, open }: { selectedId: string; open: bo
     >
       <div className="grid grid-cols-2 gap-2" data-testid="agent-stats">
         <StatTile label="Tokens" value={u.calls ? fmtTokens(u.totalTokens) : '—'} hint={u.calls ? `${fmtTokens(u.promptTokens)} in · ${fmtTokens(u.completionTokens)} out` : 'No calls yet'} />
-        <StatTile label="Estimated cost" value={usageCostLabel(u)} hint={u.unpricedTokens > 0 ? `${fmtTokens(u.unpricedTokens)} tokens unpriced` : 'Measured'} />
+        <StatTile label="Estimated cost" value={usageCostLabel(u)} hint={u.unpricedTokens > 0 ? `${fmtTokens(u.unpricedTokens)} tokens unpriced` : u.referenceCostUSD ? 'At Claude account API rates' : 'Measured'} />
         <StatTile label="Calls" value={u.calls} />
         <StatTile label="Tasks done / failed" value={<>{done}<span className="text-fg-subtle"> / </span><span className={failed ? 'text-danger' : undefined}>{failed}</span></>} />
       </div>

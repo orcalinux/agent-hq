@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
-import type { AgentStatus, AgentTokenUsage, AIModelId, ProviderState } from '@/types';
+import type { AgentStatus, AgentTokenUsage, AIModelId, ModelPricing, ProviderState } from '@/types';
 import { shortModelLabel } from '@/types';
 import { Select } from './primitives';
 
@@ -50,6 +50,17 @@ export function fmtCost(cost: number): string {
   return cost < 0.01 ? `$${cost.toFixed(4)}` : `$${cost.toFixed(2)}`;
 }
 
+export function fmtRate(perM: number): string {
+  return '$' + Number(perM.toPrecision(6)).toString();
+}
+
+export const PRICING_SOURCE: Record<ModelPricing['source'], string> = {
+  provider: 'from provider',
+  local: 'local model',
+  user: 'set by you',
+  account: 'Claude account rates',
+};
+
 /** Cost label that is honest about unpriced usage. */
 export function usageCostLabel(usage: Pick<AgentTokenUsage, 'estimatedCostUSD' | 'unpricedTokens' | 'calls' | 'totalTokens'>): string {
   if (usage.calls === 0) return '—';
@@ -97,19 +108,21 @@ interface ModelSelectProps {
 export function ModelSelect({ value, onChange, emptyLabel = 'Unassigned', className, disabled, ...rest }: ModelSelectProps) {
   const providers = useConnectionsStore((s) => s.providers);
   const groups = useMemo(
-    () => providers.filter((p) => p.connection && p.models.length > 0),
+    () => providers.filter((p) => p.connection).map((provider) => ({ ...provider, models: provider.models.filter((model) => model.selectable !== false) })).filter((provider) => provider.models.length > 0),
     [providers]
   );
-  const known = groups.some((g) => g.models.some((m) => m.ref === value));
+  const legacy = providers.flatMap((provider) => provider.models).find((model) => model.ref === value && model.selectable === false);
+  const selectedValue = legacy?.canonicalRef ?? value;
+  const known = groups.some((g) => g.models.some((m) => m.ref === selectedValue));
   return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)} className={className} disabled={disabled} aria-label={rest['aria-label'] ?? 'Model'}>
+    <Select value={selectedValue} onChange={(e) => onChange(e.target.value)} className={className} disabled={disabled} aria-label={rest['aria-label'] ?? 'Model'}>
       <option value="">{emptyLabel}</option>
       {groups.length === 0 ? (
         <option value="__none" disabled>
           No models yet. Connect a provider in Connections.
         </option>
       ) : null}
-      {value && !known ? <option value={value}>{shortModelLabel(value)} (not connected)</option> : null}
+      {selectedValue && !known ? <option value={selectedValue} disabled={Boolean(legacy)}>{legacy ? 'Choose an exact model' : shortModelLabel(selectedValue) + ' (not connected)'}</option> : null}
       {groups.map((p) => (
         <optgroup key={p.id} label={p.name}>
           {p.models.map((m) => (

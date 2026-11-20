@@ -334,6 +334,9 @@ export interface ChatUsage {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  cacheWrite1hTokens?: number;
 }
 
 export interface ManagerChatMessage {

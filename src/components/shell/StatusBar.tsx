@@ -1,6 +1,6 @@
 import { Activity, GitBranch, Search } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
-import { useConnectionsStore } from '@/store/useConnectionsStore';
+import { selectAllModels, useConnectionsStore } from '@/store/useConnectionsStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { Kbd, StatusDot } from '@/components/ui/primitives';
@@ -11,7 +11,7 @@ export function StatusBar() {
   const workspaceName = useWorkspaceStore((s) => s.name);
   const branch = useWorkspaceStore((s) => s.git?.branch);
   const connectedCount = useConnectionsStore((s) => s.providers.filter((p) => p.connection).length);
-  const modelCount = useConnectionsStore((s) => s.providers.reduce((n, p) => n + (p.connection ? p.models.length : 0), 0));
+  const modelCount = useConnectionsStore((s) => selectAllModels(s.providers).length);
   const mission = useAgentStore((s) => s.activeMission);
   const busyAgents = useAgentStore((s) => Object.values(s.agents).filter((a) => isBusy(a.status)).length);
   const toggle = useLayoutStore((s) => s.toggle);

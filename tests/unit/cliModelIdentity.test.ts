@@ -7,6 +7,7 @@ import { claudeModelChoices, observeCliModels, reportedClaudeModels } from '../.
 import { chat, discoverModels, verifyConnection } from '../../server/providers';
 
 const connection = (): StoredConnection => ({ providerId: 'anthropic', method: 'cli', connectedAt: '2026-11-20' });
+const emptyCatalog = { models: [], deniedIds: [] };
 
 describe('Claude CLI model identity', () => {
   it('uses reported model IDs rather than guessing a version from an alias', () => {
@@ -15,21 +16,20 @@ describe('Claude CLI model identity', () => {
     for (const modelUsage of [undefined, null, 'opus', [], { '': {}, ' opus ': {} }]) {
       expect(reportedClaudeModels({ modelUsage })).toEqual([]);
     }
-    expect(claudeModelChoices(connection(), '/project')[0][1]).toContain('verify to identify');
+    expect(claudeModelChoices(connection(), '/project', emptyCatalog).every((model) => model.selectable === false)).toBe(true);
   });
 
-  it('preserves automatic assignments while exposing exact models as selectable options', async () => {
+  it('maps old assignments to exact model choices while keeping compatibility entries hidden', () => {
     const conn = connection();
     observeCliModels(conn, '/project', 'cli:default', ['claude-opus-4-6']);
-    const models = await discoverModels(JSON.parse(JSON.stringify(conn)), '/project');
-    expect(models[0]).toMatchObject({
-      ref: 'anthropic:cli:default',
-      id: 'cli:default',
-      name: 'claude-opus-4-6 · last used (automatic)',
+    const models = claudeModelChoices(JSON.parse(JSON.stringify(conn)), '/project', emptyCatalog);
+    expect(models.find((model) => model.id === 'default')).toMatchObject({
+      id: 'default',
+      name: 'claude-opus-4-6',
+      selectable: false,
+      canonicalRef: 'anthropic:cli:claude-opus-4-6',
     });
-    expect(models.find((model) => model.ref === 'anthropic:cli:claude-opus-4-6'))
-      .toMatchObject({ name: 'claude-opus-4-6 · Claude Code' });
-    expect(models.find((model) => model.id === 'cli:sonnet')?.name).toBe('Claude Sonnet · alias');
+    expect(models.filter((model) => model.selectable).map((model) => model.id)).toEqual(['claude-opus-4-6']);
   });
 
   it('updates aliases independently, preserves multiple reported models and deduplicates exact choices', () => {
@@ -37,26 +37,27 @@ describe('Claude CLI model identity', () => {
     observeCliModels(conn, '/project', 'cli:default', ['claude-opus-4-6']);
     observeCliModels(conn, '/project', 'cli:sonnet', ['claude-sonnet-4-6', 'claude-haiku-4-5']);
     observeCliModels(conn, '/project', 'cli:opus', ['claude-opus-4-6']);
-    const choices = claudeModelChoices(conn, '/project');
-    expect(choices[1][1]).toBe('claude-sonnet-4-6 + claude-haiku-4-5 · last used (sonnet alias)');
-    expect(choices.filter(([id]) => id === 'claude-opus-4-6')).toHaveLength(1);
+    const choices = claudeModelChoices(conn, '/project', emptyCatalog);
+    expect(choices.find((model) => model.id === 'sonnet')?.name).toBe('claude-sonnet-4-6 + claude-haiku-4-5');
+    expect(choices.find((model) => model.id === 'sonnet')?.canonicalRef).toBeUndefined();
+    expect(choices.filter((model) => model.id === 'claude-opus-4-6')).toHaveLength(1);
     observeCliModels(conn, '/project', 'cli:sonnet', ['claude-sonnet-new']);
-    expect(claudeModelChoices(conn, '/project')[1][1]).toContain('claude-sonnet-new');
+    expect(claudeModelChoices(conn, '/project', emptyCatalog).find((model) => model.id === 'sonnet')?.name).toContain('claude-sonnet-new');
   });
 
   it('does not attribute one project’s model selection to a different project', () => {
     const conn = connection();
     observeCliModels(conn, '/first', 'cli:default', ['claude-opus-4-6']);
-    expect(claudeModelChoices(conn, '/second')[0][1]).toContain('verify to identify');
+    expect(claudeModelChoices(conn, '/second', emptyCatalog).find((model) => model.id === 'default')?.canonicalRef).toBeUndefined();
     observeCliModels(conn, '/second', 'cli:sonnet', ['claude-sonnet-4-6']);
-    expect(claudeModelChoices(conn, '/second')[0][1]).toContain('verify to identify');
+    expect(claudeModelChoices(conn, '/second', emptyCatalog).find((model) => model.id === 'default')?.canonicalRef).toBeUndefined();
   });
 
   it('keeps observations when metadata is absent and leaves other providers untouched', () => {
     const conn = connection();
     observeCliModels(conn, '/project', 'cli:default', ['claude-opus-4-6']);
     observeCliModels(conn, '/project', 'cli:default', []);
-    expect(claudeModelChoices(conn, '/project')[0][1]).toContain('claude-opus-4-6');
+    expect(claudeModelChoices(conn, '/project', emptyCatalog).find((model) => model.id === 'default')?.name).toContain('claude-opus-4-6');
     const other: StoredConnection = { ...connection(), providerId: 'openai' };
     observeCliModels(other, '/project', 'cli:default', ['unexpected']);
     expect(other.cliModelObservation).toBeUndefined();
@@ -78,10 +79,12 @@ if (process.argv.includes('--version')) {
 }
 `, { mode: 0o755 });
     vi.stubEnv('PATH', `${dir}${path.delimiter}${process.env.PATH}`);
+    vi.stubEnv('CLAUDE_CONFIG_DIR', dir);
     try {
       const conn = { ...connection(), cliBinary: binary };
       const verified = await verifyConnection(conn, dir);
-      expect(verified.models[0].name).toContain('claude-opus-fixture');
+      expect(verified.models[0]).toMatchObject({ name: 'claude-opus-fixture', selectable: true });
+      expect((await discoverModels(conn, dir))[0].id).toBe('cli:claude-opus-fixture');
       const result = await chat({
         connection: conn,
         cwd: dir,

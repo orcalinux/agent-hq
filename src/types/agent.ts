@@ -46,6 +46,8 @@ export interface AgentTokenUsage {
   totalTokens: number;
   /** Sum of costs for calls whose pricing is known. */
   estimatedCostUSD: number;
+  /** Part of estimatedCostUSD valued at a subscription account's API rate card (not a bill). */
+  referenceCostUSD?: number;
   /** Tokens from calls whose pricing is unknown (not included in cost). */
   unpricedTokens: number;
   calls: number;

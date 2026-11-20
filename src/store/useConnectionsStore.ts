@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { api, type ConnectPayload, type DetectResponse, type TestResult } from '@/api/client';
 import type { AIModelId, AIProviderId, ModelInfo, ModelPricing, ProviderState } from '@/types';
 import { safeStorage } from './storage';
+import { canonicalizeAgentModels } from './useAgentStore';
 
 interface ConnectionsState {
   providers: ProviderState[];
@@ -46,6 +47,7 @@ export const useConnectionsStore = create<ConnectionsState>()(
         try {
           const data = await api.connections();
           set({ providers: data.providers, loading: false, loaded: true });
+          canonicalizeAgentModels(data.providers.flatMap((provider) => provider.models));
         } catch (err) {
           set({ loading: false, loaded: true, error: (err as Error).message });
         }
@@ -124,7 +126,7 @@ export const useConnectionsStore = create<ConnectionsState>()(
 );
 
 export function selectAllModels(providers: ProviderState[]): ModelInfo[] {
-  return providers.flatMap((p) => (p.connection ? p.models : []));
+  return providers.flatMap((p) => (p.connection ? p.models.filter((model) => model.selectable !== false) : []));
 }
 
 export function findModel(providers: ProviderState[], ref: AIModelId | undefined): ModelInfo | undefined {
@@ -151,5 +153,5 @@ export function pricingFor(
 /** True when the model's provider is connected and the model was discovered. */
 export function isModelAvailable(providers: ProviderState[], ref: AIModelId | undefined): boolean {
   if (!ref) return false;
-  return providers.some((p) => p.connection && p.models.some((m) => m.ref === ref));
+  return providers.some((p) => p.connection && p.models.some((m) => m.ref === ref && (m.selectable !== false || Boolean(m.canonicalRef))));
 }
