@@ -129,6 +129,13 @@
   [role="tab"], [role="menuitem"], kbd { white-space: nowrap; }
   /* A label that may shrink, but not below a few readable characters (short labels keep their width). */
   .ahq-min-label { min-width: 0; min-width: calc-size(max-content, min(size, 5ch)); }
+  /*
+   * A table cell that takes the leftover width and ellipsises its text. `max-width: 0` stops long text
+   * from widening the column; the min-width (which wins over max-width) keeps the column readable and
+   * makes the table scroll inside its card instead of letting text spill into the next column.
+   * Override per table with --ahq-flex-min.
+   */
+  .ahq-flex-cell { width: 100%; max-width: 0; min-width: var(--ahq-flex-min, 9rem); }
 }
 
 @layer components {

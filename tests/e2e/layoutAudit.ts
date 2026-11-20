@@ -8,7 +8,8 @@ export interface LayoutIssue {
 
 /**
  * Measures the rendered page: text that spills out of its box, text cut off without an ellipsis,
- * single-line controls whose label wrapped, and horizontal page scroll.
+ * single-line controls whose label wrapped, and horizontal page scroll. Text crossing a table cell's edge
+ * always counts: cells have no border of their own, so overlap there reads as one column running into the next.
  * Multiline content (paragraphs, prose, editors, inputs, terminals) is skipped on purpose.
  */
 export function auditLayout(page: Page): Promise<LayoutIssue[]> {
@@ -60,12 +61,16 @@ export function auditLayout(page: Page): Promise<LayoutIssue[]> {
           const ellipsis = getComputedStyle(el).textOverflow === 'ellipsis' || style.textOverflow === 'ellipsis';
           const scrollable = style.overflowX === 'auto' || style.overflowX === 'scroll';
           if (!ellipsis && !scrollable) issues.push({ kind: 'clipped', text: text.slice(0, 60), where: describe(el) });
-        } else if (box !== el && /^(BUTTON|TD|TH|LI|A|LABEL|SECTION|HEADER|ARTICLE|ASIDE|NAV|DIV)$/.test(box.tagName) && (getComputedStyle(box).borderLeftWidth !== '0px' || getComputedStyle(box).backgroundColor !== 'rgba(0, 0, 0, 0)')) {
+        } else if (box !== el && (/^(TD|TH)$/.test(box.tagName) || (/^(BUTTON|LI|A|LABEL|SECTION|HEADER|ARTICLE|ASIDE|NAV|DIV)$/.test(box.tagName) && (getComputedStyle(box).borderLeftWidth !== '0px' || getComputedStyle(box).backgroundColor !== 'rgba(0, 0, 0, 0)')))) {
           issues.push({ kind: 'spill', text: text.slice(0, 60), where: describe(el) });
         } else continue;
         seen.add(el);
         break;
       }
+    }
+    for (const cell of Array.from(document.querySelectorAll<HTMLElement>('td, th'))) {
+      if (cell.closest(SKIP) || !visible(cell) || cell.clientWidth === 0) continue;
+      if (cell.scrollWidth > cell.clientWidth + 1) issues.push({ kind: 'spill', text: (cell.textContent ?? '').trim().slice(0, 60), where: describe(cell) + ` (${cell.scrollWidth}px in ${cell.clientWidth}px)` });
     }
     if (document.documentElement.scrollWidth > innerWidth + 1) issues.push({ kind: 'page-scroll', text: `${document.documentElement.scrollWidth}px`, where: 'document' });
     return issues;

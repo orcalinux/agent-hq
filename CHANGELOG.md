@@ -11,6 +11,16 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.4.2] — 2026-11-20
+
+### Fixed
+- **Table columns no longer run into each other.** In narrow windows the first column of the Reports tables (run title, agent name and title, model) could shrink below its text, and the text spilled over the Calls and Input columns. Every flexible table column (Reports, Agents, Providers, Local tools, Models and Role defaults) now keeps a readable minimum width. When a table doesn't fit, it scrolls inside its card instead of overlapping.
+- Reports tables keep their first column pinned while you scroll sideways, so each row keeps its name.
+- In Usage by agent, the agent's name stays whole and its title is shortened first.
+
+### Tested
+- The layout audit now flags content that is wider than its table cell, the check that would have caught this bug. It also runs at 880 px for window managers that ignore the 1024 px minimum, and waits for each screen to finish loading before measuring.
+
 ## [0.4.1] — 2026-11-20
 
 ### Changed

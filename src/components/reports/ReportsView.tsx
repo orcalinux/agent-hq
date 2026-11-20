@@ -6,14 +6,15 @@ import { fmtCost, fmtDateTime, fmtDuration, fmtTokens, modelLabel, usageCostLabe
 
 /**
  * Report tables keep every cell on one line. The first column takes the leftover width and ellipsises
- * (see <FlexCell>); when even the numbers do not fit, the table scrolls inside its card.
+ * (see <FlexCell>), but never below a readable minimum: when even that does not fit, the table scrolls
+ * inside its card and the first column stays pinned so each row keeps its name.
  */
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
       <table className="w-full text-left text-[12.5px] [&_td]:whitespace-nowrap">
         <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
-          <tr>{headers.map((h) => <th key={h} className="px-3 py-1.5 font-medium">{h}</th>)}</tr>
+          <tr>{headers.map((h, i) => <th key={h} scope="col" className={'px-3 py-1.5 font-medium' + (i === 0 ? ' sticky left-0 z-[1] bg-surface-2' : '')}>{h}</th>)}</tr>
         </thead>
         <tbody>{children}</tbody>
       </table>
@@ -23,8 +24,8 @@ function Table({ headers, children }: { headers: string[]; children: React.React
 
 function FlexCell({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <td className={'w-full max-w-0 px-3 py-1.5 ' + (className ?? '')}>
-      <div className="min-w-32 truncate">{children}</div>
+    <td className={'ahq-flex-cell sticky left-0 z-[1] bg-surface px-3 py-1.5 ' + (className ?? '')}>
+      <div className="flex min-w-0 items-baseline gap-1.5">{children}</div>
     </td>
   );
 }
@@ -90,7 +91,7 @@ export default function ReportsView() {
             <Table headers={['Run', 'Type', 'Status', 'Started', 'Duration', 'Tasks', 'Tokens', 'Cost', 'QA', 'Files proposed / applied']}>
               {runs.map((r) => (
                 <tr key={r.id} className="border-b border-line last:border-0">
-                  <FlexCell className="font-medium">{r.title}</FlexCell>
+                  <FlexCell className="font-medium"><span className="min-w-0 truncate">{r.title}</span></FlexCell>
                   <td className="px-3 py-1.5">{r.source === 'live' ? <Badge tone="accent">Live</Badge> : <Badge tone="warning">Simulated</Badge>}</td>
                   <td className="px-3 py-1.5"><Badge tone={r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : 'neutral'}>{r.status}</Badge></td>
                   <td className="px-3 py-1.5 text-fg-muted">{fmtDateTime(r.startedAt)}</td>
@@ -110,7 +111,7 @@ export default function ReportsView() {
           <Table headers={['Agent', 'Calls', 'Input', 'Output', 'Total tokens', 'Est. cost', 'Tasks done', 'Tasks failed', 'Time on tasks']}>
             {Object.values(agents).map((a) => (
               <tr key={a.id} className="border-b border-line last:border-0">
-                <FlexCell className="font-medium">{a.name}<span className="ml-1.5 text-fg-subtle">{a.title}</span></FlexCell>
+                <FlexCell className="font-medium"><span className="max-w-full shrink-0 truncate">{a.name}</span><span className="min-w-0 truncate font-normal text-fg-subtle">{a.title}</span></FlexCell>
                 <td className="px-3 py-1.5 tabular-nums">{a.tokenUsage.calls}</td>
                 <td className="px-3 py-1.5 tabular-nums">{a.tokenUsage.calls ? fmtTokens(a.tokenUsage.promptTokens) : '—'}</td>
                 <td className="px-3 py-1.5 tabular-nums">{a.tokenUsage.calls ? fmtTokens(a.tokenUsage.completionTokens) : '—'}</td>
@@ -129,7 +130,7 @@ export default function ReportsView() {
             <Table headers={['Model', 'Tasks', 'Failed', 'Tokens']}>
               {byModel.map(([ref, row]) => (
                 <tr key={ref} className="border-b border-line last:border-0">
-                  <FlexCell className="font-mono text-[12px]">{modelLabel(providers, ref)}</FlexCell>
+                  <FlexCell className="font-mono text-[12px]"><span className="min-w-0 truncate">{modelLabel(providers, ref)}</span></FlexCell>
                   <td className="px-3 py-1.5 tabular-nums">{row.tasks}</td>
                   <td className="px-3 py-1.5 tabular-nums">{row.failed}</td>
                   <td className="px-3 py-1.5 tabular-nums">{fmtTokens(row.tokens)}</td>

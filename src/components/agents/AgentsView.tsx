@@ -80,7 +80,7 @@ function AgentTable() {
                     </div>
                   </div>
                 </td>
-                <td className="max-w-0 px-4 py-3">
+                <td className="ahq-flex-cell px-4 py-3 [--ahq-flex-min:8rem]">
                   <div className="truncate">{ref ? modelLabel(providers, ref) : <span className="text-warning">No model assigned</span>}</div>
                   <div className="mt-0.5 truncate text-[11.5px] text-fg-subtle">{ref ? `${providerName(providers, ref)} · ${a.model ? 'Agent model' : 'Role default'}` : 'Choose a model in details'}</div>
                 </td>

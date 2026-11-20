@@ -23,7 +23,7 @@ function ProviderRow({ provider, onConnect }: { provider: ProviderState; onConne
 
   return (
     <tr className="border-b border-line align-top">
-      <td className="w-full max-w-0 px-3 py-2">
+      <td className="ahq-flex-cell px-3 py-2">
         <div className="truncate font-medium">{provider.name}</div>
         <div className="truncate text-[11.5px] text-fg-subtle">{provider.methods.map((m) => CONNECTION_METHOD_LABEL[m]).join(' · ')}</div>
       </td>
@@ -133,7 +133,7 @@ export function LocalTools() {
                 <td className={cn('px-3 py-1.5 text-fg-muted', TOOL_COLUMN.signIn)}>
                   <div className="max-w-56 truncate">{cli.detected ? (cli.auth?.checked ? (cli.auth.detail ?? (cli.auth.ok ? 'Signed in' : 'Not signed in')) : 'Verified when you connect') : '—'}</div>
                 </td>
-                <td className="w-full max-w-0 px-3 py-1.5 text-fg-muted"><div className="truncate">{cli.purpose}{!cli.executionSupported ? ' (not supported for model calls)' : ''}</div></td>
+                <td className="ahq-flex-cell px-3 py-1.5 text-fg-muted"><div className="truncate">{cli.purpose}{!cli.executionSupported ? ' (not supported for model calls)' : ''}</div></td>
                 <td className="px-3 py-1.5">{!cli.detected && ['claude', 'codex', 'gemini'].includes(cli.binary) ? <InstallActions id={cli.binary} /> : <span className="text-fg-subtle">—</span>}</td>
               </tr>
             ))}
@@ -150,7 +150,7 @@ export function LocalTools() {
                 </span>
               </td>
               <td className={cn('px-3 py-1.5 text-fg-subtle', TOOL_COLUMN.signIn)}>—</td>
-              <td className="w-full max-w-0 px-3 py-1.5 text-fg-muted"><div className="truncate">Local model server, used through its HTTP endpoint</div></td>
+              <td className="ahq-flex-cell px-3 py-1.5 text-fg-muted"><div className="truncate">Local model server, used through its HTTP endpoint</div></td>
               <td className="px-3 py-1.5">{detection && !detection.ollama.reachable && !detection.clis.find((c) => c.binary === 'ollama')?.detected ? <InstallActions id="ollama" /> : <span className="text-fg-subtle">—</span>}</td>
             </tr>
             <tr className="border-t border-line">
@@ -166,7 +166,7 @@ export function LocalTools() {
                 </span>
               </td>
               <td className={cn('px-3 py-1.5 text-fg-subtle', TOOL_COLUMN.signIn)}>—</td>
-              <td className="w-full max-w-0 px-3 py-1.5 text-fg-muted"><div className="truncate">Magpie gateway — its models, routing groups and failover</div></td>
+              <td className="ahq-flex-cell px-3 py-1.5 text-fg-muted"><div className="truncate">Magpie gateway — its models, routing groups and failover</div></td>
               <td className="px-3 py-1.5">{detection && !detection.magpie?.reachable ? <InstallActions id="magpie" /> : <span className="text-fg-subtle">—</span>}</td>
             </tr>
           </tbody>

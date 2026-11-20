@@ -42,7 +42,7 @@ export default function App() {
             {activeView === 'workspace' ? (
               <WorkspaceView />
             ) : (
-              <Suspense fallback={<div className="flex h-full items-center justify-center"><Spinner /></div>}>
+              <Suspense fallback={<div data-view-loading="" className="flex h-full items-center justify-center"><Spinner /></div>}>
                 {activeView === 'agents' && <AgentsView />}
                 {activeView === 'tasks' && <TasksView />}
                 {activeView === 'reports' && <ReportsView />}

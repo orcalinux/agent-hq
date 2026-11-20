@@ -51,7 +51,7 @@ function ModelRow({ model, provider }: { model: ModelInfo; provider: ProviderSta
 
   return (
     <tr className="border-b border-line align-top">
-      <td className="w-full max-w-0 px-3 py-1.5">
+      <td className="ahq-flex-cell px-3 py-1.5">
         <div className="truncate font-medium">{model.name}</div>
         <div className="truncate font-mono text-[11px] text-fg-subtle">{model.ref}</div>
       </td>
@@ -193,7 +193,7 @@ export function RoleDefaults() {
               const Icon = r.icon;
               return (
                 <tr key={r.role} className="border-b border-line last:border-b-0 hover:bg-surface-2/50">
-                  <td className="w-full max-w-0 px-3 py-2">
+                  <td className="ahq-flex-cell px-3 py-2">
                     <div className="flex items-center gap-2.5">
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface-2 text-fg-muted">
                         <Icon className="h-3.5 w-3.5" />

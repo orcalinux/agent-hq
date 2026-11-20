@@ -70,16 +70,17 @@ test('every screen keeps single-line text on one line, ellipsised, at every wind
   await page.goto('/');
   await seedRun(page);
   const found: Array<LayoutIssue & { screen: string; width: number; stress: boolean }> = [];
-  for (const width of [1024, 1280, 1920]) {
+  for (const width of [880, 1024, 1280, 1920]) {
     await page.setViewportSize({ width, height: 760 });
     for (const stress of [false, true]) {
       for (const screen of SCREENS) {
         await closeOverlays(page);
         await screen.open(page);
+        await expect(page.locator('[data-view-loading]')).toHaveCount(0);
         await stressText(page, stress);
         await page.waitForTimeout(60);
         for (const issue of await auditLayout(page)) found.push({ ...issue, screen: screen.name, width, stress });
-        if (width === 1024) await page.screenshot({ path: testInfo.outputPath(`${screen.name.replace(/ /g, '-')}-${width}${stress ? '-stress' : ''}.png`) });
+        if (width <= 1024) await page.screenshot({ path: testInfo.outputPath(`${screen.name.replace(/ /g, '-')}-${width}${stress ? '-stress' : ''}.png`) });
         await stressText(page, false);
         if (screen.close) await screen.close(page);
       }
