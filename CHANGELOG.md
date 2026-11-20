@@ -11,6 +11,15 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.5.2] — 2026-11-20
+
+### Fixed
+- The integrated terminal no longer takes keyboard focus away from the editor, file search or another field when it finishes starting a moment after the page loads. It still focuses itself when you open it, switch terminal tabs, or create a new terminal.
+
+### Verification
+- Added a regression test that delays terminal startup and checks that focus stays where the user was typing.
+- CI now runs the desktop tests under a window manager so the window buttons are exercised the way they behave on a real Linux desktop, and the terminal exit test no longer depends on the previous command's status.
+
 ## [0.5.1] — 2026-11-20
 
 ### Fixed

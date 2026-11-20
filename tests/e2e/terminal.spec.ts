@@ -83,6 +83,23 @@ test('integrated terminal is a real shell in the project folder with tabs, resiz
   expect(errors).toEqual([]);
 });
 
+test('a terminal that starts late does not steal focus from what the user is typing in', async ({ page }) => {
+  await mockProvider(page);
+  await page.route('**/api/terminal/sessions', async (route) => {
+    if (route.request().method() === 'POST') await new Promise((resolve) => setTimeout(resolve, 1200));
+    await route.continue();
+  });
+  await page.goto('/');
+  const search = page.getByRole('textbox', { name: 'Search files', exact: true });
+  await search.click();
+  await search.fill('greeting');
+  const terminal = page.getByTestId('integrated-terminal');
+  await expect(terminal.getByRole('tab')).toHaveCount(1);
+  await page.waitForTimeout(300);
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('greeting');
+});
+
 test('terminal API only accepts JSON requests from this machine and bounded input', async ({ request }) => {
   const rejected = await request.post('/api/terminal/sessions', { headers: { 'content-type': 'text/plain' }, data: '{}' });
   expect(rejected.status()).toBe(415);

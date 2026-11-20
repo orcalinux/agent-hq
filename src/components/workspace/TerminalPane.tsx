@@ -22,6 +22,7 @@ export function TerminalPane() {
   useTerminalStore((s) => s.version);
   const root = useWorkspaceStore((s) => s.root);
   const stage = useRef<HTMLDivElement>(null);
+  const pane = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const active = sessions.find((s) => s.id === activeId) ?? null;
 
@@ -62,7 +63,9 @@ export function TerminalPane() {
     requestAnimationFrame(() => {
       fitActive();
       runtime.term.refresh(0, runtime.term.rows - 1);
-      runtime.term.focus();
+      const focused = document.activeElement;
+      const free = !focused || focused === document.body || focused === document.documentElement;
+      if (free || pane.current?.contains(focused)) runtime.term.focus();
     });
     const observer = new ResizeObserver(() => fitActive());
     observer.observe(element);
@@ -91,7 +94,7 @@ export function TerminalPane() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col" data-testid="integrated-terminal">
+    <div ref={pane} className="flex h-full min-h-0 flex-col" data-testid="integrated-terminal">
       <div className="flex h-8 shrink-0 items-center gap-1 border-b border-line bg-surface-2/60 pl-1.5 pr-1">
         <div role="tablist" aria-label="Terminals" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           {sessions.map((session, index) => {
