@@ -11,6 +11,17 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.3.2] — 2026-11-20
+
+### Changed
+- The Agents list now uses the same inset, rounded table surface as Connections, with Settings' shared icon tile and consistent spacing and typography.
+- Agent avatars, status badges and grouped model/provider and usage information make the team easier to scan.
+- Added team readiness counts, search by name, role, provider or model, and an explicit Configure action for every agent.
+
+### Tested
+- Search, empty-state recovery, keyboard navigation and agent configuration in light and dark themes.
+- Agents list layout at 1000px and 1440px widths and interaction in the desktop app.
+
 ## [0.3.1] — 2026-11-20
 
 ### Changed
@@ -70,6 +81,7 @@ git push --follow-tags
 
 First release: web UI, real provider connections, and an orchestrator that adapts when a provider runs out of credit.
 
+[0.3.2]: https://github.com/orcalinux/agent-hq/releases/tag/v0.3.2
 [0.3.1]: https://github.com/orcalinux/agent-hq/releases/tag/v0.3.1
 [0.3.0]: https://github.com/orcalinux/agent-hq/releases/tag/v0.3.0
 [0.2.0]: https://github.com/orcalinux/agent-hq/releases/tag/v0.2.0

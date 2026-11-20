@@ -51,7 +51,9 @@ test('agent detail cards support editing and discarding in the desktop shell', a
   try {
     await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Agents', exact: true }).click();
     await page.getByRole('tab', { name: 'List', exact: true }).click();
-    await page.getByText('Sovereign', { exact: true }).first().click();
+    await page.getByRole('textbox', { name: 'Search agents' }).fill('Sovereign');
+    await expect(page.getByRole('table', { name: 'Agents', exact: true }).locator('tbody tr')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Configure Sovereign', exact: true }).click();
     const panel = page.getByRole('complementary', { name: 'Sovereign', exact: true });
     await expect(panel.getByTestId('agent-stats')).toBeVisible();
     await expect(panel.getByRole('region', { name: 'Role and instructions' })).toBeVisible();

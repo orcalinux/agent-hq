@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react';
-import { GraduationCap, Plus } from 'lucide-react';
+import { ChevronRight, GraduationCap, Plus, Search, Users } from 'lucide-react';
 import { useAgentStore, resolveAgentModel } from '@/store/useAgentStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { useLayoutStore, type AgentsViewMode } from '@/store/useLayoutStore';
-import { Badge, Button, PageTitle, StatusDot, Tabs } from '@/components/ui/primitives';
+import { Badge, Button, Input, PageTitle, StatusDot, Tabs } from '@/components/ui/primitives';
+import { IconTile } from '@/components/ui/Card';
 import { fmtRelative, fmtTokens, isBusy, modelLabel, providerName, statusTone, usageCostLabel } from '@/components/ui/helpers';
 import { cn } from '@/utils/cn';
 import { AgentDetail } from './AgentDetail';
 import { AgentGraph } from './AgentGraph';
 import { AgentOffice } from './AgentOffice';
 import { AddAgentDialog, OnboardInternDialog } from './AgentDialogs';
+import { AgentAvatar } from './vizShared';
 
 function AgentTable() {
   const agents = useAgentStore((s) => s.agents);
@@ -17,14 +19,37 @@ function AgentTable() {
   const selectedId = useAgentStore((s) => s.selectedAgentId);
   const select = useAgentStore((s) => s.selectAgent);
   const providers = useConnectionsStore((s) => s.providers);
-  const rows = useMemo(() => Object.values(agents), [agents]);
-  const headers = ['Agent', 'Role', 'Model', 'Provider', 'Current task', 'Status', 'Tokens', 'Est. cost', 'Last activity'];
+  const [query, setQuery] = useState('');
+  const team = useMemo(() => Object.values(agents), [agents]);
+  const rows = team.filter((agent) => {
+    const ref = resolveAgentModel(agent, roleDefaults);
+    return [agent.name, agent.title, agent.role, agent.specialty, agent.internship?.specialty, ref ? modelLabel(providers, ref) : '', ref ? providerName(providers, ref) : '']
+      .some((value) => value?.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  });
+  const ready = team.filter((agent) => resolveAgentModel(agent, roleDefaults)).length;
+  const working = team.filter((agent) => isBusy(agent.status)).length;
+  const headers = ['Agent', 'Model', 'Status', 'Current task', 'Usage', 'Last activity'];
 
   return (
-    <div className="h-full overflow-auto">
-      <table className="w-full min-w-[900px] text-left text-[12.5px]">
-        <thead className="sticky top-0 z-10 border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
-          <tr>{headers.map((h) => <th key={h} className="px-3 py-1.5 font-medium">{h}</th>)}</tr>
+    <div className="h-full overflow-y-auto p-4">
+      <section aria-label="Agent team" className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile icon={Users} tint="var(--accent)" />
+            <div>
+              <h2 className="text-[13px] font-semibold">Your team <span className="ml-1 font-normal tabular-nums text-fg-subtle">{team.length}</span></h2>
+              <p className="text-[11.5px] text-fg-muted">{ready} with a model · {working} working</p>
+            </div>
+          </div>
+          <div className="relative w-60 max-w-full">
+            <Search aria-hidden className="pointer-events-none absolute left-2 top-1.5 h-4 w-4 text-fg-subtle" />
+            <Input aria-label="Search agents" placeholder="Search agents, roles or models…" value={query} onChange={(event) => setQuery(event.target.value)} className="pl-8" />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+      <table aria-label="Agents" className="w-full min-w-[800px] text-left text-[12.5px]">
+        <thead className="border-b border-line bg-surface-2 text-[11.5px] uppercase tracking-wide text-fg-subtle">
+          <tr>{headers.map((header) => <th scope="col" key={header} className="px-4 py-2 font-medium">{header}</th>)}<th scope="col" className="relative"><span className="sr-only">Details</span></th></tr>
         </thead>
         <tbody>
           {rows.map((a) => {
@@ -35,26 +60,41 @@ function AgentTable() {
                 tabIndex={0}
                 aria-selected={selectedId === a.id}
                 onClick={() => select(a.id)}
-                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), select(a.id))}
-                className={cn('cursor-pointer border-b border-line hover:bg-surface-2', selectedId === a.id && 'bg-accent-soft')}
+                onKeyDown={(e) => e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), select(a.id))}
+                className={cn('group cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-2 focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-accent', selectedId === a.id && 'bg-accent-soft')}
               >
-                <td className="px-3 py-2">
-                  <div className="font-medium">{a.name}</div>
-                  <div className="text-[11.5px] text-fg-subtle">{a.title}</div>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <AgentAvatar agent={a} size={32} />
+                    <div className="min-w-0">
+                      <div className="font-medium">{a.name}</div>
+                      <div className="max-w-56 truncate text-[11.5px] text-fg-muted" title={a.specialty || a.internship?.specialty || a.title}>{a.specialty || a.internship?.specialty || a.title}</div>
+                    </div>
+                  </div>
                 </td>
-                <td className="px-3 py-2 text-fg-muted">{a.specialty || a.internship?.specialty || (a.internship?.isIntern ? 'junior' : a.role)}</td>
-                <td className="px-3 py-2 font-mono text-[12px]">{ref ? modelLabel(providers, ref) : <span className="font-sans text-warning">Unassigned</span>}{!a.model && ref ? <span className="ml-1 font-sans text-[11px] text-fg-subtle">(role default)</span> : null}</td>
-                <td className="px-3 py-2 text-fg-muted">{ref ? providerName(providers, ref) : '—'}</td>
-                <td className="max-w-56 truncate px-3 py-2 text-fg-muted" title={a.currentTask}>{a.currentTask ?? '—'}</td>
-                <td className="px-3 py-2"><span className="flex items-center gap-1.5"><StatusDot tone={statusTone(a.status)} pulse={isBusy(a.status)} />{a.status}</span></td>
-                <td className="px-3 py-2 tabular-nums">{a.tokenUsage.calls ? fmtTokens(a.tokenUsage.totalTokens) : '—'}</td>
-                <td className="px-3 py-2 tabular-nums">{usageCostLabel(a.tokenUsage)}</td>
-                <td className="px-3 py-2 text-fg-muted">{fmtRelative(a.taskHistory[a.taskHistory.length - 1]?.timestamp)}</td>
+                <td className="px-4 py-3">
+                  <div className="max-w-64 truncate" title={ref ? modelLabel(providers, ref) : undefined}>{ref ? modelLabel(providers, ref) : <span className="text-warning">No model assigned</span>}</div>
+                  <div className="mt-0.5 text-[11.5px] text-fg-subtle">{ref ? `${providerName(providers, ref)} · ${a.model ? 'Agent model' : 'Role default'}` : 'Choose a model in details'}</div>
+                </td>
+                <td className="px-4 py-3"><Badge tone={statusTone(a.status)}><StatusDot tone={statusTone(a.status)} pulse={isBusy(a.status)} /><span className="capitalize">{a.status}</span></Badge></td>
+                <td className="max-w-56 truncate px-4 py-3 text-fg-muted" title={a.currentTask}>{a.currentTask ?? 'No active task'}</td>
+                <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+                  {a.tokenUsage.calls ? <><div>{fmtTokens(a.tokenUsage.totalTokens)} tokens</div><div className="text-[11.5px] text-fg-subtle">{usageCostLabel(a.tokenUsage)}</div></> : <span className="text-fg-subtle">No calls yet</span>}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-fg-muted">{fmtRelative(a.taskHistory[a.taskHistory.length - 1]?.timestamp)}</td>
+                <td className="pr-3">
+                  <button type="button" aria-label={`Configure ${a.name}`} onClick={(event) => { event.stopPropagation(); select(a.id); }} className="flex h-7 w-7 items-center justify-center rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg">
+                    <ChevronRight aria-hidden className="h-4 w-4" />
+                  </button>
+                </td>
               </tr>
             );
           })}
+          {rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-10 text-center"><p className="font-medium">No agents match your search</p><Button variant="ghost" size="sm" className="mt-2" onClick={() => setQuery('')}>Clear search</Button></td></tr> : null}
         </tbody>
       </table>
+        </div>
+      </section>
     </div>
   );
 }
@@ -71,7 +111,7 @@ export default function AgentsView() {
   return (
     <div className="flex h-full min-w-0 flex-col">
       <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-surface/70 px-5 py-2 backdrop-blur">
-        <PageTitle group="Work" title="Agents" subtitle="Click an agent to configure it and see its history." />
+        <PageTitle group="Work" title="Agents" subtitle="Manage your team, models and agent activity." />
         <div className="flex items-center gap-2">
           <Tabs<AgentsViewMode>
             label="Agents view"

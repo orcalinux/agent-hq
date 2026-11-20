@@ -10,6 +10,50 @@ const go = (page: Page, view: string) =>
 test.beforeEach(() => resetFixtureWorkspace());
 
 for (const theme of ['light', 'dark'] as const) {
+  test(`agent list uses the shared surface and supports search and keyboard in ${theme} theme`, async ({ page }, testInfo) => {
+    const errors = trapErrors(page);
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await mockProvider(page);
+    await page.goto('/');
+    await go(page, 'Connections');
+    await page.getByRole('tab', { name: 'Role defaults' }).click();
+    await page.getByRole('button', { name: 'Fill empty roles' }).click();
+    await go(page, 'Agents');
+    await page.getByRole('tab', { name: 'List', exact: true }).click();
+    const team = page.getByRole('region', { name: 'Agent team', exact: true });
+    const table = team.getByRole('table', { name: 'Agents', exact: true });
+    const rows = table.locator('tbody tr');
+    await expect(rows).toHaveCount(7);
+    await expect(team).toContainText('7 with a model · 0 working');
+    for (const width of [1000, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`agent-list-${width}.png`) });
+    }
+    const search = page.getByRole('textbox', { name: 'Search agents', exact: true });
+    await search.fill('  SOVEREIGN  ');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText('Sovereign');
+    await search.fill('frontend');
+    await expect(rows).toHaveCount(2);
+    await search.fill('Mock Model');
+    await expect(rows).toHaveCount(7);
+    await search.fill('nothing matches this');
+    await expect(team).toContainText('No agents match your search');
+    await team.getByRole('button', { name: 'Clear search' }).click();
+    await expect(search).toHaveValue('');
+    await expect(rows).toHaveCount(7);
+    await rows.first().focus();
+    await page.keyboard.press('Enter');
+    const panel = page.getByRole('complementary', { name: 'Sovereign', exact: true });
+    await expect(panel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await page.getByRole('button', { name: 'Configure Pulse', exact: true }).click();
+    await expect(page.getByRole('complementary', { name: 'Pulse', exact: true })).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test(`agent details match the app and preserve edits in ${theme} theme`, async ({ page }, testInfo) => {
     const errors = trapErrors(page);
     await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
