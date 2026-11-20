@@ -255,3 +255,15 @@ test('typing in the project dialog filters folders and Enter goes into the match
   await expect(dialog.getByRole('textbox', { name: 'Filter folders' })).toHaveValue('');
   expect(errors).toEqual([]);
 });
+
+test('opening the workspace with the Changes tab saved and no mission does not crash', async ({ page }) => {
+  const errors = trapErrors(page);
+  await mockProvider(page);
+  await page.addInitScript(() => localStorage.setItem('agent-hq.layout', JSON.stringify({ state: { bottomTab: 'changes', bottomVisible: true }, version: 0 })));
+  await page.goto('/');
+  await expect(page.getByText(/failed to render/i)).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Changes' })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Terminal', exact: true }).click();
+  await expect(page.getByTestId('integrated-terminal')).toBeVisible();
+  expect(errors).toEqual([]);
+});

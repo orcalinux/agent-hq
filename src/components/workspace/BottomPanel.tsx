@@ -9,6 +9,7 @@ import { api } from '@/api/client';
 import { Badge, Button, EmptyState, IconButton, Spinner, Tabs } from '@/components/ui/primitives';
 import { fmtDuration } from '@/components/ui/helpers';
 const TerminalPane = lazy(() => import('./TerminalPane').then((m) => ({ default: m.TerminalPane })));
+import type { ProposedFileChange } from '@/types';
 import { cn } from '@/utils/cn';
 
 function CommandsTab() {
@@ -140,13 +141,15 @@ function ProblemsTab() {
   );
 }
 
+const NO_PROPOSALS: ProposedFileChange[] = [];
+
 function ChangesTab() {
   const git = useWorkspaceStore((s) => s.git);
   const tree = useWorkspaceStore((s) => s.tree);
   const openFile = useWorkspaceStore((s) => s.openFile);
   const showDiff = useWorkspaceStore((s) => s.showDiff);
   const reload = useWorkspaceStore((s) => s.loadGit);
-  const proposals = useAgentStore((s) => s.activeMission?.proposedChanges ?? []);
+  const proposals = useAgentStore((s) => s.activeMission?.proposedChanges ?? NO_PROPOSALS);
   const setStatus = useAgentStore((s) => s.setProposedChangeStatus);
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
