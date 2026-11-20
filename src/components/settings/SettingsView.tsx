@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Bell, CircleArrowUp, Database, FolderOpen, Keyboard, Palette, ShieldCheck, TestTube2, type LucideIcon } from 'lucide-react';
+import { Bell, Brain, CircleArrowUp, Database, FolderOpen, Keyboard, Palette, ShieldCheck, TestTube2, type LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
@@ -9,12 +9,14 @@ import { fmtDateTime } from '@/components/ui/helpers';
 import { SHORTCUTS } from '@/components/shell/useShortcuts';
 import { ApprovalModeCards } from '@/components/shell/ApprovalMode';
 import { UpdatesSettings } from './UpdatesSettings';
+import { MemorySettings } from './MemorySettings';
 import { IconTile } from '@/components/ui/Card';
 import { useUpdateStore } from '@/desktop/useUpdate';
 
 const SECTIONS: Array<{ id: string; title: string; hint: string; icon: LucideIcon; tint: string }> = [
   { id: 'project', title: 'Project', hint: 'The folder agents work in', icon: FolderOpen, tint: '#2563EB' },
   { id: 'permissions', title: 'Agent permissions', hint: 'How much they may do alone', icon: ShieldCheck, tint: '#16A34A' },
+  { id: 'memory', title: 'Memory and learning', hint: 'What agents learn and how it is found', icon: Brain, tint: '#9333EA' },
   { id: 'appearance', title: 'Appearance', hint: 'Theme and layout', icon: Palette, tint: '#DB2777' },
   { id: 'updates', title: 'Updates', hint: 'Version and new releases', icon: CircleArrowUp, tint: '#0EA5E9' },
   { id: 'qa', title: 'QA verification', hint: 'Checks run after each task', icon: TestTube2, tint: '#D97706' },
@@ -77,7 +79,7 @@ export default function SettingsView() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex min-h-14 shrink-0 items-center border-b border-line bg-surface/70 px-5 py-2 backdrop-blur">
-        <PageTitle group="App" title="Settings" subtitle="Project folder, agent permissions, appearance and QA." />
+        <PageTitle group="App" title="Settings" subtitle="Project folder, agent permissions, memory, appearance and QA." />
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <div className="mx-auto flex max-w-5xl items-start gap-8">
@@ -134,6 +136,10 @@ export default function SettingsView() {
           <Section id="permissions">
             <p className="text-[12.5px] text-fg-muted">Choose how much the agents may do without asking. Changes are always reviewed by QA first, stay inside the project folder, and can be undone from the Changes panel.</p>
             <ApprovalModeCards />
+          </Section>
+
+          <Section id="memory">
+            <MemorySettings />
           </Section>
 
           <Section id="appearance">

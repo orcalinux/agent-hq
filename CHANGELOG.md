@@ -11,6 +11,22 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.6.0] — 2026-11-20
+
+### Added
+- **Agent memory.** Every project now has a long-term memory at `.agent-hq/memory/lessons.json`: plain JSON of short lessons (convention, pitfall, decision, preference, fact), each for one agent or the whole team.
+- **Teach agents.** `/remember [@Agent] text` in chat, plus a Memory panel in each agent's details with a Teach form, search, pin, edit and delete.
+- **Agents learn on their own.** Mentor revisions, QA rejections and failed verification are journaled, and after each run Sovereign saves up to 6 reflected lessons. Near-duplicates reinforce an existing lesson. The activity log shows what was learned.
+- **Lessons are used.** Tasks, mentor reviews, QA and Sovereign chat receive pinned and relevant lessons within a fixed character budget.
+- **Search by meaning.** Keyword (BM25) search is always on. With Ollama running, an embedding model (`nomic-embed-text` preferred) adds meaning search, fused with keywords. Settings → Memory and learning can install the model with progress, rebuild the index, or turn it off.
+- **Learning mode** setting: every run (default), only from feedback, or off.
+
+### Safety
+- Memory paths are confined to the project, including through symlinks. Agents cannot overwrite `.agent-hq/` through file blocks; the attempt is dropped with a warning. A malformed memory file is reported and never overwritten.
+
+### Verification
+- Unit tests for storage, merging, search ranking, the meaning-match filter, prompt budgeting, Ollama embeddings and the learning loop; browser tests for the full teach, learn and reuse loop, the settings install flow and layout at every window width.
+
 ## [0.5.4] — 2026-11-20
 
 ### Fixed

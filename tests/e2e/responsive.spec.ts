@@ -67,6 +67,15 @@ test('every screen keeps single-line text on one line, ellipsised, at every wind
   const errors = trapErrors(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await mockProvider(page, 50, { magpie: true });
+  await page.request.post('/api/memory/lessons', {
+    data: {
+      lessons: [
+        { agentId: 'agent-frontend', kind: 'pitfall', pinned: true, text: `${LONG_AGENT} should never rename exported components without updating every import in the project first.` },
+        { agentId: 'team', kind: 'convention', text: 'UnbreakableIdentifier_'.repeat(8) },
+        { agentId: 'agent-frontend', kind: 'decision', text: 'Short lesson.' },
+      ],
+    },
+  });
   await page.goto('/');
   await seedRun(page);
   const found: Array<LayoutIssue & { screen: string; width: number; stress: boolean }> = [];

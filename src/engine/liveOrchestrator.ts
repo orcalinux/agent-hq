@@ -29,6 +29,8 @@ import { planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
 import { autoAppliesChanges, autoStartsRuns, selectAutoApply } from './approval';
 import { providerOfRef } from '@/types';
+import { useMemoryStore } from '@/store/useMemoryStore';
+import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
 
 const MAX_QA_LOOPS = 1;
 const QA_TASK_ID = 'qa-review';
@@ -258,6 +260,23 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
   const mode = store.orchestratorMode;
   const sovereign = store.agents['agent-manager'];
   if (!sovereign) return;
+  const remember = parseRemember(text, store.agents);
+  if (remember) {
+    store.appendChatMessage({ sender: 'user', text, mode });
+    if ('error' in remember) {
+      store.appendChatMessage({ sender: 'system', text: remember.error });
+      return;
+    }
+    const owner = remember.agentId === 'team' ? 'the team' : store.agents[remember.agentId]?.name ?? remember.agentId;
+    try {
+      const res = await useMemoryStore.getState().add([{ agentId: remember.agentId, kind: 'convention', text: remember.text, source: 'user' }]);
+      agentsState().appendChatMessage({ sender: 'system', text: res.added.length ? `Saved to ${owner}'s memory. It is used on every relevant task from now on.` : `${owner} already knew that; the lesson was reinforced.` });
+      agentsState().logActivity({ kind: 'learning', level: 'success', agentId: remember.agentId === 'team' ? undefined : remember.agentId, text: `You taught ${owner}: ${truncate(remember.text, 100)}` });
+    } catch (err) {
+      agentsState().appendChatMessage({ sender: 'system', text: `Could not save to memory: ${(err as Error).message}` });
+    }
+    return;
+  }
 
   const history = store.managerChatMessages
     .filter((m) => (m.sender === 'user' || m.sender === 'manager') && !m.error && !m.streaming && m.text)
@@ -273,7 +292,8 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
   chatController = controller;
 
   const content = `${text}${await attachmentContext(attachments)}`;
-  const system = `${sovereign.systemPrompt}\n\n${mode === 'ask' ? ASK_INSTRUCTIONS : planInstructions(store.teamStrategy)}\n\nTeam roster (id | name | title):\n${rosterDescription()}\n\n${mode === 'ask' ? '' : modelCatalog() + '\n\n'}${projectContext()}`;
+  const lessons = await memoryBrief(sovereign.id, text);
+  const system = `${sovereign.systemPrompt}${lessons}\n\n${mode === 'ask' ? ASK_INSTRUCTIONS : planInstructions(store.teamStrategy)}\n\nTeam roster (id | name | title):\n${rosterDescription()}\n\n${mode === 'ask' ? '' : modelCatalog() + '\n\n'}${projectContext()}`;
   const update = throttle((full) => agentsState().updateChatMessage(replyId, { text: full }), 120);
 
   try {
@@ -477,7 +497,7 @@ When you create or change files, output each file in full inside a fenced block 
 // full file content
 \`\`\`
 Files are only written to the project after QA approves the run. Keep explanations short.
-When you change an existing file, start from its current contents (provided below when available) and preserve unrelated code.`;
+When you change an existing file, start from its current contents (provided below when available) and preserve unrelated code.${await memoryBrief(agent.id, `${task.title}\n${task.description}\n${task.qaFeedback ?? ''}`)}`;
 
   const fileContext = await taskFileContext(task, mission);
   const user = `Overall request:\n${mission.prompt}\n\nYour task: ${task.title}\n${task.description}${
@@ -499,7 +519,7 @@ When you change an existing file, start from its current contents (provided belo
       agentsState().setAgentStatus(agent.id, 'waiting', `Waiting for ${mentor.name}'s review`);
       agentsState().setAgentStatus(mentor.id, 'reviewing', `N+1 review: ${task.title}`);
       const review = await callAgent(mentor, {
-        system: `${mentor.systemPrompt}\n\nYou are the N+1 senior mentor reviewing a junior engineer's work.`,
+        system: `${mentor.systemPrompt}\n\nYou are the N+1 senior mentor reviewing a junior engineer's work.${await memoryBrief(mentor.id, `${task.title}\n${task.description}`)}`,
         messages: [
           {
             role: 'user',
@@ -513,6 +533,7 @@ When you change an existing file, start from its current contents (provided belo
       tokens += (review.usage?.inputTokens ?? 0) + (review.usage?.outputTokens ?? 0) || review.usage?.totalTokens || 0;
       const verdict = parseMentorVerdict(review.text);
       if (verdict.verdict === 'revise' && verdict.revised) output = verdict.revised;
+      if (verdict.verdict === 'revise' && verdict.notes) noteFeedback(mission.id, { agentId: agent.id, source: 'mentor', text: verdict.notes, taskId: task.id });
       agentsState().updateTask(task.id, {
         n1ReviewStatus: verdict.verdict === 'approve' ? 'approved' : 'bug_fixed',
         n1ReviewNote: verdict.notes,
@@ -537,7 +558,11 @@ When you change an existing file, start from its current contents (provided belo
     }
 
     const durationMs = Date.now() - started;
-    const files = extractFileBlocks(output);
+    const blocks = extractFileBlocks(output);
+    const files = blocks.filter((f) => !isMemoryPath(f.path));
+    if (files.length < blocks.length) {
+      agentsState().logActivity({ kind: 'learning', level: 'warn', runId: mission.id, agentId: agent.id, taskId: task.id, text: `${agent.name} tried to edit the project memory folder; those file changes were dropped` });
+    }
     const changes: ProposedFileChange[] = files.map((f) => ({
       id: `${task.id}:${f.path}`,
       path: f.path,
@@ -621,7 +646,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     .map((t) => `## [${t.id}] ${t.title} — ${store.agents[t.assignedAgentId]?.name}\n${truncate(stripThinking(t.output ?? ''), 10_000)}`)
     .join('\n\n');
   const result = await callAgent(qa, {
-    system: `${qa.systemPrompt}\n\nRespond with ONLY a JSON object: {"verdict": "approve" | "reject", "summary": "...", "issues": [{"taskId": "<task id>", "problem": "..."}]}. Reject only for real defects, security problems or unmet requirements.`,
+    system: `${qa.systemPrompt}${await memoryBrief(qa.id, mission.prompt)}\n\nRespond with ONLY a JSON object: {"verdict": "approve" | "reject", "summary": "...", "issues": [{"taskId": "<task id>", "problem": "..."}]}. Reject only for real defects, security problems or unmet requirements.`,
     messages: [{ role: 'user', content: `Request:\n${mission.prompt}\n\nDeliverables:\n${deliverables}` }],
     signal,
     note: 'QA review',
@@ -658,6 +683,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     for (const t of targets) {
       const feedback = verdict.issues.filter((i) => i.taskId === t.id || !i.taskId).map((i) => `- ${i.problem}`).join('\n') || verdict.summary;
       store.updateTask(t.id, { status: 'rejected', qaFeedback: feedback, stage: 'implementation' });
+      noteFeedback(mission.id, { agentId: t.assignedAgentId, source: 'qa', text: `${t.title}: ${feedback}`, taskId: t.id });
     }
     store.updateTask(QA_TASK_ID, { status: 'pending', progress: 0 });
     return 'retry';
@@ -684,6 +710,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
       text: res.rejected ? `Verification command rejected: ${res.stderr}` : `Verification ${passed ? 'passed' : `failed (exit ${res.exitCode})`}`,
     });
     if (!passed) {
+      noteFeedback(mission.id, { agentId: 'team', source: 'verification', text: `"${command}" failed (exit ${res.exitCode}): ${truncate(verification.output, 500)}` });
       store.updateTask(QA_TASK_ID, { status: 'rejected', progress: 100, qaFeedback: `Verification "${command}" failed (exit ${res.exitCode}).` });
       return 'rejected';
     }
@@ -815,6 +842,52 @@ export async function executeRun() {
     else finalize('failed', (err as Error).message);
   } finally {
     if (runController === controller) runController = null;
+    void learnFromRun(mission.id);
+  }
+}
+
+/** After a run, Sovereign distills durable lessons from it into project memory. */
+export async function learnFromRun(runId: string) {
+  const feedback = takeJournal(runId);
+  const store = agentsState();
+  const mission = currentMission();
+  const sovereign = store.agents['agent-manager'];
+  if (!mission || mission.id !== runId || !sovereign) return;
+  if (!shouldReflect(store.learningMode, mission.status, feedback.length)) return;
+  const memory = useMemoryStore.getState();
+  if (memory.error) return;
+  const ids = Object.keys(store.agents);
+  let lessons;
+  try {
+    const result = await callAgent(sovereign, {
+      system: `${sovereign.systemPrompt}\n\n${REFLECTION_INSTRUCTIONS}`,
+      messages: [{ role: 'user', content: reflectionPrompt({ mission, agents: store.agents, feedback, known: memory.lessons }) }],
+      signal: new AbortController().signal,
+      note: 'Learning from the run',
+    });
+    lessons = parseLessons(result.text, ids, runId);
+  } catch (err) {
+    if (!feedback.length) {
+      agentsState().logActivity({ kind: 'learning', level: 'warn', runId, text: `No lessons saved from this run: ${(err as Error).message}` });
+      return;
+    }
+    lessons = feedbackLessons(feedback, runId);
+  }
+  if (!lessons.length) return;
+  try {
+    const res = await useMemoryStore.getState().add(lessons);
+    const agents = agentsState().agents;
+    const byAgent = new Map<string, number>();
+    for (const l of res.added) byAgent.set(l.agentId, (byAgent.get(l.agentId) ?? 0) + 1);
+    for (const [agentId, count] of byAgent) {
+      const who = agentId === 'team' ? 'Team memory' : agents[agentId]?.name ?? agentId;
+      agentsState().logActivity({ kind: 'learning', level: 'success', runId, agentId: agentId === 'team' ? undefined : agentId, text: `${who} learned ${count} lesson${count === 1 ? '' : 's'}` });
+    }
+    if (res.reinforced.length) {
+      agentsState().logActivity({ kind: 'learning', level: 'info', runId, text: `${res.reinforced.length} known lesson${res.reinforced.length === 1 ? ' was' : 's were'} confirmed again` });
+    }
+  } catch (err) {
+    agentsState().logActivity({ kind: 'learning', level: 'warn', runId, text: `Could not save lessons: ${(err as Error).message}` });
   }
 }
 

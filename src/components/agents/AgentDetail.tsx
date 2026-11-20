@@ -10,6 +10,7 @@ import { CORE_AGENT_IDS } from '@/store/defaultState';
 import type { AgentProfile, AutonomyLevel } from '@/types';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { AgentAvatar } from './vizShared';
+import { AgentMemory } from './AgentMemory';
 
 const TINT = {
   model: '#2563EB',
@@ -163,6 +164,8 @@ export function AgentDetail({ selectedId, open }: { selectedId: string; open: bo
           </div>
         </PanelCard>
       ) : null}
+
+      <AgentMemory agent={agent} />
 
       <ConfigForm key={agent.id} agent={agent} />
 

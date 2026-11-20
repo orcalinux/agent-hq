@@ -32,6 +32,8 @@ import { INSTALL_GUIDES, installCommandFor } from './installers';
 import { buildTerminalLaunch } from './terminal';
 import { observeCliModels } from './cliModelIdentity';
 import { deleteFile, gitStatus, readFile, scanTree, writeFile } from './workspace';
+import { addLessons, deleteLesson, indexLessons, LESSONS_FILE, lessonsFor, loadLessons, memoryContext, MemoryError, searchLessons, updateLesson, type LessonInput } from './memory';
+import { currentEmbedder, embeddingStatus, forgetEmbedder, pullModel } from './embeddings';
 
 const MAX_BODY = 8 * 1024 * 1024;
 
@@ -424,6 +426,114 @@ const routes: Record<string, Handler> = {
     res.end();
   },
 
+  'GET /api/memory': async (_req, res, url) => {
+    const root = getWorkspaceRoot();
+    const agentId = url.searchParams.get('agentId') || undefined;
+    let lessons: ReturnType<typeof loadLessons> = [];
+    let error: string | undefined;
+    try {
+      lessons = lessonsFor(loadLessons(root), agentId);
+    } catch (err) {
+      if (!(err instanceof MemoryError)) throw err;
+      error = err.message;
+    }
+    send(res, 200, { ok: true, file: LESSONS_FILE, lessons, error });
+  },
+
+  'GET /api/memory/status': async (_req, res) => {
+    forgetEmbedder();
+    const { status } = await currentEmbedder();
+    send(res, 200, { ok: true, embedding: status, mode: status.active ? 'hybrid' : 'keyword' });
+  },
+
+  'POST /api/memory/lessons': async (req, res) => {
+    const body = await readJson(req);
+    const inputs = Array.isArray(body.lessons) ? (body.lessons as LessonInput[]) : [];
+    if (!inputs.length) throw new HttpError(400, 'No lessons to save.');
+    send(res, 200, { ok: true, ...addLessons(getWorkspaceRoot(), inputs) });
+  },
+
+  'PATCH /api/memory/lesson': async (req, res) => {
+    const body = await readJson(req);
+    const patch = body.patch && typeof body.patch === 'object' ? (body.patch as Record<string, unknown>) : {};
+    send(res, 200, { ok: true, lesson: updateLesson(getWorkspaceRoot(), String(body.id || ''), patch) });
+  },
+
+  'DELETE /api/memory/lesson': async (req, res) => {
+    const body = await readJson(req);
+    deleteLesson(getWorkspaceRoot(), String(body.id || ''));
+    send(res, 200, { ok: true });
+  },
+
+  'POST /api/memory/search': async (req, res) => {
+    const body = await readJson(req);
+    const root = getWorkspaceRoot();
+    const query = String(body.query || '').slice(0, 4000);
+    const candidates = lessonsFor(loadLessons(root), typeof body.agentId === 'string' && body.agentId ? body.agentId : undefined);
+    const { embedder } = await currentEmbedder();
+    const limit = Math.min(Math.max(Number(body.limit) || 8, 1), 50);
+    send(res, 200, { ok: true, ...(await searchLessons(root, candidates, query, embedder, limit)) });
+  },
+
+  'POST /api/memory/context': async (req, res) => {
+    const body = await readJson(req);
+    const agentId = String(body.agentId || '');
+    if (!agentId) throw new HttpError(400, 'Which agent is the context for?');
+    const { embedder } = await currentEmbedder();
+    const result = await memoryContext(getWorkspaceRoot(), { agentId, query: String(body.query || '').slice(0, 8000), budgetChars: Number(body.budgetChars) || undefined }, embedder);
+    send(res, 200, { ok: true, ...result });
+  },
+
+  'POST /api/memory/embedding': async (req, res) => {
+    const body = await readJson(req);
+    const model = String(body.model || 'auto').trim();
+    if (!/^[A-Za-z0-9._:/-]{1,100}$/.test(model)) throw new HttpError(400, 'That is not a model name.');
+    updateConfig((cfg) => {
+      cfg.memory = { ...cfg.memory, embeddingModel: model };
+    });
+    forgetEmbedder();
+    const status = await embeddingStatus();
+    send(res, 200, { ok: true, embedding: status, mode: status.active ? 'hybrid' : 'keyword' });
+  },
+
+  'POST /api/memory/reindex': async (_req, res) => {
+    const root = getWorkspaceRoot();
+    forgetEmbedder();
+    const { embedder, status } = await currentEmbedder();
+    if (!embedder) throw new HttpError(409, status.reachable ? 'No embedding model is installed in Ollama.' : `Ollama is not reachable at ${status.endpoint}.`);
+    const lessons = loadLessons(root);
+    const started = Date.now();
+    try {
+      await indexLessons(root, lessons, embedder);
+    } catch (err) {
+      throw new HttpError(502, (err as Error).message);
+    }
+    send(res, 200, { ok: true, indexed: lessons.length, model: embedder.model, durationMs: Date.now() - started });
+  },
+
+  'POST /api/memory/embedding/pull': async (req, res) => {
+    const body = await readJson(req);
+    const model = String(body.model || '').trim();
+    if (!/^[A-Za-z0-9._:/-]{1,100}$/.test(model)) throw new HttpError(400, 'That is not a model name.');
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.flushHeaders?.();
+    const write = (ev: unknown) => res.write(`data: ${JSON.stringify(ev)}\n\n`);
+    const controller = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) controller.abort();
+    });
+    try {
+      await pullModel(model, (ev) => write({ type: 'progress', ...ev }), controller.signal);
+      const status = await embeddingStatus();
+      write({ type: 'done', embedding: status, mode: status.active ? 'hybrid' : 'keyword' });
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') write({ type: 'error', message: (err as Error).message });
+    }
+    res.end();
+  },
+
   'GET /api/workspace': async (_req, res) => {
     const cfg = loadConfig();
     send(res, 200, {
@@ -634,7 +744,7 @@ export function createApiMiddleware() {
     try {
       await handler(req, res, url);
     } catch (err) {
-      const status = err instanceof HttpError ? err.status : 500;
+      const status = err instanceof HttpError || err instanceof MemoryError ? err.status : 500;
       if (!res.headersSent) send(res, status, { ok: false, error: (err as Error).message });
       else res.end();
     }

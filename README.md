@@ -49,6 +49,7 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
 - **Plan first, then build.** Sovereign proposes tasks, agents and models; you edit and approve before anything runs.
 - **Parallel by design.** Independent tasks run in waves, up to 3 at once and never two at once for the same agent.
 - **Reviewed work.** Juniors get an N+1 senior review, and Sentinel QA can send work back once for rework.
+- **Agents that learn.** Each project has a long-term memory in `.agent-hq/memory/lessons.json`. Agents are taught with `/remember`, learn from QA and mentor feedback and from a short reflection after every run, and receive the relevant lessons in their next prompt. See [Agent memory](#agent-memory).
 - **You choose how much to trust the agents.** By default edits arrive as diffs in the **Changes** tab and are only written when you apply them. **Auto-apply** writes QA-approved changes for you, and **Full access** also skips plan approval. Every auto-applied file can be undone.
 - **Local and bring-your-own-model.** Claude Code, Codex, Gemini, Ollama and the Magpie gateway, with automatic failover when a provider runs out of credit.
 - **Looks right on your system.** The theme is **System** by default (light or dark, following your OS live) and can be pinned to Light or Dark. The sidebar glides open and shut, and the editor has modern file tabs with an unsaved dot.
@@ -107,6 +108,17 @@ Like the permission modes in Claude Code and Codex, you decide how much the agen
 | **Full access** | Build requests start running at once | Written automatically once Sentinel QA approves the run |
 
 Turning on a more permissive mode asks for confirmation first. Auto mode never writes work that QA rejected, only writes inside the project folder, and keeps each file's previous contents: **Undo** in the Changes tab restores the file, or deletes it if the agent created it. Every automatic write is logged in the activity panel.
+
+## Agent memory
+
+Agents keep what they learn **per project**, in plain JSON you can read, edit and commit: `<project>/.agent-hq/memory/lessons.json`. A `.gitignore` inside `.agent-hq/memory/` keeps the search index out of git.
+
+- **Teach directly.** In chat, `/remember Always run the formatter before QA` saves a lesson for the whole team; `/remember @Pulse Use Tailwind classes, not inline styles` saves it for one agent. Agents → pick an agent → **Memory** has a Teach form, search, pin, edit and delete.
+- **Learn from feedback.** Mentor revisions, QA rejections and failed verification are journaled; after the run Sovereign reflects on them and saves up to 6 short lessons. Repeats reinforce the existing lesson instead of adding a copy.
+- **Use it.** Pinned lessons come first, then the ones that best match the task, within a fixed prompt budget. The activity log shows when an agent learned something.
+- **Learning mode** (Settings → Memory and learning): **Every run** (default), **Only from feedback**, or **Off**.
+- **Search by meaning.** Lessons are always searched by keyword. If [Ollama](https://ollama.com) is running, Agent HQ also uses an embedding model (`nomic-embed-text` preferred) so "change the look of a button" finds a lesson about Tailwind. Install it from Settings with one click; otherwise search stays keyword-only. Everything stays on your computer.
+- **Safe by design.** Memory files stay inside the project, agents cannot overwrite them through file blocks, and a malformed file is reported rather than replaced.
 
 ## Features
 

@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
+import { memoryStats, useMemoryStore } from '@/store/useMemoryStore';
+import { TEAM_MEMORY } from '@/types';
 import { Badge, EmptyState, PageTitle, Section } from '@/components/ui/primitives';
-import { fmtCost, fmtDateTime, fmtDuration, fmtTokens, modelLabel, usageCostLabel } from '@/components/ui/helpers';
+import { fmtCost, fmtDateTime, fmtDuration, fmtRelative, fmtTokens, modelLabel, usageCostLabel } from '@/components/ui/helpers';
 
 /**
  * Report tables keep every cell on one line. The first column takes the leftover width and ellipsises
@@ -131,6 +133,8 @@ export default function ReportsView() {
           </Table>
         </Section>
 
+        <LearningSection />
+
         <Section title="Usage by model">
           {byModel.length === 0 ? <p className="text-[12px] text-fg-subtle">No task history yet.</p> : (
             <Table headers={['Model', 'Tasks', 'Failed', 'Tokens']}>
@@ -183,5 +187,49 @@ export default function ReportsView() {
         </Section>
       </div>
     </div>
+  );
+}
+
+/** How much each agent has learned on this project, from the project's memory file. */
+function LearningSection() {
+  const agents = useAgentStore((s) => s.agents);
+  const lessons = useMemoryStore((s) => s.lessons);
+  const loaded = useMemoryStore((s) => s.loaded);
+  const load = useMemoryStore((s) => s.load);
+  const select = useAgentStore((s) => s.selectAgent);
+  const setActiveView = useAgentStore((s) => s.setActiveView);
+  useEffect(() => {
+    if (!loaded) void load();
+  }, [loaded, load]);
+  const total = memoryStats(lessons);
+  const team = memoryStats(lessons, TEAM_MEMORY);
+  const rows = Object.values(agents).map((a) => ({ agent: a, stats: memoryStats(lessons, a.id) }));
+  return (
+    <Section title="Learning">
+      {total.count === 0 ? (
+        <p className="text-[12px] text-fg-subtle">No lessons yet. Agents learn from QA and mentor feedback and after each run; you can also teach them from an agent's panel or with /remember in the chat.</p>
+      ) : (
+        <>
+          <p className="text-[12px] text-fg-muted" data-testid="learning-summary">
+            {total.count} lesson{total.count === 1 ? '' : 's'} on this project, {total.thisWeek} learned this week{team.count ? `, ${team.count} shared by the whole team` : ''}. Lessons were used {total.uses} time{total.uses === 1 ? '' : 's'} in prompts.
+          </p>
+          <Table headers={['Agent', 'Lessons', 'This week', 'Confirmed again', 'Used in prompts', 'Last learned']}>
+            {rows.map(({ agent: a, stats }) => (
+              <tr key={a.id} className="border-b border-line last:border-0">
+                <FlexCell className="font-medium">
+                  <button type="button" className="max-w-full shrink-0 truncate hover:underline" onClick={() => { setActiveView('agents'); select(a.id); }}>{a.name}</button>
+                  <span className="min-w-0 truncate font-normal text-fg-subtle">{a.title}</span>
+                </FlexCell>
+                <td className="px-3 py-1.5 tabular-nums">{stats.count || '—'}</td>
+                <td className="px-3 py-1.5 tabular-nums">{stats.thisWeek || '—'}</td>
+                <td className="px-3 py-1.5 tabular-nums">{stats.reinforced || '—'}</td>
+                <td className="px-3 py-1.5 tabular-nums">{stats.uses || '—'}</td>
+                <td className="px-3 py-1.5 text-fg-muted">{stats.lastLearnedAt ? fmtRelative(stats.lastLearnedAt) : '—'}</td>
+              </tr>
+            ))}
+          </Table>
+        </>
+      )}
+    </Section>
   );
 }

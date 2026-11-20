@@ -21,6 +21,8 @@ export interface StoredConfig {
   workspaceRoot?: string;
   recentWorkspaces?: string[];
   connections: Partial<Record<ProviderId, StoredConnection>>;
+  /** Embedding model for project memory search: "auto" (default), "off", or an Ollama model name. */
+  memory?: { embeddingModel?: string };
 }
 
 export const REPO_ROOT = path.resolve(__dirname, '..');

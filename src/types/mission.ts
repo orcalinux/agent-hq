@@ -427,7 +427,7 @@ export interface ActivityEvent {
   runId?: string;
   agentId?: string;
   taskId?: string;
-  kind: 'run' | 'step_started' | 'step_completed' | 'step_failed' | 'review' | 'qa' | 'verification' | 'info';
+  kind: 'run' | 'step_started' | 'step_completed' | 'step_failed' | 'review' | 'qa' | 'verification' | 'learning' | 'info';
   level: 'info' | 'success' | 'warn' | 'error';
   text: string;
   model?: string;

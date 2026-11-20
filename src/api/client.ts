@@ -1,5 +1,10 @@
 import type {
   AIProviderId,
+  EmbeddingStatus,
+  Lesson,
+  LessonInput,
+  MemorySearchHit,
+  MemorySearchMode,
   ChatUsage,
   CliDetection,
   ConnectionMethod,
@@ -97,6 +102,19 @@ export const api = {
 
   /** Opens the user's own external terminal in the workspace; `install` runs that tool's official install command in it. */
   openTerminal: (install?: string) => call<{ terminal: string; cwd: string; command: string | null }>('POST', '/api/workspace/open-terminal', install ? { install } : {}),
+  memory: (agentId?: string) =>
+    call<{ file: string; lessons: Lesson[]; error?: string }>('GET', `/api/memory${agentId ? `?agentId=${encodeURIComponent(agentId)}` : ''}`),
+  memoryStatus: () => call<{ embedding: EmbeddingStatus; mode: MemorySearchMode }>('GET', '/api/memory/status'),
+  addLessons: (lessons: LessonInput[]) => call<{ added: Lesson[]; reinforced: Lesson[] }>('POST', '/api/memory/lessons', { lessons }),
+  updateLesson: (id: string, patch: Partial<Pick<Lesson, 'text' | 'kind' | 'agentId' | 'pinned'>>) =>
+    call<{ lesson: Lesson }>('PATCH', '/api/memory/lesson', { id, patch }),
+  deleteLesson: (id: string) => call<{ ok: true }>('DELETE', '/api/memory/lesson', { id }),
+  searchMemory: (query: string, agentId?: string, limit?: number) =>
+    call<{ hits: MemorySearchHit[]; mode: MemorySearchMode; embeddingModel?: string; embeddingError?: string }>('POST', '/api/memory/search', { query, agentId, limit }),
+  memoryContext: (agentId: string, query: string, budgetChars?: number) =>
+    call<{ lessons: Lesson[]; total: number; mode: MemorySearchMode; embeddingError?: string }>('POST', '/api/memory/context', { agentId, query, budgetChars }),
+  setEmbeddingModel: (model: string) => call<{ embedding: EmbeddingStatus; mode: MemorySearchMode }>('POST', '/api/memory/embedding', { model }),
+  reindexMemory: () => call<{ indexed: number; model: string; durationMs: number }>('POST', '/api/memory/reindex'),
   workspace: () => call<{ root: string; name: string; lockedByEnv: boolean; recent: string[] }>('GET', '/api/workspace'),
   setWorkspaceRoot: (path: string) => call<{ root: string; name: string }>('POST', '/api/workspace/root', { path }),
   createProject: (p: { parent: string; name: string; gitInit: boolean; description?: string }) =>
@@ -216,4 +234,39 @@ export async function streamChat(req: ChatStreamRequest): Promise<ChatStreamResu
     throw new ApiError(502, 'The model stream ended unexpectedly.');
   }
   return result;
+}
+
+/** Downloads an Ollama model, reporting progress as a 0..1 fraction when Ollama gives sizes. */
+export async function pullEmbeddingModel(model: string, onProgress: (status: string, fraction?: number) => void, signal?: AbortSignal) {
+  const res = await fetch('/api/memory/embedding/pull', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ model }),
+    signal,
+  });
+  if (!res.ok || !res.body) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(res.status, data.error || `HTTP ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finished: { embedding: EmbeddingStatus; mode: MemorySearchMode } | null = null;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf('\n\n')) >= 0) {
+      const line = buffer.slice(0, idx).split('\n').find((l) => l.startsWith('data:'));
+      buffer = buffer.slice(idx + 2);
+      if (!line) continue;
+      const ev = JSON.parse(line.slice(5).trim()) as { type: string; status?: string; completed?: number; total?: number; message?: string; embedding?: EmbeddingStatus; mode?: MemorySearchMode };
+      if (ev.type === 'progress') onProgress(ev.status ?? '', ev.total ? (ev.completed ?? 0) / ev.total : undefined);
+      else if (ev.type === 'error') throw new ApiError(502, ev.message || 'The download failed.');
+      else if (ev.type === 'done' && ev.embedding && ev.mode) finished = { embedding: ev.embedding, mode: ev.mode };
+    }
+  }
+  if (!finished) throw new ApiError(502, 'The download ended unexpectedly.');
+  return finished;
 }

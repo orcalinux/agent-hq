@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   ApprovalMode,
+  LearningMode,
   ThemePreference,
   ActiveBeamEvent,
   ActivityEvent,
@@ -79,6 +80,7 @@ export interface AgentStoreState {
   orchestratorMode: OrchestratorMode;
   teamStrategy: TeamStrategy;
   approvalMode: ApprovalMode;
+  learningMode: LearningMode;
   managerChatMessages: ManagerChatMessage[];
   emailConfig: EmailNotificationConfig;
   sentEmails: SentEmailRecord[];
@@ -114,6 +116,7 @@ export interface AgentStoreState {
   setOrchestratorMode: (mode: OrchestratorMode) => void;
   setTeamStrategy: (strategy: TeamStrategy) => void;
   setApprovalMode: (mode: ApprovalMode) => void;
+  setLearningMode: (mode: LearningMode) => void;
 
   // Agents & models
   setRoleDefault: (role: AgentRole, model: AIModelId) => void;
@@ -208,6 +211,7 @@ export const useAgentStore = create<AgentStoreState>()(
         orchestratorMode: 'ask',
         teamStrategy: 'adaptive',
         approvalMode: 'ask',
+        learningMode: 'every-run',
         managerChatMessages: DEFAULT_MANAGER_CHAT_MESSAGES,
         emailConfig: DEFAULT_EMAIL_CONFIG,
         sentEmails: [],
@@ -247,6 +251,7 @@ export const useAgentStore = create<AgentStoreState>()(
         setOrchestratorMode: (mode) => set({ orchestratorMode: mode }),
         setTeamStrategy: (strategy) => set({ teamStrategy: strategy }),
         setApprovalMode: (mode) => set({ approvalMode: mode }),
+        setLearningMode: (mode) => set({ learningMode: mode }),
 
         // ---------------------------------------------------------- Agents & models
         setRoleDefault: (role, model) => set((s) => ({ roleDefaults: { ...s.roleDefaults, [role]: model } })),
@@ -836,6 +841,7 @@ export const useAgentStore = create<AgentStoreState>()(
         orchestratorMode: s.orchestratorMode,
         teamStrategy: s.teamStrategy,
         approvalMode: s.approvalMode,
+        learningMode: s.learningMode,
         managerChatMessages: s.managerChatMessages.slice(-100).map((m) => (m.streaming ? { ...m, streaming: false, error: m.error ?? 'Interrupted' } : m)),
         emailConfig: s.emailConfig,
         sentEmails: s.sentEmails,

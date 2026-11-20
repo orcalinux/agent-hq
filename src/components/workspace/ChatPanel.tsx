@@ -308,7 +308,7 @@ export function ChatPanel() {
       >
         {messages.length === 0 ? (
           <EmptyState title="Talk to Sovereign">
-            Describe what you want built or changed. Use Ask to discuss, Plan to get a task breakdown with agent assignments, and approve it to run.
+            Describe what you want built or changed. Use Ask to discuss, Plan to get a task breakdown with agent assignments, and approve it to run. Type /remember to teach the team something it should always know.
           </EmptyState>
         ) : null}
         {messages.map((m) => <Message key={m.id} message={m} />)}
