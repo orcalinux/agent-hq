@@ -9,6 +9,50 @@ const go = (page: Page, view: string) =>
 
 test.beforeEach(() => resetFixtureWorkspace());
 
+for (const theme of ['light', 'dark'] as const) {
+  test(`agent details match the app and preserve edits in ${theme} theme`, async ({ page }, testInfo) => {
+    const errors = trapErrors(page);
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await mockProvider(page);
+    await page.goto('/');
+    await go(page, 'Agents');
+    await page.getByRole('tab', { name: 'List', exact: true }).click();
+    await page.getByText('Sovereign', { exact: true }).first().click();
+    const panel = page.getByRole('complementary', { name: 'Sovereign', exact: true });
+    await expect(panel).toBeVisible();
+    await expect(panel.getByTestId('agent-stats')).toContainText('Tasks done / failed');
+    for (const name of ['Model', 'Role and instructions', 'Prompt and review', 'Task history', 'Recent activity']) {
+      await expect(panel.getByRole('region', { name, exact: true })).toBeVisible();
+    }
+    const title = panel.getByRole('textbox', { name: 'Title', exact: true });
+    const original = await title.inputValue();
+    await expect(panel.getByTestId('agent-save-bar')).toHaveCount(0);
+    await title.fill('Temporary title');
+    await expect(panel.getByTestId('agent-save-bar')).toContainText('Unsaved changes');
+    await panel.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(title).toHaveValue(original);
+    await expect(panel.getByTestId('agent-save-bar')).toHaveCount(0);
+    await title.fill('Updated orchestrator');
+    await panel.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(panel.getByRole('status')).toHaveText('Saved');
+    await expect(panel).toContainText('Updated orchestrator');
+    await panel.getByRole('button', { name: 'Close details', exact: true }).click();
+    await expect(panel).toHaveCount(0);
+    await page.reload();
+    await page.getByText('Sovereign', { exact: true }).first().click();
+    await expect(title).toHaveValue('Updated orchestrator');
+    for (const width of [1000, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`agent-detail-${width}.png`) });
+    }
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+}
+
 test('role onboarding, individual assignment and reload preserve the team', async ({ page }) => {
   const errors = trapErrors(page);
   await mockProvider(page, 100, { magpie: true });

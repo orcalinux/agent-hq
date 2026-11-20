@@ -46,6 +46,29 @@ async function launch(extraEnv: Record<string, string> = {}): Promise<{ app: Ele
 
 test.beforeAll(freshDirs);
 
+test('agent detail cards support editing and discarding in the desktop shell', async () => {
+  const { app, page, errors } = await launch();
+  try {
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Agents', exact: true }).click();
+    await page.getByRole('tab', { name: 'List', exact: true }).click();
+    await page.getByText('Sovereign', { exact: true }).first().click();
+    const panel = page.getByRole('complementary', { name: 'Sovereign', exact: true });
+    await expect(panel.getByTestId('agent-stats')).toBeVisible();
+    await expect(panel.getByRole('region', { name: 'Role and instructions' })).toBeVisible();
+    const title = panel.getByRole('textbox', { name: 'Title', exact: true });
+    const original = await title.inputValue();
+    await title.fill('Desktop edit');
+    await panel.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(title).toHaveValue(original);
+    await expect(panel.getByTestId('agent-save-bar')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
 test('desktop app starts its own server, loads the UI and talks to the shell', async () => {
   const { app, page, errors } = await launch();
   try {

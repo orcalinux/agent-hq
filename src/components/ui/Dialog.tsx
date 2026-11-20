@@ -107,12 +107,16 @@ interface SidePanelProps {
   onClose: () => void;
   title: string;
   subtitle?: ReactNode;
+  leading?: ReactNode;
+  meta?: ReactNode;
+  footer?: ReactNode;
   children: ReactNode;
   width?: number;
+  tint?: string;
 }
 
 /** Right-hand details panel that sits inside the content area (not modal). */
-export function SidePanel({ open, onClose, title, subtitle, children, width = 420 }: SidePanelProps) {
+export function SidePanel({ open, onClose, title, subtitle, leading, meta, footer, children, width = 420, tint }: SidePanelProps) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -126,16 +130,24 @@ export function SidePanel({ open, onClose, title, subtitle, children, width = 42
     <aside
       aria-label={title}
       style={{ width }}
-      className="flex h-full max-w-[85vw] shrink-0 flex-col border-l border-line bg-surface"
+      className="ahq-panel-in flex h-full max-w-[85vw] shrink-0 flex-col border-l border-line bg-canvas"
     >
-      <div className="flex items-start justify-between gap-2 border-b border-line px-3 py-2.5">
-        <div className="min-w-0">
-          <h2 className="truncate text-[13.5px] font-semibold text-fg">{title}</h2>
-          {subtitle ? <div className="mt-0.5 text-[12px] text-fg-muted">{subtitle}</div> : null}
+      <div
+        className="relative border-b border-line bg-surface px-4 pb-3 pt-3.5"
+        style={tint ? { backgroundImage: `radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, ${tint} 12%, transparent), transparent 60%)` } : undefined}
+      >
+        <div className="flex items-start gap-3">
+          {leading}
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-[15px] font-semibold tracking-tight text-fg">{title}</h2>
+            {subtitle ? <div className="mt-0.5 text-[12px] text-fg-muted">{subtitle}</div> : null}
+          </div>
+          <IconButton icon={X} label="Close details" size="sm" onClick={onClose} />
         </div>
-        <IconButton icon={X} label="Close details" size="sm" onClick={onClose} />
+        {meta ? <div className="mt-2.5 flex flex-wrap items-center gap-1.5">{meta}</div> : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">{children}</div>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">{children}</div>
+      {footer}
     </aside>
   );
 }

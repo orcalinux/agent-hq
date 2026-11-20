@@ -9,6 +9,7 @@ import { fmtDateTime } from '@/components/ui/helpers';
 import { SHORTCUTS } from '@/components/shell/useShortcuts';
 import { ApprovalModeCards } from '@/components/shell/ApprovalMode';
 import { UpdatesSettings } from './UpdatesSettings';
+import { IconTile } from '@/components/ui/Card';
 import { useUpdateStore } from '@/desktop/useUpdate';
 
 const SECTIONS: Array<{ id: string; title: string; hint: string; icon: LucideIcon; tint: string }> = [
@@ -28,9 +29,7 @@ function Section({ id, children }: { id: string; children: ReactNode }) {
   return (
     <section id={`settings-${id}`} aria-labelledby={`settings-${id}-title`} className="scroll-mt-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
       <div className="flex items-center gap-3 border-b border-line px-5 py-3.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ color: meta.tint, background: `color-mix(in srgb, ${meta.tint} 15%, var(--surface))`, boxShadow: `0 0 0 1px color-mix(in srgb, ${meta.tint} 30%, transparent)` }}>
-          <Icon className="h-4 w-4" />
-        </span>
+        <IconTile icon={Icon} tint={meta.tint} />
         <div>
           <h2 id={`settings-${id}-title`} className="text-[13.5px] font-semibold tracking-tight">{meta.title}</h2>
           <p className="text-[11.5px] text-fg-subtle">{meta.hint}</p>

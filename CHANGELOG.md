@@ -11,6 +11,18 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.3.1] — 2026-11-20
+
+### Changed
+- Agent details now share Settings' icon tiles, card surfaces, borders and typography, with a clearer avatar header and model and status badges.
+- Measured usage appears in compact stat tiles, with separate sections for model selection, role instructions, prompts, history and activity.
+- Editing shows an explicit Save changes and Discard bar.
+- Detail panels open with a short slide transition that respects reduced motion.
+
+### Tested
+- Agent editing, discarding, saving and persistence in light and dark themes, at 1000px and 1440px widths.
+- Agent detail interaction in the desktop shell.
+
 ## [0.3.0] — 2026-11-20
 
 ### Added
@@ -58,6 +70,7 @@ git push --follow-tags
 
 First release: web UI, real provider connections, and an orchestrator that adapts when a provider runs out of credit.
 
+[0.3.1]: https://github.com/orcalinux/agent-hq/releases/tag/v0.3.1
 [0.3.0]: https://github.com/orcalinux/agent-hq/releases/tag/v0.3.0
 [0.2.0]: https://github.com/orcalinux/agent-hq/releases/tag/v0.2.0
 [0.1.0]: https://github.com/orcalinux/agent-hq/commit/ad75829
