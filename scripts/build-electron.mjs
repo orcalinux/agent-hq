@@ -24,6 +24,7 @@ const nativeModules = ['@lydell/node-pty'];
 await Promise.all([
   build({ ...common, entryPoints: ['electron/main.ts'], outfile: 'dist-electron/main.cjs', external: ['electron', 'electron-updater', ...nativeModules] }),
   build({ ...common, entryPoints: ['electron/preload.ts'], outfile: 'dist-electron/preload.cjs', external: ['electron'], sourcemap: false }),
+  build({ ...common, entryPoints: ['electron/trayPreload.ts'], outfile: 'dist-electron/tray-preload.cjs', external: ['electron'], sourcemap: false }),
   build({ ...common, entryPoints: ['server/start.ts'], outfile: 'dist-electron/server.cjs', external: nativeModules }),
 ]);
 

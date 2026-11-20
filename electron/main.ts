@@ -15,11 +15,12 @@ import {
   Tray,
   type MenuItemConstructorOptions,
 } from 'electron';
-import { TITLE_BAR_HEIGHT, type DesktopCommand, type DesktopStatus, type UpdatePrefs } from '../src/desktop/types';
+import { TITLE_BAR_HEIGHT, type DesktopCommand, type DesktopStatus, type UpdatePrefs, type TraySnapshot, type TrayState } from '../src/desktop/types';
 import { startStandaloneServer, type StandaloneServer } from '../server/standalone';
 import { deepLinkFromArgv, parseDeepLink, PROTOCOL } from './deepLink';
 import { fitToDisplays, loadWindowState, MIN_SIZE, saveWindowState } from './windowState';
 import { createUpdater } from './updater';
+import { createTrayPanel } from './trayPanel';
 
 const PRODUCT = 'Agent HQ';
 const REPO_URL = 'https://github.com/orcalinux/agent-hq';
@@ -42,6 +43,13 @@ let mainWindow: BrowserWindow | null = null;
 let server: StandaloneServer | null = null;
 let appUrl = '';
 let tray: Tray | null = null;
+let quickPanel: ReturnType<typeof createTrayPanel> | null = null;
+let traySnapshot: TraySnapshot = {
+  busy: 0, label: 'Idle', running: false, theme: 'dark', project: '', projectPath: '',
+  totalAgents: 0, connectedProviders: 0, totalProviders: 0, mission: null,
+  usage: { calls: 0, totalTokens: 0, estimatedCostUSD: 0, unpricedTokens: 0 },
+  agents: [], activity: [],
+};
 let status: DesktopStatus = { busy: 0, label: 'Idle', running: false };
 let quitting = false;
 let toldAboutTray = false;
@@ -52,6 +60,7 @@ const updater = createUpdater({
   onState: (state) => {
     mainWindow?.webContents.send('desktop:update', state);
     updateTray();
+    quickPanel?.publish();
   },
   onReady: (version) => {
     if (!Notification.isSupported()) return;
@@ -99,6 +108,7 @@ function send(command: DesktopCommand): void {
 
 function showWindow(): void {
   if (!mainWindow) return;
+  quickPanel?.hide();
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
@@ -179,6 +189,7 @@ function buildMenu(): void {
         { label: 'Command Palette', accelerator: 'CmdOrCtrl+K', registerAccelerator: false, click: () => send({ type: 'command-palette' }) },
         { label: 'Switch Theme (System, Light, Dark)', click: () => send({ type: 'toggle-theme' }) },
         { label: 'Open Integrated Terminal', accelerator: 'CmdOrCtrl+`', registerAccelerator: false, click: () => send({ type: 'open-terminal' }) },
+        { label: 'Quick status', accelerator: 'CmdOrCtrl+Shift+Space', click: () => void quickPanel?.show() },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
@@ -216,7 +227,7 @@ function buildMenu(): void {
 
 function updateTray(): void {
   if (!tray) return;
-  tray.setToolTip(`${PRODUCT} · ${status.label}`);
+  tray.setToolTip(`${PRODUCT}${traySnapshot.project ? ' · ' + traySnapshot.project : ''} · ${status.label}`);
   const go = (view: Extract<DesktopCommand, { type: 'navigate' }>['view']) => () => {
     showWindow();
     send({ type: 'navigate', view });
@@ -225,6 +236,7 @@ function updateTray(): void {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: status.label, enabled: false },
+      { label: 'Quick status', click: () => void quickPanel?.show() },
       { type: 'separator' },
       ...(update.status === 'ready'
         ? [{ label: `Restart to update to ${update.version}`, click: () => updater.install('now') }, { type: 'separator' as const }]
@@ -244,7 +256,7 @@ function createTray(): void {
     const icon = nativeImage.createFromPath(path.join(assets, process.platform === 'darwin' ? 'trayTemplate.png' : 'tray.png'));
     if (process.platform === 'darwin') icon.setTemplateImage(true);
     tray = new Tray(icon);
-    tray.on('click', () => showWindow());
+    tray.on('click', (_event, bounds) => quickPanel?.toggle(bounds));
     updateTray();
   } catch {
     tray = null;
@@ -332,12 +344,16 @@ function createWindow(): BrowserWindow {
 
   win.on('close', (event) => {
     remember();
-    if (quitting || !status.running || !tray) return;
+    if (quitting || !tray) return;
     event.preventDefault();
     win.hide();
     if (!toldAboutTray) {
       toldAboutTray = true;
-      new Notification({ title: `${PRODUCT} is still running`, body: 'The run continues in the background. Open it again from the tray icon.', icon: appIcon() }).show();
+      new Notification({
+        title: `${PRODUCT} is still running`,
+        body: status.running ? 'The run continues in the background. Click the tray icon for quick status.' : 'Click the tray icon for quick status, or choose Quit to exit.',
+        icon: appIcon(),
+      }).show();
     }
   });
   win.on('closed', () => {
@@ -359,9 +375,20 @@ function registerIpc(): void {
       running: next.running === true,
     };
     updateTray();
+    quickPanel?.publish();
     if (process.platform === 'darwin' || process.platform === 'linux') app.setBadgeCount(status.busy);
     mainWindow?.setProgressBar(status.running ? 2 : -1);
     if (!status.running) updater.idle();
+  });
+  ipcMain.on('desktop:tray-snapshot', (event, next: TraySnapshot) => {
+    if (!fromApp(event) || !next || typeof next !== 'object' || !Array.isArray(next.agents) || !Array.isArray(next.activity) || !next.usage) return;
+    const changedProject = next.project !== traySnapshot.project;
+    traySnapshot = next;
+    if (changedProject) updateTray();
+    quickPanel?.publish();
+  });
+  ipcMain.on('desktop:tray-show', (event) => {
+    if (fromApp(event)) void quickPanel?.show();
   });
   ipcMain.on('desktop:notify', (event, payload: { title?: unknown; body?: unknown }) => {
     if (!fromApp(event) || !Notification.isSupported()) return;
@@ -378,6 +405,7 @@ function registerIpc(): void {
     theme = mode;
     if (process.platform !== 'darwin') mainWindow?.setTitleBarOverlay({ ...TITLE_BAR[theme], height: TITLE_BAR_HEIGHT });
     mainWindow?.setBackgroundColor(CANVAS[theme]);
+    quickPanel?.publish();
   });
   ipcMain.on('desktop:menu', (event, at: { x?: unknown; y?: unknown }) => {
     if (!fromApp(event) || !mainWindow) return;
@@ -432,6 +460,21 @@ async function start(): Promise<void> {
   }
 
   mainWindow = createWindow();
+  quickPanel = createTrayPanel({
+    url: appUrl,
+    icon: appIcon(),
+    state: (): TrayState => ({ ...traySnapshot, ...status, theme, current: app.getVersion(), update: updater.state() }),
+    action: (action) => {
+      if (action.type === 'quit') return quit();
+      showWindow();
+      if (action.type === 'updates') send({ type: 'show-updates' });
+      else if (action.type === 'open') {
+        const views = ['workspace', 'agents', 'tasks', 'reports', 'connections', 'settings'];
+        if (typeof action.agentId === 'string') send({ type: 'show-agent', agentId: action.agentId });
+        else if (action.view && views.includes(action.view)) send({ type: 'navigate', view: action.view });
+      }
+    },
+  });
   createTray();
   await mainWindow.loadURL(appUrl);
   if (pendingLink) {
@@ -452,6 +495,8 @@ async function start(): Promise<void> {
 
 app.on('before-quit', () => {
   quitting = true;
+  quickPanel?.destroy();
+  quickPanel = null;
 });
 
 app.on('window-all-closed', () => {

@@ -11,6 +11,23 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.4.0] — 2026-11-20
+
+### Added
+- **Tray quick status**: clicking the system tray icon opens a compact panel with Overview, Agents and Activity tabs.
+- Live project and run status, task progress, pending changes to review, provider counts, measured tokens and estimated cost.
+- Agent status and models, recent activity and errors, and direct shortcuts to agent configuration, Workspace, Tasks, Connections and Settings.
+- A downloaded update appears in the panel and opens its release notes in the main window before installation.
+- **View → Quick status**, also available with Ctrl+Shift+Space (Cmd+Shift+Space on macOS).
+
+### Changed
+- Closing the main window keeps Agent HQ available in the tray while idle as well as during a run. Quit exits the app.
+- The popup follows the app's theme, fits within the current display, and dismisses on Escape or when focus leaves it.
+
+### Tested
+- Popup placement at screen edges, on another monitor and on small displays.
+- Live updates, light and dark themes, long and Arabic text, unpriced usage, keyboard dismissal, navigation, and the popup's isolated preload API.
+
 ## [0.3.2] — 2026-11-20
 
 ### Changed
@@ -81,6 +98,7 @@ git push --follow-tags
 
 First release: web UI, real provider connections, and an orchestrator that adapts when a provider runs out of credit.
 
+[0.4.0]: https://github.com/orcalinux/agent-hq/releases/tag/v0.4.0
 [0.3.2]: https://github.com/orcalinux/agent-hq/releases/tag/v0.3.2
 [0.3.1]: https://github.com/orcalinux/agent-hq/releases/tag/v0.3.1
 [0.3.0]: https://github.com/orcalinux/agent-hq/releases/tag/v0.3.0

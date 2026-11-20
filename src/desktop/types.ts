@@ -1,11 +1,44 @@
 import type { ViewMode } from '../types/mission';
+import type { AgentStatus } from '../types/agent';
 
 export type DesktopCommand =
   | { type: 'navigate'; view: ViewMode }
   | { type: 'open-project'; path: string }
   | { type: 'command-palette' }
   | { type: 'toggle-theme' }
-  | { type: 'open-terminal' };
+  | { type: 'open-terminal' }
+  | { type: 'show-agent'; agentId: string }
+  | { type: 'show-updates' };
+
+export type TrayAction =
+  | { type: 'open'; view?: ViewMode; agentId?: string }
+  | { type: 'updates' }
+  | { type: 'hide' }
+  | { type: 'quit' };
+
+export interface TraySnapshot extends DesktopStatus {
+  theme: 'dark' | 'light';
+  project: string;
+  projectPath: string;
+  totalAgents: number;
+  connectedProviders: number;
+  totalProviders: number;
+  mission: { title: string; completed: number; total: number; failed: number; review: number; source: 'live' | 'simulation' } | null;
+  usage: { calls: number; totalTokens: number; estimatedCostUSD: number; unpricedTokens: number };
+  agents: Array<{ id: string; name: string; title: string; avatar: string; status: AgentStatus; model: string; task?: string }>;
+  activity: Array<{ id: string; text: string; timestamp: number; level: 'info' | 'success' | 'warn' | 'error'; agent?: string }>;
+}
+
+export interface TrayState extends TraySnapshot {
+  current: string;
+  update: UpdateState;
+}
+
+export interface TrayApi {
+  getState: () => Promise<TrayState>;
+  onState: (listener: (state: TrayState) => void) => () => void;
+  action: (action: TrayAction) => void;
+}
 
 export interface DesktopStatus {
   /** Agents working right now. */
@@ -69,6 +102,8 @@ export interface DesktopApi {
   platform: string;
   version: string;
   setStatus: (status: DesktopStatus) => void;
+  setTraySnapshot: (snapshot: TraySnapshot) => void;
+  showTrayPanel: () => void;
   notify: (title: string, body: string) => void;
   /** Matches the native window buttons to the app theme. */
   setTheme: (mode: 'dark' | 'light') => void;
@@ -95,5 +130,6 @@ export const TITLE_BAR_HEIGHT = 36;
 declare global {
   interface Window {
     agentHqDesktop?: DesktopApi;
+    agentHqTray?: TrayApi;
   }
 }

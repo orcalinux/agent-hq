@@ -26,6 +26,12 @@ export default defineConfig({
   },
   build: {
     emptyOutDir: false,
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        tray: path.resolve(__dirname, 'tray.html'),
+      },
+    },
   },
   resolve: {
     alias: {

@@ -143,22 +143,110 @@ test('a second launch reuses the same origin and remembers the window size', asy
   }
 });
 
-test('closing the window during a run keeps the app running in the tray', async () => {
+test('closing the window keeps quick status available while working and while idle', async () => {
   const { app, page } = await launch();
+  const mainVisible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((window) => !window.webContents.getURL().endsWith('/tray.html'))?.isVisible());
+  const closeMain = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((window) => !window.webContents.getURL().endsWith('/tray.html'))?.close());
   try {
     await page.evaluate(() => window.agentHqDesktop?.setStatus({ busy: 2, label: '2 agents working · 1/3 tasks', running: true }));
-    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible())).toBe(true);
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+    await expect.poll(mainVisible).toBe(true);
+    await closeMain();
     await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => w.isVisible()))).toEqual([false]);
 
     await page.evaluate(() => window.agentHqDesktop?.setStatus({ busy: 0, label: 'Last run finished', running: false }));
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].show());
-    const closed = app.waitForEvent('close');
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
-    await closed;
-  } catch (err) {
+    const panel = await openQuickStatus(app, page);
+    await expect(panel.getByRole('status')).toContainText('Last run finished');
+    await panel.getByRole('button', { name: 'Open Agent HQ', exact: true }).click();
+    await expect.poll(mainVisible).toBe(true);
+    await closeMain();
+    await expect.poll(mainVisible).toBe(false);
+  } finally {
     await app.close();
-    throw err;
+  }
+});
+
+async function openQuickStatus(app: ElectronApplication, page: Page): Promise<Page> {
+  const existing = app.windows().find((window) => window.url().endsWith('/tray.html'));
+  const opened = existing ? Promise.resolve(existing) : app.waitForEvent('window');
+  await page.evaluate(() => window.agentHqDesktop?.showTrayPanel());
+  const panel = await opened;
+  await panel.waitForURL('**/tray.html');
+  await expect(panel.getByTestId('tray-panel')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'demo-app', exact: true })).toBeVisible();
+  return panel;
+}
+
+test('quick status shows live project data in a separate sandboxed panel and opens agent details', async ({}, testInfo) => {
+  const { app, page, errors } = await launch();
+  try {
+    const panel = await openQuickStatus(app, page);
+    panel.on('pageerror', (error) => errors.push(error.message));
+    await expect(panel.getByRole('status')).toContainText('Idle');
+    await expect(panel.getByRole('tabpanel', { name: 'Overview' })).toContainText('Ready when you are');
+    await panel.emulateMedia({ reducedMotion: 'reduce' });
+    await panel.screenshot({ path: testInfo.outputPath('tray-idle.png'), animations: 'disabled' });
+    expect(await panel.evaluate(() => ({
+      node: typeof (window as unknown as { require?: unknown }).require,
+      mainApi: typeof window.agentHqDesktop,
+      methods: Object.keys(window.agentHqTray ?? {}).sort(),
+    }))).toEqual({ node: 'undefined', mainApi: 'undefined', methods: ['action', 'getState', 'onState'] });
+    await panel.getByRole('tab', { name: /Agents/ }).click();
+    await expect(panel.getByRole('button', { name: /^Open (Sovereign|Aegis|Pulse|Titan|Sentinel|Nova|Byte)$/ })).toHaveCount(7);
+    await panel.getByRole('button', { name: 'Open Sovereign', exact: true }).click();
+    await expect(page.getByRole('complementary', { name: 'Sovereign', exact: true })).toBeVisible();
+    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().endsWith('/tray.html'))?.isVisible())).toBe(false);
+    await openQuickStatus(app, page);
+    await panel.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('main', { name: 'settings', exact: true })).toBeVisible();
+    await openQuickStatus(app, page);
+    await panel.keyboard.press('Escape');
+    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().endsWith('/tray.html'))?.isVisible())).toBe(false);
+    await openQuickStatus(app, page);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().endsWith('/tray.html'))?.emit('blur'));
+    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().endsWith('/tray.html'))?.isVisible())).toBe(false);
+    expect(app.windows()).toHaveLength(2);
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
+test('quick status follows live changes and both themes, including long text and unpriced usage', async ({}, testInfo) => {
+  const { app, page, errors } = await launch();
+  try {
+    const panel = await openQuickStatus(app, page);
+    await panel.emulateMedia({ reducedMotion: 'reduce' });
+    panel.on('pageerror', (error) => errors.push(error.message));
+    const snapshot = await panel.evaluate(() => window.agentHqTray!.getState());
+    await page.evaluate((snapshot) => {
+      window.agentHqDesktop!.setStatus({ busy: 2, running: true, label: '2 agents working · 1/3 tasks' });
+      window.agentHqDesktop!.setTraySnapshot({
+        ...snapshot,
+        project: 'مشروع طويل للاختبار — project-' + 'x'.repeat(100),
+        mission: { title: 'Task ' + 'x'.repeat(250), total: 3, completed: 1, failed: 1, review: 2, source: 'simulation' },
+        usage: { calls: 3, totalTokens: 15000, estimatedCostUSD: 0, unpricedTokens: 15000 },
+        activity: [{ id: 'event', agent: 'Sovereign', timestamp: Date.now(), level: 'error', text: 'Error ' + 'x'.repeat(300) }],
+      });
+    }, snapshot);
+    await expect(panel.getByRole('status')).toContainText('2 agents working');
+    await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
+    await expect(panel.getByRole('tabpanel')).toContainText('Estimated cost: unpriced');
+    await expect(panel.getByRole('tabpanel')).toContainText('2 changes ready to review');
+    await expect(panel.getByRole('status')).toContainText('Demo run');
+    for (const theme of ['light', 'dark'] as const) {
+      await page.evaluate((theme) => window.agentHqDesktop!.setTheme(theme), theme);
+      await expect(panel.locator('html')).toHaveAttribute('data-theme', theme);
+      for (const tab of ['Overview', 'Agents', 'Activity']) {
+        await panel.getByRole('tab', { name: tab, exact: tab !== 'Agents' }).click();
+        await expect(panel.getByRole('tab', { name: tab, exact: tab !== 'Agents' })).toHaveAttribute('aria-selected', 'true');
+        expect(await panel.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await panel.screenshot({ path: testInfo.outputPath(`tray-${theme}-${tab.toLowerCase()}.png`), animations: 'disabled' });
+      }
+    }
+    await panel.getByRole('button', { name: 'Close quick status', exact: true }).click();
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
   }
 });
 
@@ -285,6 +373,11 @@ test('a downloaded update shows the Update pill, its notes, and restarts from th
     await dialog.getByRole('button', { name: 'Later' }).click();
     await expect(dialog).toBeHidden();
     await expect(pill).toBeVisible();
+
+    const panel = await openQuickStatus(app, page);
+    await panel.getByRole('button', { name: /v99.0.0 is ready/ }).click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Later' }).click();
 
     await pill.click();
     await page.getByTestId('update-restart').click();

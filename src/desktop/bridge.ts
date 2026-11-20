@@ -1,6 +1,9 @@
-import { isBusy } from '@/components/ui/helpers';
+import { isBusy, modelLabel } from '@/components/ui/helpers';
 import { api } from '@/api/client';
-import { useAgentStore } from '@/store/useAgentStore';
+import { resolveAgentModel, useAgentStore } from '@/store/useAgentStore';
+import { useConnectionsStore } from '@/store/useConnectionsStore';
+import { useUpdateStore } from './useUpdate';
+import { makeTraySnapshot } from './traySnapshot';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import type { ViewMode } from '@/types';
 import { openIntegratedTerminal } from '@/utils/terminalActions';
@@ -49,6 +52,16 @@ function handleCommand(command: DesktopCommand): void {
     case 'open-terminal':
       openIntegratedTerminal();
       break;
+    case 'show-agent':
+      if (store.agents[command.agentId]) {
+        store.selectAgent(command.agentId);
+        store.setActiveView('agents');
+      }
+      break;
+    case 'show-updates':
+      store.setActiveView('settings');
+      useUpdateStore.getState().openNotes(useUpdateStore.getState().state?.status === 'ready' ? 'confirm' : 'browse');
+      break;
   }
 }
 
@@ -66,6 +79,7 @@ export function installDesktopBridge(): () => void {
 
   let lastStatus = '';
   let lastTheme = '';
+  let lastSnapshot = '';
   let lastMissionStatus = useAgentStore.getState().activeMission?.status;
   const notifiedPlans = new Set<string>();
   for (const m of useAgentStore.getState().managerChatMessages) if (m.plan?.status === 'proposed') notifiedPlans.add(m.id);
@@ -106,9 +120,25 @@ export function installDesktopBridge(): () => void {
   };
 
   publish(useAgentStore.getState());
-  const offStore = useAgentStore.subscribe(publish);
+  const publishSnapshot = () => {
+    const state = useAgentStore.getState();
+    const providers = useConnectionsStore.getState().providers;
+    const snapshot = makeTraySnapshot(state, useWorkspaceStore.getState(), providers, statusFrom(state),
+      (agent) => resolveAgentModel(agent, state.roleDefaults), (model) => modelLabel(providers, model));
+    const key = JSON.stringify(snapshot);
+    if (key !== lastSnapshot) {
+      lastSnapshot = key;
+      api.setTraySnapshot(snapshot);
+    }
+  };
+  publishSnapshot();
+  const offStore = useAgentStore.subscribe((state) => { publish(state); publishSnapshot(); });
+  const offWorkspace = useWorkspaceStore.subscribe(publishSnapshot);
+  const offConnections = useConnectionsStore.subscribe(publishSnapshot);
   return () => {
     offCommand();
     offStore();
+    offWorkspace();
+    offConnections();
   };
 }

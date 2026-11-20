@@ -187,7 +187,8 @@ npm run dist:desktop   # build installers for this system into release/
 The desktop app runs the same UI and server inside one window, so there is nothing to start first. It shares connections and settings with the browser version (`~/.config/agent-hq`).
 
 - **Custom title bar** in the app's design, with the project name, the live run status and an application menu; the native window buttons follow the light or dark theme.
-- **Tray icon** with the live run status ("2 agents working · 1/3 tasks"). Closing the window during a run keeps the run going in the tray.
+- **Tray quick status**: click the icon beside your system's battery and network icons to see the project, task progress, measured usage, agent models and recent activity. Its Overview, Agents and Activity tabs use the app's theme; select an agent to open its configuration. Escape or clicking outside dismisses the panel. **View → Quick status** (`Ctrl+Shift+Space`, or `Cmd+Shift+Space` on macOS) opens the same panel. Some Linux tray hosts show a menu first; choose **Quick status** there.
+- Closing the main window keeps Agent HQ in the tray, including when idle. Use **Quit** in the panel or application menu to exit.
 - **Notifications** when a plan is ready for review or a run finishes or fails while the window is in the background.
 - **Native menu**: open a project (`Ctrl+O`), switch views, command palette, zoom, full screen.
 - **`agenthq://` links**: `agenthq://open?path=/abs/project` opens a project after asking you, `agenthq://view/agents` shows a view.
