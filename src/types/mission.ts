@@ -89,6 +89,8 @@ export interface KanbanTaskCard {
   output?: string;
   error?: string;
   model?: string;
+  /** How hard Sovereign judged the task; picks the model tier when routing by complexity. */
+  complexity?: Complexity;
   tokens?: number;
   durationMs?: number;
   startedAt?: number;
@@ -307,9 +309,16 @@ export interface PlanTask {
   dependsOn: string[];
   /** Optional model chosen for this task; overrides the agent's model. */
   model?: string;
+  /** simple | standard | complex, set by Sovereign; picks the model when routing by complexity. */
+  complexity?: Complexity;
 }
 
 export type TeamStrategy = 'adaptive' | 'fixed';
+
+export type Complexity = 'simple' | 'standard' | 'complex';
+
+/** `sovereign`: every agent uses a model from Sovereign's own provider (one subscription). `any`: any connected provider. */
+export type ModelScope = 'sovereign' | 'any';
 
 export interface ProposedAgent {
   key: string;

@@ -11,6 +11,20 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.10.0] — 2026-11-21
+
+### Added
+- **One subscription for the whole team.** Settings → Models and routing → *Models agents may use*: **Sovereign's provider only** (default) keeps every agent on the provider Sovereign runs on, so signing in to Claude Code alone is enough. *Any connected provider* restores the old behaviour.
+- **A model per task, by complexity.** Sovereign rates each task simple, standard or complex, and the task runs on the model for that level (Haiku, Sonnet and Opus with Claude), whichever agent does it. The plan card has a complexity picker per task, which re-picks the model; model pickers only offer models in scope. Pin a model for any level in Settings, or leave it on Auto.
+- **Model update check for every provider.** Agent HQ re-reads the model lists of all connected providers on startup when due and every 1, 6 (default) or 24 hours, or on **Check now**. No prompt is sent (new `POST /api/models/rescan`). New and removed models are logged, listed in Settings and announced by a desktop notification, and Auto levels move to the newest model of their family.
+
+### Changed
+- Model suggestions are version-aware: the newest model of a family wins whatever order a provider lists them in, and release dates in ids are ignored.
+- New agents Sovereign creates without a model get the model for their level (juniors simple, architects and QA complex, others standard).
+
+### Verification
+- Unit tests for tiers, versions, scope (including the CLI default alias), task routing, plan parsing, the model diff and the check interval; browser tests for a Claude-only plan routed by complexity and for pinning tiers and picking up a newly released model.
+
 ## [0.9.0] — 2026-11-21
 
 ### Added

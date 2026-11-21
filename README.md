@@ -53,6 +53,7 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
 - **Agents that learn.** Each project has a long-term memory in `.agent-hq/memory/lessons.json`. Agents are taught with `/remember`, learn from QA and mentor feedback and from a short reflection after every run, and receive the relevant lessons in their next prompt. **Insights → Growth** shows each agent's level, focus areas and learning over time. See [Agent memory](#agent-memory).
 - **You choose how much to trust the agents.** By default edits arrive as diffs in the **Changes** tab and are only written when you apply them. **Auto-apply** writes QA-approved changes for you, and **Full access** also skips plan approval. Every auto-applied file can be undone.
 - **Local and bring-your-own-model.** Claude Code, Codex, Gemini, Ollama and the Magpie gateway, with automatic failover when a provider runs out of credit.
+- **One subscription, the right model per task.** Sign in to Claude Code only: Sovereign rates every task simple, standard or complex and runs it on Haiku, Sonnet or Opus. Agent HQ checks your providers for new models and moves to the newest one by itself. See [Models and routing](#models-and-routing).
 - **Looks right on your system.** The theme is **System** by default (light or dark, following your OS live) and can be pinned to Light or Dark. The sidebar glides open and shut, and the editor has modern file tabs with an unsaved dot.
 - **Installs the missing pieces for you.** In **Connections → Local tools**, every missing tool (Claude Code, Codex, Gemini CLI, Ollama, Magpie) has an **Install** button that opens your own terminal in the project and runs the official command, plus **Copy** and **Docs**.
 - **A real terminal built in, like VS Code.** The bottom panel's **Terminal** tab is a full interactive shell (your `$SHELL`, colors, `Ctrl+C`, resize, multiple tabs) that starts in the project folder. Open it with `` Ctrl+` `` or the command palette; shells survive panel switches and window reloads, and stop when the app quits. Prefer your own emulator? **Open in external terminal app** is still in the panel header and the command palette.
@@ -133,6 +134,12 @@ Agents keep what they learn **per project**, in plain JSON you can read, edit an
 - **Lessons, confirmations, uses and tasks** with the success rate, the mix of lesson kinds, lessons per week over the last 8 weeks, how many came from reviews or from you, and the latest lesson.
 - Team totals, a team learning chart and a feed of the newest lessons. **Open memory** jumps to the agent's Memory panel. On the desktop, the tray's quick status shows the lesson count and the most experienced agent.
 
+## Models and routing
+
+- **One subscription is enough.** By default (Settings → Models and routing → *Sovereign's provider only*), every agent uses a model from the provider Sovereign runs on. With Claude Code signed in, that is all you need.
+- **A model per task, by complexity.** Sovereign rates each task **simple** (small edits, docs, juniors' work), **standard** (normal features) or **complex** (architecture, security, hard bugs). The task runs on the model for that level, whichever agent does it: Haiku, Sonnet and Opus by default. You can change a task's complexity or model in the plan before approving, or pin a model per level in Settings.
+- **Always current.** Every 6 hours by default (or hourly, daily, off, or **Check now**), Agent HQ re-reads the model list of every connected provider: Claude Code, Codex, Gemini, Ollama, Magpie and API keys. No prompt is sent, so checks are free. New or removed models are logged and shown in Settings, the desktop app notifies you, and levels left on **Auto** move to the newest model of their family (a future Opus or Haiku is used as soon as your account has it). Pinned levels stay as you set them.
+
 ## Team building and mentors
 
 - **Every junior has a mentor.** A senior, or Sovereign as the direct manager, reviews their work (N+1). Onboarding suggests one by specialty; change it any time in the agent's **Internship** card. A senior's **Mentors** card lists their juniors.
@@ -149,7 +156,7 @@ Agents keep what they learn **per project**, in plain JSON you can read, edit an
 | **Adaptive team** | Sovereign designs the team for the work, with no limit on agents or tasks, exact models and juniors with mentors; or restrict it to your own agents in Settings → Team building. |
 | **Agents** | Graph, Office and List views. The graph supports zoom, pan, dragging nodes and reset. The Office is a live floor plan with a glass HUD, minimap, daylight that fades to night, animated avatars and speech bubbles; monitors light up while an agent works. Change models, add agents, onboard juniors with an N+1 mentor you can change any time. |
 | **Custom specialties** | Create or edit any agent with a free-text role/specialty (IoT, embedded firmware, robotics, or any domain) and domain instructions. Sovereign sees these when assigning tasks, and the agent receives them on every task. Workflow categories preserve routing and model defaults. Junior agents also support custom study tracks. |
-| **Connections & Models** | Detects installed CLIs, connects providers, discovers real models, and sets default models per role. |
+| **Connections & Models** | Detects installed CLIs, connects providers, discovers real models, and sets default models per role. Routes each task to a model by complexity within one subscription, and checks providers for new models. |
 | **Failover** | If a provider runs out of credit during a run, affected agents are rerouted to another connected provider and the switch is logged. |
 | **Tasks** | Kanban with the stages Briefing, Architecture, Implementation, Code Review & QA, Shipped, and the N+1 senior review. |
 | **Reports** | Usage, cost and run history from recorded data. |

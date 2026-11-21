@@ -1,4 +1,5 @@
 import type { AgentProfile, OrchestratorPlan, PlanTask, ProposedAgent, SOPStage } from '../types';
+import { parseComplexity } from './modelRouting';
 
 const STAGES: SOPStage[] = ['briefing', 'architecture', 'implementation', 'qa_review', 'shipped'];
 const PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
@@ -132,6 +133,7 @@ export function parsePlan(text: string, agents: Record<string, AgentProfile>, av
     const stage = STAGES.includes(t.stage as SOPStage) ? (t.stage as SOPStage) : defaultStageForRole(role);
     const priority = PRIORITIES.includes(t.priority as (typeof PRIORITIES)[number]) ? (t.priority as PlanTask['priority']) : 'medium';
     const model = typeof t.model === 'string' && t.model && (!models || models.has(t.model)) ? t.model : undefined;
+    const complexity = parseComplexity(t.complexity ?? t.difficulty);
     return {
       id,
       title: String(t.title ?? `Task ${idx + 1}`).slice(0, 160),
@@ -141,6 +143,7 @@ export function parsePlan(text: string, agents: Record<string, AgentProfile>, av
       priority,
       dependsOn: Array.isArray(t.dependsOn) ? t.dependsOn.map(String) : [],
       ...(model ? { model } : {}),
+      ...(complexity ? { complexity } : {}),
     };
   });
   const ids = new Set(tasks.map((t) => t.id));

@@ -14,6 +14,8 @@ import { useAgentStore } from '@/store/useAgentStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
+import { useModelWatchStore } from '@/store/useModelWatchStore';
+import { isCheckDue } from '@/engine/modelWatch';
 
 const AgentsView = lazy(() => import('@/components/agents/AgentsView'));
 const TasksView = lazy(() => import('@/components/tasks/TasksView'));
@@ -28,9 +30,15 @@ export default function App() {
   useShortcuts();
 
   useEffect(() => {
-    void useConnectionsStore.getState().load();
+    const checkIfDue = () => {
+      const watch = useModelWatchStore.getState();
+      if (isCheckDue(watch.lastCheckedAt, watch.intervalHours)) void watch.check();
+    };
+    void useConnectionsStore.getState().load().then(checkIfDue);
     void useConnectionsStore.getState().detect();
     void useWorkspaceStore.getState().load();
+    const timer = window.setInterval(checkIfDue, 10 * 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   return (

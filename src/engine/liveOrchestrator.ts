@@ -31,6 +31,7 @@ import { autoAppliesChanges, autoStartsRuns, selectAutoApply } from './approval'
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
+import { COMPLEXITIES, COMPLEXITY_HINT, routeTaskModel, routingFor } from './modelRouting';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
 
 const MAX_QA_LOOPS = 1;
@@ -225,31 +226,47 @@ function rosterDescription(): string {
     .join('\n');
 }
 
-function availableModels(): Array<{ ref: string; name: string; provider: string; contextWindow?: number }> {
+/** Models agents may use (only Sovereign's provider when the scope is one subscription) and the model per complexity. */
+function routing() {
   const { providers, exhausted } = useConnectionsStore.getState();
-  return providers
-    .filter((p) => p.connection && !isProviderExhausted(exhausted, p.id))
-    .flatMap((p) => p.models.filter((model) => model.selectable !== false).map((m) => ({ ref: m.ref, name: m.name, provider: p.name, contextWindow: m.contextWindow })));
+  const store = agentsState();
+  return routingFor(providers, {
+    scope: store.modelScope,
+    overrides: store.tierModels,
+    sovereignModel: resolveAgentModel(store.agents['agent-manager'], store.roleDefaults),
+    skip: (id) => isProviderExhausted(exhausted, id),
+  });
+}
+
+function availableModels(): Array<{ ref: string; name: string; provider: string; contextWindow?: number }> {
+  return routing().models;
 }
 
 function modelCatalog(): string {
-  const models = availableModels();
+  const { models, tiers } = routing();
   if (!models.length) return 'Available models: none besides the agents\u2019 own assignments.';
-  return 'Available models (ref | name | provider):\n' + models.map((m) => `- ${m.ref} | ${m.name} | ${m.provider}${m.contextWindow ? ` | ${Math.round(m.contextWindow / 1000)}k context` : ''}`).join('\n');
+  const list = 'Available models (ref | name | provider):\n' + models.map((m) => `- ${m.ref} | ${m.name} | ${m.provider}${m.contextWindow ? ` | ${Math.round(m.contextWindow / 1000)}k context` : ''}`).join('\n');
+  if (!agentsState().complexityRouting) return list;
+  const name = (ref: string) => models.find((m) => m.ref === ref)?.name ?? ref;
+  return `${list}\n\nModel for each task complexity (used when a task has no "model"):\n${COMPLEXITIES.map((c) => `- ${c}: ${tiers[c]} (${name(tiers[c])}) — ${COMPLEXITY_HINT[c]}`).join('\n')}`;
 }
 
 const ASK_INSTRUCTIONS = 'Mode: ASK. Discuss, explain, inspect and advise. Do not propose an execution plan unless asked, and do not claim to have changed any files.';
 
-function planInstructions(strategy: TeamStrategy): string {
+function planInstructions(strategy: TeamStrategy, byComplexity: boolean): string {
   const teamRule =
     strategy === 'adaptive'
       ? `Team design: you build the team yourself; the user does not edit it. First think about what THIS request actually needs (stack, domain, size, risk) and size the team to the work: one agent for a small fix, as many as the work needs for a large feature. There is no limit on the number of agents. Use existing roster agents where they fit. When the work needs a specialist the roster lacks (for example mobile, data/ML, DevOps, database, game, embedded, security), add it in "newAgents" with a short distinct name that is not already on the roster, a role (architect|frontend|backend|qa), a title, a specialty, focused systemPrompt instructions for this project, and a one-line reason. Always set "model" on every new agent to an exact ref from the available models: a strong model for architecture, security and hard logic, a fast and cheap one for simple, well-scoped work. For small, well-scoped work that a senior should review, add a junior instead: set "junior": true and "mentor" to the roster agent id or the key of a new senior in this plan who reviews it (N+1); prefer a mentor with the same specialty. Assign tasks to new agents by their "key". Do not add agents you do not use. New agents stay on the team for later requests and keep learning.`
       : 'Team design: use ONLY agents from the roster. Do not propose new agents.';
   return `Mode: PLAN. Produce an execution plan. Respond with ONLY a JSON object (no prose outside it) of the form:
-{"summary": "one paragraph", "newAgents": [{"key": "mobile", "name": "Orion", "role": "frontend", "title": "Mobile Engineer", "specialty": "<any project domain, such as IoT & Embedded>", "focus": "<domain instructions and verification requirements>", "systemPrompt": "...", "model": "<exact model ref>", "reason": "...", "junior": false, "mentor": "<for juniors: roster agent id or new senior key>"}], "tasks": [{"id": "t1", "title": "...", "description": "concrete instructions", "stage": "briefing|architecture|implementation", "agentId": "<roster agent id or new agent key>", "model": "<optional model ref for this task>", "priority": "critical|high|medium|low", "dependsOn": ["t0"]}]}
+{"summary": "one paragraph", "newAgents": [{"key": "mobile", "name": "Orion", "role": "frontend", "title": "Mobile Engineer", "specialty": "<any project domain, such as IoT & Embedded>", "focus": "<domain instructions and verification requirements>", "systemPrompt": "...", "model": "<exact model ref>", "reason": "...", "junior": false, "mentor": "<for juniors: roster agent id or new senior key>"}], "tasks": [{"id": "t1", "title": "...", "description": "concrete instructions", "stage": "briefing|architecture|implementation", "agentId": "<roster agent id or new agent key>", "complexity": "simple|standard|complex", "model": "<optional model ref for this task>", "priority": "critical|high|medium|low", "dependsOn": ["t0"]}]}
 The role field is a workflow routing category only. Specialty is unrestricted: choose the expertise required by the project, including IoT, embedded firmware, electronics, robotics or any other domain.
 Rules: as many tasks as the work needs, each one concrete and independently checkable. Split work so tasks that depend on each other say so in dependsOn (outputs of dependencies are handed to the dependent task). Juniors only get small, well-scoped tasks; their mentor reviews them automatically. Do not add a QA task: QA review by Sentinel runs automatically. Dependencies must reference earlier task ids.
-Model choice: set "model" on a task only when it clearly benefits (a strong model for architecture or hard logic, a fast cheap model for simple edits); otherwise omit it and the agent's own model is used. Only use refs from the available models list.
+${
+  byComplexity
+    ? 'Model choice: rate EVERY task\'s "complexity" honestly (simple, standard or complex) and leave "model" out; the task then runs on the model listed for its complexity, so simple work does not spend the strongest model. Set "model" only to deliberately override that, and only with a ref from the available models list.'
+    : 'Model choice: set "model" on a task only when it clearly benefits (a strong model for architecture or hard logic, a fast cheap model for simple edits); otherwise omit it and the agent\'s own model is used. Only use refs from the available models list. Still rate each task\'s "complexity".'
+}
 ${teamRule}`;
 }
 
@@ -297,7 +314,7 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
 
   const content = `${text}${await attachmentContext(attachments)}`;
   const lessons = await memoryBrief(sovereign.id, text);
-  const system = `${sovereign.systemPrompt}${lessons}\n\n${mode === 'ask' ? ASK_INSTRUCTIONS : planInstructions(store.teamStrategy)}\n\nTeam roster (id | name | title):\n${rosterDescription()}\n\n${mode === 'ask' ? '' : modelCatalog() + '\n\n'}${projectContext()}`;
+  const system = `${sovereign.systemPrompt}${lessons}\n\n${mode === 'ask' ? ASK_INSTRUCTIONS : planInstructions(store.teamStrategy, store.complexityRouting)}\n\nTeam roster (id | name | title):\n${rosterDescription()}\n\n${mode === 'ask' ? '' : modelCatalog() + '\n\n'}${projectContext()}`;
   const update = throttle((full) => agentsState().updateChatMessage(replyId, { text: full }), 120);
 
   try {
@@ -324,7 +341,7 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
           plan.tasks = plan.tasks.map((t) => (keys.has(t.agentId) ? { ...t, agentId: 'agent-manager' } : t));
           plan.newAgents = [];
         }
-        patch.plan = plan;
+        patch.plan = routePlanModels(plan);
       } catch (err) {
         patch.planError = `Could not read a plan from the response: ${(err as Error).message}`;
       }
@@ -360,6 +377,27 @@ const ROLE_PLACEMENT: Record<ProposedAgent['role'], { department: AgentProfile['
   backend: { department: 'Engineering', room: 'Dev Bay' },
   qa: { department: 'Quality & Security', room: 'QA Vault' },
 };
+
+/**
+ * With routing by complexity, every task without a deliberate model gets the model for its complexity
+ * (juniors default to simple work). Models outside the allowed scope are replaced the same way.
+ */
+export function routePlanModels(plan: OrchestratorPlan): OrchestratorPlan {
+  const store = agentsState();
+  if (!store.complexityRouting) return plan;
+  const { models, tiers } = routing();
+  const allowed = new Set(models.map((m) => m.ref));
+  const juniorKeys = new Set((plan.newAgents ?? []).filter((n) => n.junior).map((n) => n.key));
+  return {
+    ...plan,
+    newAgents: plan.newAgents?.map((n) => (n.model && allowed.has(n.model) ? n : { ...n, model: tiers[n.junior ? 'simple' : n.role === 'architect' || n.role === 'qa' ? 'complex' : 'standard'] || undefined })),
+    tasks: plan.tasks.map((t) => {
+      const junior = juniorKeys.has(t.agentId) || Boolean(store.agents[t.agentId]?.internship?.isIntern);
+      const model = routeTaskModel(t, tiers, allowed, junior);
+      return model ? { ...t, model } : t;
+    }),
+  };
+}
 
 /** Creates the agents Sovereign proposed for this plan and points their tasks at the new agent ids. */
 function materializeNewAgents(plan: OrchestratorPlan): OrchestratorPlan {
@@ -413,6 +451,7 @@ function buildMission(plan: OrchestratorPlan, request: string, contextFiles?: st
       status: 'pending',
       priority: t.priority,
       model: t.model,
+      complexity: t.complexity,
       progress: 0,
       tags: [],
       dependsOn: t.dependsOn,

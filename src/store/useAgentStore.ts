@@ -22,6 +22,8 @@ import type {
   NewAgentSpec,
   OrchestratorMode,
   TeamStrategy,
+  Complexity,
+  ModelScope,
   ProposedFileChange,
   QADebateMessage,
   RunRecord,
@@ -90,6 +92,9 @@ export interface AgentStoreState {
   orchestratorMode: OrchestratorMode;
   teamStrategy: TeamStrategy;
   maxParallel: number;
+  modelScope: ModelScope;
+  complexityRouting: boolean;
+  tierModels: Partial<Record<Complexity, AIModelId>>;
   approvalMode: ApprovalMode;
   learningMode: LearningMode;
   managerChatMessages: ManagerChatMessage[];
@@ -127,6 +132,10 @@ export interface AgentStoreState {
   setOrchestratorMode: (mode: OrchestratorMode) => void;
   setTeamStrategy: (strategy: TeamStrategy) => void;
   setMaxParallel: (limit: number) => void;
+  setModelScope: (scope: ModelScope) => void;
+  setComplexityRouting: (on: boolean) => void;
+  /** Pin a model for a complexity, or pass '' to go back to the automatic (newest) choice. */
+  setTierModel: (tier: Complexity, model: AIModelId) => void;
   setApprovalMode: (mode: ApprovalMode) => void;
   setLearningMode: (mode: LearningMode) => void;
 
@@ -225,6 +234,9 @@ export const useAgentStore = create<AgentStoreState>()(
         orchestratorMode: 'ask',
         teamStrategy: 'adaptive',
         maxParallel: 3,
+        modelScope: 'sovereign',
+        complexityRouting: true,
+        tierModels: {},
         approvalMode: 'ask',
         learningMode: 'every-run',
         managerChatMessages: DEFAULT_MANAGER_CHAT_MESSAGES,
@@ -266,6 +278,15 @@ export const useAgentStore = create<AgentStoreState>()(
         setOrchestratorMode: (mode) => set({ orchestratorMode: mode }),
         setTeamStrategy: (strategy) => set({ teamStrategy: strategy }),
         setMaxParallel: (limit) => set({ maxParallel: Math.max(0, Math.floor(limit)) }),
+        setModelScope: (scope) => set({ modelScope: scope }),
+        setComplexityRouting: (on) => set({ complexityRouting: on }),
+        setTierModel: (tier, model) =>
+          set((s) => {
+            const next = { ...s.tierModels };
+            if (model) next[tier] = model;
+            else delete next[tier];
+            return { tierModels: next };
+          }),
         setApprovalMode: (mode) => set({ approvalMode: mode }),
         setLearningMode: (mode) => set({ learningMode: mode }),
 
@@ -876,6 +897,9 @@ export const useAgentStore = create<AgentStoreState>()(
         orchestratorMode: s.orchestratorMode,
         teamStrategy: s.teamStrategy,
         maxParallel: s.maxParallel,
+        modelScope: s.modelScope,
+        complexityRouting: s.complexityRouting,
+        tierModels: s.tierModels,
         approvalMode: s.approvalMode,
         learningMode: s.learningMode,
         managerChatMessages: s.managerChatMessages.slice(-100).map((m) => (m.streaming ? { ...m, streaming: false, error: m.error ?? 'Interrupted' } : m)),

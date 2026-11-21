@@ -348,6 +348,24 @@ const routes: Record<string, Handler> = {
     send(res, 200, { ok: true });
   },
 
+  /** Re-reads every connected provider's model list. No prompt is sent, so it costs nothing. */
+  'POST /api/models/rescan': async (_req, res) => {
+    const connections = loadConfig().connections;
+    const results = await Promise.all(
+      PROVIDERS.filter((p) => connections[p.id]).map(async (p) => {
+        const conn = connections[p.id]!;
+        try {
+          const models = await discoverModels(conn, conn.method === 'cli' ? getWorkspaceRoot() : '');
+          if (conn.method !== 'cli') modelCache.set(p.id, models);
+          return { providerId: p.id, ok: true, count: models.length };
+        } catch (err) {
+          return { providerId: p.id, ok: false, error: (err as Error).message };
+        }
+      })
+    );
+    send(res, 200, { ok: true, results });
+  },
+
   'POST /api/connections/refresh': async (req, res) => {
     const body = await readJson(req);
     if (!isProviderId(body.providerId)) throw new HttpError(400, 'Unknown provider.');

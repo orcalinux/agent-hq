@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Bell, Brain, CircleArrowUp, Database, FolderOpen, Keyboard, Palette, ShieldCheck, TestTube2, Users, type LucideIcon } from 'lucide-react';
+import { Bell, Brain, CircleArrowUp, Cpu, Database, FolderOpen, Keyboard, Palette, ShieldCheck, TestTube2, Users, type LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
@@ -10,6 +10,7 @@ import { SHORTCUTS } from '@/components/shell/useShortcuts';
 import { ApprovalModeCards } from '@/components/shell/ApprovalMode';
 import { UpdatesSettings } from './UpdatesSettings';
 import { MemorySettings } from './MemorySettings';
+import { ModelSettings } from './ModelSettings';
 import { IconTile } from '@/components/ui/Card';
 import { useUpdateStore } from '@/desktop/useUpdate';
 
@@ -18,6 +19,7 @@ const SECTIONS: Array<{ id: string; title: string; hint: string; icon: LucideIco
   { id: 'permissions', title: 'Agent permissions', hint: 'How much they may do alone', icon: ShieldCheck, tint: '#16A34A' },
   { id: 'memory', title: 'Memory and learning', hint: 'What agents learn and how it is found', icon: Brain, tint: '#9333EA' },
   { id: 'team', title: 'Team building', hint: 'Who decides which agents work', icon: Users, tint: '#EA580C' },
+  { id: 'models', title: 'Models and routing', hint: 'One subscription, model per task, new models', icon: Cpu, tint: '#4F46E5' },
   { id: 'appearance', title: 'Appearance', hint: 'Theme and layout', icon: Palette, tint: '#DB2777' },
   { id: 'updates', title: 'Updates', hint: 'Version and new releases', icon: CircleArrowUp, tint: '#0EA5E9' },
   { id: 'qa', title: 'QA verification', hint: 'Checks run after each task', icon: TestTube2, tint: '#D97706' },
@@ -202,6 +204,10 @@ export default function SettingsView() {
 
           <Section id="team">
             <TeamSettings />
+          </Section>
+
+          <Section id="models">
+            <ModelSettings />
           </Section>
 
           <Section id="appearance">

@@ -5,10 +5,12 @@ import { useConnectionsStore, isModelAvailable } from '@/store/useConnectionsSto
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { approveAndRun, resumeRun, sendToOrchestrator, stopChat, stopRun, updatePlan } from '@/engine/liveOrchestrator';
 import { stripThinking } from '@/engine/orchestratorParsing';
-import type { ManagerChatMessage, OrchestratorMode, OrchestratorPlan, TeamStrategy } from '@/types';
+import type { Complexity, ManagerChatMessage, OrchestratorMode, OrchestratorPlan, TeamStrategy } from '@/types';
 import { Badge, Button, EmptyState, IconButton, Input, ProgressBar, Select, Tabs } from '@/components/ui/primitives';
 import { ModelSelect, fmtTokens, modelLabel } from '@/components/ui/helpers';
 import { ApprovalModeSelect } from '@/components/shell/ApprovalMode';
+import { useRouting } from '@/components/models/useRouting';
+import { COMPLEXITIES, COMPLEXITY_LABEL, taskComplexity } from '@/engine/modelRouting';
 import { Markdown } from './Markdown';
 
 const MODES: Array<{ id: OrchestratorMode; label: string; hint: string }> = [
@@ -23,11 +25,17 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
   const running = useAgentStore((s) => s.isLiveRunning || s.isSimulating);
   const [error, setError] = useState<string | null>(null);
   const editable = plan.status === 'proposed';
+  const routing = useRouting();
 
   const setAgent = (taskId: string, agentId: string) =>
     updatePlan(message.id, { ...plan, tasks: plan.tasks.map((t) => (t.id === taskId ? { ...t, agentId } : t)) });
   const setTaskModel = (taskId: string, model: string) =>
     updatePlan(message.id, { ...plan, tasks: plan.tasks.map((t) => (t.id === taskId ? { ...t, model: model || undefined } : t)) });
+  const setComplexity = (taskId: string, complexity: Complexity) =>
+    updatePlan(message.id, {
+      ...plan,
+      tasks: plan.tasks.map((t) => (t.id === taskId ? { ...t, complexity, ...(routing.enabled && routing.tiers[complexity] ? { model: routing.tiers[complexity] } : {}) } : t)),
+    });
   const newAgents = plan.newAgents ?? [];
   const setNewAgentModel = (key: string, model: string) =>
     updatePlan(message.id, { ...plan, newAgents: newAgents.map((n) => (n.key === key ? { ...n, model: model || undefined } : n)) });
@@ -82,7 +90,7 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
                 </div>
                 <div className="mt-1 flex items-center gap-2">
                   <span className="shrink-0 text-[11px] text-fg-subtle">Model</span>
-                  <ModelSelect value={n.model ?? ''} onChange={(ref) => setNewAgentModel(n.key, ref)} emptyLabel={`${n.junior ? 'Junior' : n.role} default`} disabled={!editable} className="h-6 flex-1" aria-label={`Model for ${n.name}`} />
+                  <ModelSelect value={n.model ?? ''} onChange={(ref) => setNewAgentModel(n.key, ref)} emptyLabel={`${n.junior ? 'Junior' : n.role} default`} disabled={!editable} className="h-6 flex-1" aria-label={`Model for ${n.name}`} only={routing.scope === 'sovereign' ? routing.refs : undefined} />
                 </div>
               </li>
               );
@@ -107,6 +115,17 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
               <Badge tone={t.priority === 'critical' || t.priority === 'high' ? 'warning' : 'neutral'}>{t.priority}</Badge>
               {t.dependsOn.length ? <span className="whitespace-nowrap">after {t.dependsOn.join(', ')}</span> : null}
               <Select
+                aria-label={`Complexity for ${t.title}`}
+                value={taskComplexity(t, Boolean(agents[t.agentId]?.internship?.isIntern) || Boolean(newAgents.find((n) => n.key === t.agentId)?.junior))}
+                disabled={!editable}
+                onChange={(e) => setComplexity(t.id, e.target.value as Complexity)}
+                className="h-6 w-28"
+              >
+                {COMPLEXITIES.map((c) => (
+                  <option key={c} value={c}>{COMPLEXITY_LABEL[c]}</option>
+                ))}
+              </Select>
+              <Select
                 aria-label={`Agent for ${t.title}`}
                 value={t.agentId}
                 disabled={!editable}
@@ -124,7 +143,7 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
                   <option key={a.id} value={a.id}>{a.name} · {a.title}</option>
                 ))}
               </Select>
-              <ModelSelect value={t.model ?? ''} onChange={(ref) => setTaskModel(t.id, ref)} emptyLabel="Agent's model" disabled={!editable} className="h-6 w-44" aria-label={`Model for ${t.title}`} />
+              <ModelSelect value={t.model ?? ''} onChange={(ref) => setTaskModel(t.id, ref)} emptyLabel="Agent's model" disabled={!editable} className="h-6 w-44" aria-label={`Model for ${t.title}`} only={routing.scope === 'sovereign' ? routing.refs : undefined} />
             </div>
           </li>
         ))}

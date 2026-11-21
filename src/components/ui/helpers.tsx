@@ -102,14 +102,23 @@ interface ModelSelectProps {
   className?: string;
   disabled?: boolean;
   'aria-label'?: string;
+  /** Only offer these model refs (for example the models of the one provider in use). */
+  only?: AIModelId[];
 }
 
 /** Select of discovered models from connected providers, grouped by provider. */
-export function ModelSelect({ value, onChange, emptyLabel = 'Unassigned', className, disabled, ...rest }: ModelSelectProps) {
+export function ModelSelect({ value, onChange, emptyLabel = 'Unassigned', className, disabled, only, ...rest }: ModelSelectProps) {
   const providers = useConnectionsStore((s) => s.providers);
+  const onlyKey = only?.join('|');
   const groups = useMemo(
-    () => providers.filter((p) => p.connection).map((provider) => ({ ...provider, models: provider.models.filter((model) => model.selectable !== false) })).filter((provider) => provider.models.length > 0),
-    [providers]
+    () => {
+      const allow = onlyKey ? new Set(onlyKey.split('|')) : null;
+      return providers
+        .filter((p) => p.connection)
+        .map((provider) => ({ ...provider, models: provider.models.filter((model) => model.selectable !== false && (!allow || allow.has(model.ref))) }))
+        .filter((provider) => provider.models.length > 0);
+    },
+    [providers, onlyKey]
   );
   const legacy = providers.flatMap((provider) => provider.models).find((model) => model.ref === value && model.selectable === false);
   const selectedValue = legacy?.canonicalRef ?? value;

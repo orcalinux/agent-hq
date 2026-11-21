@@ -92,6 +92,7 @@ export const api = {
   connect: (p: ConnectPayload) => call<TestResult>('POST', '/api/connections/connect', p),
   disconnect: (providerId: AIProviderId) => call<{ ok: boolean }>('POST', '/api/connections/disconnect', { providerId }),
   refresh: (providerId: AIProviderId) => call<TestResult>('POST', '/api/connections/refresh', { providerId }),
+  rescanModels: () => call<{ ok: boolean; results: Array<{ providerId: AIProviderId; ok: boolean; count?: number; error?: string }> }>('POST', '/api/models/rescan'),
 
   terminalSessions: () => call<{ sessions: TerminalInfo[]; root: string }>('GET', '/api/terminal/sessions'),
   createTerminal: (cols: number, rows: number) => call<{ session: TerminalInfo }>('POST', '/api/terminal/sessions', { cols, rows }),
