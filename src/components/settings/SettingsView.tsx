@@ -51,6 +51,8 @@ const TEAM_HINT: Record<TeamStrategy, string> = {
 function TeamSettings() {
   const strategy = useAgentStore((s) => s.teamStrategy);
   const setStrategy = useAgentStore((s) => s.setTeamStrategy);
+  const maxParallel = useAgentStore((s) => s.maxParallel);
+  const setMaxParallel = useAgentStore((s) => s.setMaxParallel);
   const juniors = useAgentStore((s) => Object.values(s.agents).filter((a) => a.internship?.isIntern).length);
   return (
     <>
@@ -67,6 +69,29 @@ function TeamSettings() {
           ]}
         />
         <p className="text-[11.5px] text-fg-subtle">{TEAM_HINT[strategy]}</p>
+      </div>
+      <div className="space-y-1">
+        <p className="text-[12px] font-medium text-fg-muted">Tasks running at once</p>
+        <Tabs<string>
+          label="Tasks running at once"
+          value={String(maxParallel)}
+          onChange={(id) => setMaxParallel(Number(id))}
+          className="w-fit"
+          items={[
+            { id: '1', label: '1' },
+            { id: '2', label: '2' },
+            { id: '3', label: '3' },
+            { id: '5', label: '5' },
+            { id: '8', label: '8' },
+            { id: '0', label: 'No limit' },
+          ]}
+        />
+        <p className="text-[11.5px] text-fg-subtle">
+          {maxParallel === 0
+            ? 'Every task whose dependencies are done starts immediately. This can hit provider rate limits and slow your computer.'
+            : `Up to ${maxParallel} independent task${maxParallel === 1 ? '' : 's'} run together. `}
+          One agent never works on two tasks at once.
+        </p>
       </div>
       <p className="text-[11.5px] text-fg-subtle">
         Every junior has an N+1 mentor, a senior or Sovereign as direct manager, who reviews its work before QA.{juniors ? ` ${juniors} junior${juniors === 1 ? '' : 's'} on the team;` : ''} change a mentor from the junior's details in Agents.

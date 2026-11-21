@@ -89,6 +89,7 @@ export interface AgentStoreState {
 
   orchestratorMode: OrchestratorMode;
   teamStrategy: TeamStrategy;
+  maxParallel: number;
   approvalMode: ApprovalMode;
   learningMode: LearningMode;
   managerChatMessages: ManagerChatMessage[];
@@ -125,6 +126,7 @@ export interface AgentStoreState {
   setCommandPaletteOpen: (open: boolean) => void;
   setOrchestratorMode: (mode: OrchestratorMode) => void;
   setTeamStrategy: (strategy: TeamStrategy) => void;
+  setMaxParallel: (limit: number) => void;
   setApprovalMode: (mode: ApprovalMode) => void;
   setLearningMode: (mode: LearningMode) => void;
 
@@ -222,6 +224,7 @@ export const useAgentStore = create<AgentStoreState>()(
 
         orchestratorMode: 'ask',
         teamStrategy: 'adaptive',
+        maxParallel: 3,
         approvalMode: 'ask',
         learningMode: 'every-run',
         managerChatMessages: DEFAULT_MANAGER_CHAT_MESSAGES,
@@ -262,6 +265,7 @@ export const useAgentStore = create<AgentStoreState>()(
         setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
         setOrchestratorMode: (mode) => set({ orchestratorMode: mode }),
         setTeamStrategy: (strategy) => set({ teamStrategy: strategy }),
+        setMaxParallel: (limit) => set({ maxParallel: Math.max(0, Math.floor(limit)) }),
         setApprovalMode: (mode) => set({ approvalMode: mode }),
         setLearningMode: (mode) => set({ learningMode: mode }),
 
@@ -871,6 +875,7 @@ export const useAgentStore = create<AgentStoreState>()(
         activeView: s.activeView,
         orchestratorMode: s.orchestratorMode,
         teamStrategy: s.teamStrategy,
+        maxParallel: s.maxParallel,
         approvalMode: s.approvalMode,
         learningMode: s.learningMode,
         managerChatMessages: s.managerChatMessages.slice(-100).map((m) => (m.streaming ? { ...m, streaming: false, error: m.error ?? 'Interrupted' } : m)),

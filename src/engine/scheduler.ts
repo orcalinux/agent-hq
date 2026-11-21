@@ -8,6 +8,11 @@ export interface SchedulableTask {
 
 export const MAX_PARALLEL_TASKS = 3;
 
+export function parallelLimit(setting: number | undefined): number {
+  if (setting === undefined || !Number.isFinite(setting)) return MAX_PARALLEL_TASKS;
+  return setting <= 0 ? Number.POSITIVE_INFINITY : Math.floor(setting);
+}
+
 const STARTABLE = new Set(['pending', 'rejected']);
 const TERMINAL_FAILURE = new Set(['failed', 'cancelled']);
 

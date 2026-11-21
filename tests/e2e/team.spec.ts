@@ -113,6 +113,11 @@ test('onboarding suggests a matching mentor, and Settings chooses who builds the
   await expect(page.getByRole('tab', { name: 'Sovereign, automatically' })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: 'Only my agents' }).click();
   await expect(page.getByText('never adds new ones')).toBeVisible();
+  await expect(page.getByRole('tab', { name: '3', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'No limit' }).click();
+  await expect(page.getByText('starts immediately')).toBeVisible();
+  await page.getByRole('tab', { name: '5', exact: true }).click();
+  await expect(page.getByText('Up to 5 independent tasks run together.')).toBeVisible();
   await nav(page, 'Workspace');
   await page.getByRole('tab', { name: 'Plan' }).click();
   await expect(page.getByRole('button', { name: 'Team strategy', exact: true })).toContainText('Only use my existing agents');

@@ -11,6 +11,14 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.9.0] — 2026-11-21
+
+### Added
+- **Tasks running at once is now a setting.** Settings → Team building → *Tasks running at once*: 1, 2, 3 (default), 5, 8 or **No limit**. With no limit every task whose dependencies are done starts immediately. One agent still never works on two tasks at once, and the choice is saved.
+
+### Verification
+- Unit tests for the setting and the scheduler with and without a limit; the browser Settings test changes it.
+
 ## [0.8.0] — 2026-11-21
 
 ### Added

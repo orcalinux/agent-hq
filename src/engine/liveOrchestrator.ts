@@ -25,7 +25,7 @@ import {
   truncate,
 } from './orchestratorParsing';
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
-import { planNextWave } from './scheduler';
+import { parallelLimit, planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
 import { autoAppliesChanges, autoStartsRuns, selectAutoApply } from './approval';
 import { providerOfRef } from '@/types';
@@ -922,7 +922,7 @@ async function runWorkTasks(signal: AbortSignal) {
     if (signal.aborted && !fatal) fatal = Object.assign(new Error('Aborted'), { name: 'AbortError' });
     if (!fatal) {
       const work = topoOrder(currentMission()!.tasks.filter((t) => t.id !== QA_TASK_ID));
-      const { start, blocked } = planNextWave(work, new Set(running.keys()));
+      const { start, blocked } = planNextWave(work, new Set(running.keys()), parallelLimit(agentsState().maxParallel));
       for (const { task, dependency } of blocked) {
         agentsState().updateTask(task.id, { status: 'failed', error: `Blocked: dependency "${dependency.title}" did not complete.` });
       }

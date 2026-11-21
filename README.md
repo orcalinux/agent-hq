@@ -47,7 +47,7 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
 ## Highlights
 
 - **Plan first, then build.** Sovereign proposes tasks, agents and models; you edit and approve before anything runs.
-- **Parallel by design.** Independent tasks run in waves, up to 3 at once and never two at once for the same agent.
+- **Parallel by design.** Independent tasks run in waves, up to 3 at once by default (Settings → Team building: 1 to 8, or no limit) and never two at once for the same agent.
 - **Reviewed work.** Juniors get an N+1 senior review, and Sentinel QA can send work back once for rework.
 - **Sovereign builds the team.** For each plan, Sovereign decides how many agents are needed, their names and exact models, and which are juniors under which senior. There is no cap on agents or tasks, and new agents stay on the team. See [Team building and mentors](#team-building-and-mentors).
 - **Agents that learn.** Each project has a long-term memory in `.agent-hq/memory/lessons.json`. Agents are taught with `/remember`, learn from QA and mentor feedback and from a short reflection after every run, and receive the relevant lessons in their next prompt. **Insights → Growth** shows each agent's level, focus areas and learning over time. See [Agent memory](#agent-memory).
@@ -137,7 +137,7 @@ Agents keep what they learn **per project**, in plain JSON you can read, edit an
 
 - **Every junior has a mentor.** A senior, or Sovereign as the direct manager, reviews their work (N+1). Onboarding suggests one by specialty; change it any time in the agent's **Internship** card. A senior's **Mentors** card lists their juniors.
 - **Sovereign builds the team.** In a plan it chooses the number of agents, their names, exact models, and juniors with mentors, then creates them when you approve. They stay on the team.
-- **No caps** on agents or tasks. Runs still execute up to 3 tasks at once.
+- **No caps** on agents or tasks. How many tasks run at once is a setting (default 3, up to no limit) in Settings → Team building.
 - **Settings → Team building:** *Sovereign, automatically* (default) or *Only my agents*.
 
 ## Features
@@ -145,7 +145,7 @@ Agents keep what they learn **per project**, in plain JSON you can read, edit an
 | Area | What you get |
 | --- | --- |
 | **Workspace** | File explorer, multi-tab editor, integrated terminal with tabs, diff view, an **Agent commands** runner (allow-listed commands, no shell), agent logs, problems, and the orchestrator chat. Resizable panels, code and chat layouts. |
-| **Orchestrator** | Ask, Plan and Build modes. Plans list tasks, assigned agents and models; you can edit, remove or reassign before approving. Runs execute in dependency waves, up to 3 tasks at once and never two at once for the same agent. Each task receives the current contents of the files attached to the request and of the workspace files its description names, so agents edit existing code instead of rewriting it. |
+| **Orchestrator** | Ask, Plan and Build modes. Plans list tasks, assigned agents and models; you can edit, remove or reassign before approving. Runs execute in dependency waves, up to 3 tasks at once by default (configurable, or no limit) and never two at once for the same agent. Each task receives the current contents of the files attached to the request and of the workspace files its description names, so agents edit existing code instead of rewriting it. |
 | **Adaptive team** | Sovereign designs the team for the work, with no limit on agents or tasks, exact models and juniors with mentors; or restrict it to your own agents in Settings → Team building. |
 | **Agents** | Graph, Office and List views. The graph supports zoom, pan, dragging nodes and reset. The Office is a live floor plan with a glass HUD, minimap, daylight that fades to night, animated avatars and speech bubbles; monitors light up while an agent works. Change models, add agents, onboard juniors with an N+1 mentor you can change any time. |
 | **Custom specialties** | Create or edit any agent with a free-text role/specialty (IoT, embedded firmware, robotics, or any domain) and domain instructions. Sovereign sees these when assigning tasks, and the agent receives them on every task. Workflow categories preserve routing and model defaults. Junior agents also support custom study tracks. |
