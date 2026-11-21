@@ -93,6 +93,8 @@ export interface AgentStoreState {
   teamStrategy: TeamStrategy;
   maxParallel: number;
   modelScope: ModelScope;
+  /** False until the user picks a scope; 0.10.0 saved 'sovereign' as the default for everyone. */
+  modelScopeChosen: boolean;
   complexityRouting: boolean;
   tierModels: Partial<Record<Complexity, AIModelId>>;
   approvalMode: ApprovalMode;
@@ -234,7 +236,8 @@ export const useAgentStore = create<AgentStoreState>()(
         orchestratorMode: 'ask',
         teamStrategy: 'adaptive',
         maxParallel: 3,
-        modelScope: 'sovereign',
+        modelScope: 'any',
+        modelScopeChosen: false,
         complexityRouting: true,
         tierModels: {},
         approvalMode: 'ask',
@@ -278,7 +281,7 @@ export const useAgentStore = create<AgentStoreState>()(
         setOrchestratorMode: (mode) => set({ orchestratorMode: mode }),
         setTeamStrategy: (strategy) => set({ teamStrategy: strategy }),
         setMaxParallel: (limit) => set({ maxParallel: Math.max(0, Math.floor(limit)) }),
-        setModelScope: (scope) => set({ modelScope: scope }),
+        setModelScope: (scope) => set({ modelScope: scope, modelScopeChosen: true }),
         setComplexityRouting: (on) => set({ complexityRouting: on }),
         setTierModel: (tier, model) =>
           set((s) => {
@@ -898,6 +901,7 @@ export const useAgentStore = create<AgentStoreState>()(
         teamStrategy: s.teamStrategy,
         maxParallel: s.maxParallel,
         modelScope: s.modelScope,
+        modelScopeChosen: s.modelScopeChosen,
         complexityRouting: s.complexityRouting,
         tierModels: s.tierModels,
         approvalMode: s.approvalMode,
@@ -920,6 +924,7 @@ export const useAgentStore = create<AgentStoreState>()(
       migrate: () => ({}) as AgentStoreState,
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        if (!state.modelScopeChosen && state.modelScope !== 'any') setTimeout(() => useAgentStore.setState({ modelScope: 'any' }), 0);
         const preference = state.themePreference ?? 'system';
         state.setThemePreference(preference);
       },

@@ -3,7 +3,7 @@
   "productName": "Agent HQ",
   "desktopName": "agent-hq.desktop",
   "private": true,
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "A local command center for teams of AI coding agents.",
   "author": "orcalinux",
   "homepage": "https://github.com/orcalinux/agent-hq",

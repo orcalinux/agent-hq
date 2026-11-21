@@ -19,21 +19,59 @@ export interface RoutingModel {
   name: string;
 }
 
-const FAMILY: Record<Complexity, RegExp[]> = {
-  simple: [/haiku/, /\bnano\b/, /\bmini\b/, /flash-?lite/, /\bflash\b/, /\blite\b/, /\bsmall\b/],
-  standard: [/sonnet/, /\bmedium\b/],
-  complex: [/opus/, /fable/, /\bultra\b/, /\bpro\b/, /\blarge\b/, /\bmax\b/],
-};
+interface Profile {
+  match: RegExp;
+  tier: Complexity;
+  /** Rough strength for coding work, 0-100. Only used to compare models with each other. */
+  score: number;
+}
+
+/**
+ * Known model families from every provider, strongest first within a tier. First match wins, so the
+ * small variants (mini, nano, flash) come before the family they belong to. Anything unknown is
+ * treated as a standard model, so a brand-new family still works and can be pinned in Settings.
+ */
+const PROFILES: Profile[] = [
+  { match: /opus/, tier: 'complex', score: 95 },
+  { match: /fable/, tier: 'complex', score: 94 },
+  { match: /sonnet/, tier: 'standard', score: 85 },
+  { match: /haiku/, tier: 'simple', score: 62 },
+  { match: /\bnano\b/, tier: 'simple', score: 45 },
+  { match: /flash-?lite|\blite\b/, tier: 'simple', score: 50 },
+  { match: /\bsmall\b/, tier: 'simple', score: 50 },
+  { match: /\bmini\b/, tier: 'simple', score: 64 },
+  { match: /\bflash\b/, tier: 'simple', score: 66 },
+  { match: /gpt-?5/, tier: 'complex', score: 90 },
+  { match: /\bo[1345]\b/, tier: 'complex', score: 88 },
+  { match: /\bpro\b/, tier: 'complex', score: 88 },
+  { match: /\bultra\b|\blarge\b|\bmax\b/, tier: 'complex', score: 80 },
+  { match: /gpt-?4/, tier: 'standard', score: 72 },
+  { match: /\bmedium\b/, tier: 'standard', score: 70 },
+];
 
 function text(model: RoutingModel): string {
-  return `${model.name} ${model.ref}`.toLowerCase().replace(/[_:/]/g, ' ');
+  return `${model.name} ${model.ref}`.toLowerCase().replace(/[_:/()]/g, ' ');
+}
+
+/** Parameter size of a local model ("qwen2.5:32b" → 32), if it says. */
+function paramsOf(model: RoutingModel): number | undefined {
+  const m = /(\d+(?:\.\d+)?)\s*b\b/.exec(text(model));
+  return m ? Number(m[1]) : undefined;
+}
+
+/** Tier and strength of a model. Local Ollama models are free but weaker, so they rank below hosted ones. */
+export function profileOf(model: RoutingModel): { tier: Complexity; score: number } {
+  if (providerOfRef(model.ref) === 'ollama') {
+    const size = paramsOf(model) ?? 7;
+    return size >= 30 ? { tier: 'standard', score: 55 } : { tier: 'simple', score: Math.min(48, 30 + size) };
+  }
+  const t = text(model);
+  const hit = PROFILES.find((p) => p.match.test(t));
+  return hit ? { tier: hit.tier, score: hit.score } : { tier: 'standard', score: 70 };
 }
 
 export function tierOf(model: RoutingModel): Complexity {
-  const t = text(model);
-  if (FAMILY.simple.some((re) => re.test(t))) return 'simple';
-  if (FAMILY.complex.some((re) => re.test(t))) return 'complex';
-  return 'standard';
+  return profileOf(model).tier;
 }
 
 /** Version numbers in a model id ("claude-opus-5-5" → [5, 5]); dates such as 20251001 are ignored. */
@@ -50,25 +88,26 @@ export function compareVersions(a: number[], b: number[]): number {
   return 0;
 }
 
-function newest<T extends RoutingModel>(models: T[]): T | undefined {
-  return models.reduce<T | undefined>((best, m) => (!best || compareVersions(versionOf(m.ref), versionOf(best.ref)) > 0 ? m : best), undefined);
+/** Subscriptions (signed-in CLIs), Magpie and local models are flat-rate; API keys are billed per token. */
+function flatRate(ref: AIModelId): boolean {
+  const provider = providerOfRef(ref);
+  return ref.includes(':cli:') || provider === 'magpie' || provider === 'ollama';
+}
+
+/** Stronger first; within a family the newest version; then flat-rate over per-token. */
+export function compareModels(a: RoutingModel, b: RoutingModel): number {
+  return profileOf(b).score - profileOf(a).score || compareVersions(versionOf(b.ref), versionOf(a.ref)) || Number(flatRate(b.ref)) - Number(flatRate(a.ref));
 }
 
 /**
- * The best model for each tier: the first family that matches (Opus before Fable, Haiku before mini…),
- * and inside it the newest version. A model released later is picked up as soon as the provider lists it.
+ * The best model for each tier across every provider given: the strongest model of that tier,
+ * newest version first. A model released later is picked up as soon as its provider lists it.
+ * A tier with no model of its own borrows from its neighbours.
  */
 export function suggestTiers(models: RoutingModel[]): Record<Complexity, AIModelId> {
-  const pick = (tier: Complexity): AIModelId | undefined => {
-    const inTier = models.filter((m) => tierOf(m) === tier);
-    for (const re of FAMILY[tier]) {
-      const hit = newest(inTier.filter((m) => re.test(text(m))));
-      if (hit) return hit.ref;
-    }
-    return newest(inTier)?.ref;
-  };
-  const found = { simple: pick('simple'), standard: pick('standard'), complex: pick('complex') };
-  const any = models[0]?.ref ?? '';
+  const best = (tier: Complexity) => [...models].filter((m) => tierOf(m) === tier).sort(compareModels)[0]?.ref;
+  const found = { simple: best('simple'), standard: best('standard'), complex: best('complex') };
+  const any = [...models].sort(compareModels)[0]?.ref ?? '';
   return {
     simple: found.simple ?? found.standard ?? found.complex ?? any,
     standard: found.standard ?? found.complex ?? found.simple ?? any,
@@ -143,4 +182,16 @@ export function routingFor(providers: ProviderState[], settings: RoutingSettings
   const canonical = providers.flatMap((p) => p.models).find((m) => m.ref === settings.sovereignModel)?.canonicalRef ?? settings.sovereignModel;
   const models = scopeModels(all, settings.scope, canonical);
   return { models, tiers: resolveTiers(models, settings.overrides) };
+}
+
+/**
+ * When a provider runs out of credit: the best model of the same level on another provider that is
+ * still available (an Opus task moves to the strongest complex model elsewhere, a Haiku task to a cheap one).
+ */
+export function fallbackForTier(providers: ProviderState[], failedRef: AIModelId, unavailable: (providerId: string) => boolean): AIModelId | null {
+  const failedProvider = providerOfRef(failedRef);
+  const known = providers.flatMap((p) => p.models).find((m) => m.ref === failedRef);
+  const tier = tierOf({ ref: known?.canonicalRef ?? failedRef, name: known?.name ?? failedRef });
+  const { models, tiers } = routingFor(providers, { scope: 'any', overrides: {}, sovereignModel: undefined, skip: (id) => id === failedProvider || unavailable(id) });
+  return models.length ? tiers[tier] || null : null;
 }

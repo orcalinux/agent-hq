@@ -11,6 +11,18 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.11.0] — 2026-11-21
+
+### Changed
+- **Routing uses every connected provider by default.** Settings → Models and routing now defaults to **All connected providers**: each level (simple, standard, complex) gets the strongest model of that level across Claude Code, Codex, Gemini, Ollama, Magpie and API keys. One provider still works on its own. *Only Sovereign's provider* remains an option; the 0.10.0 default is switched once, and a choice you made yourself is kept.
+- Models are ranked by family and strength across providers (Opus and Fable, GPT-5 and Gemini Pro for complex work; Sonnet for standard; Haiku, mini and Flash for simple; local models below hosted ones; unknown families as standard). Within a family the newest version wins, and a subscription or local model wins over a per-token API key for the same model.
+- Sovereign's model list is sorted strongest first with provider, level and strength, and Sovereign may set another provider's model on a task when it fits better.
+- **Failover by level:** when a provider runs out of credit, a task moves to the best model of the same level on another provider.
+- The Auto choice in Settings shows which provider it comes from.
+
+### Verification
+- Unit tests for cross-provider ranking, local and unknown models, subscription preference and same-level failover; browser tests for a plan mixing providers, the new default, and the one-time switch from the 0.10.0 default.
+
 ## [0.10.0] — 2026-11-21
 
 ### Added

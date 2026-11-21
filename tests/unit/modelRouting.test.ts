@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseComplexity, resolveTiers, routeTaskModel, routingFor, scopeModels, suggestTiers, taskComplexity, tierOf, versionOf } from '../../src/engine/modelRouting';
+import { fallbackForTier, parseComplexity, profileOf, resolveTiers, routeTaskModel, routingFor, scopeModels, suggestTiers, taskComplexity, tierOf, versionOf } from '../../src/engine/modelRouting';
 import { diffModels, isCheckDue, snapshotModels } from '../../src/engine/modelWatch';
 import { parsePlan } from '../../src/engine/orchestratorParsing';
 import { DEFAULT_AGENTS } from '../../src/store/defaultState';
@@ -63,6 +63,36 @@ describe('model tiers', () => {
   });
 });
 
+describe('across providers', () => {
+  const mixed = [
+    ...CLAUDE.filter((m) => !/opus|fable/.test(m.ref)),
+    { ref: 'openai:cli:gpt-5', name: 'GPT-5' },
+    { ref: 'openai:cli:gpt-5-mini', name: 'GPT-5 mini' },
+    { ref: 'google:gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+    { ref: 'ollama:qwen2.5-coder:7b', name: 'qwen2.5-coder:7b (7B)' },
+    { ref: 'magpie:daily-coding', name: 'daily-coding (routing group)' },
+  ];
+
+  it('picks the strongest model of each level wherever it comes from', () => {
+    const tiers = suggestTiers(mixed);
+    expect(tiers.complex).toBe('openai:cli:gpt-5');
+    expect(tiers.standard).toBe('anthropic:cli:claude-sonnet-5-5');
+    expect(tiers.simple).toBe('openai:cli:gpt-5-mini');
+    expect(suggestTiers([...mixed, claude('claude-opus-5-5', 'Claude Opus 5.5')]).complex).toBe('anthropic:cli:claude-opus-5-5');
+  });
+
+  it('ranks local models below hosted ones and treats unknown families as standard', () => {
+    expect(profileOf({ ref: 'ollama:qwen2.5-coder:7b', name: 'qwen2.5-coder:7b' }).tier).toBe('simple');
+    expect(profileOf({ ref: 'ollama:qwen2.5:32b', name: 'qwen2.5:32b' })).toEqual({ tier: 'standard', score: 55 });
+    expect(profileOf({ ref: 'magpie:daily-coding', name: 'daily-coding (routing group)' }).tier).toBe('standard');
+    expect(suggestTiers([{ ref: 'ollama:llama3:8b', name: 'llama3:8b' }, claude('claude-haiku-5-5', 'Claude Haiku 5.5')]).simple).toBe('anthropic:cli:claude-haiku-5-5');
+  });
+
+  it('prefers a subscription over a per-token API key for the same model', () => {
+    expect(suggestTiers([{ ref: 'anthropic:claude-opus-5-5', name: 'Claude Opus 5.5' }, claude('claude-opus-5-5', 'Claude Opus 5.5')]).complex).toBe('anthropic:cli:claude-opus-5-5');
+  });
+});
+
 describe('one subscription', () => {
   const providers = [
     provider('anthropic', 'Anthropic', CLAUDE, true, [{ ref: 'anthropic:cli:default', providerId: 'anthropic', id: 'cli:default', name: 'Claude Opus 5.5', via: 'cli', capabilities: ['chat'], selectable: false, canonicalRef: 'anthropic:cli:claude-opus-5-5' }]),
@@ -79,6 +109,11 @@ describe('one subscription', () => {
   it('offers every connected provider with scope any, and skips out-of-credit ones', () => {
     expect(routingFor(providers, { scope: 'any', overrides: {}, sovereignModel: 'anthropic:cli:default' }).models.map((m) => m.ref)).toContain('openai:cli:gpt-5');
     expect(routingFor(providers, { scope: 'any', overrides: {}, sovereignModel: '', skip: (id) => id === 'anthropic' }).models.map((m) => m.ref)).toEqual(['openai:cli:gpt-5']);
+  });
+
+  it('fails over to the best model of the same level on another provider', () => {
+    expect(fallbackForTier(providers, 'anthropic:cli:claude-opus-5-5', () => false)).toBe('openai:cli:gpt-5');
+    expect(fallbackForTier(providers, 'anthropic:cli:claude-opus-5-5', (id) => id === 'openai')).toBeNull();
   });
 
   it('falls back to all models when Sovereign has none', () => {

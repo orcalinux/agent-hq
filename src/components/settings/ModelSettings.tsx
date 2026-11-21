@@ -18,6 +18,8 @@ export function ModelSettings() {
   const setTier = useAgentStore((s) => s.setTierModel);
   const providers = useConnectionsStore((s) => s.providers);
   const routing = useRouting();
+  const providerCount = new Set(routing.models.map((m) => m.provider)).size;
+  const providerOf = (ref: string) => routing.models.find((m) => m.ref === ref)?.provider;
   const interval = useModelWatchStore((s) => s.intervalHours);
   const setInterval = useModelWatchStore((s) => s.setIntervalHours);
   const lastCheckedAt = useModelWatchStore((s) => s.lastCheckedAt);
@@ -44,14 +46,14 @@ export function ModelSettings() {
           onChange={setScope}
           className="w-fit"
           items={[
-            { id: 'sovereign', label: "Sovereign's provider only" },
-            { id: 'any', label: 'Any connected provider' },
+            { id: 'any', label: 'All connected providers' },
+            { id: 'sovereign', label: "Only Sovereign's provider" },
           ]}
         />
         <p className="text-[11.5px] text-fg-subtle">
           {scope === 'sovereign'
-            ? `Every agent runs on ${routing.provider ?? "Sovereign's provider"}, so one subscription is enough. Change Sovereign's model to switch provider.`
-            : 'Agents may use any connected provider; Sovereign picks across all of them.'}
+            ? `Every agent runs on ${routing.provider ?? "Sovereign's provider"}, even when others are connected. Change Sovereign's model to switch provider.`
+            : `Agent HQ compares the models of all ${providerCount} connected provider${providerCount === 1 ? '' : 's'} and uses the best one for each level; Sovereign can pick another provider's model for a task when it fits better. With one provider connected, everything runs on it.`}
         </p>
       </div>
 
@@ -70,7 +72,7 @@ export function ModelSettings() {
         </div>
         <p className="text-[11.5px] text-fg-subtle">
           {enabled
-            ? 'Sovereign rates every task as simple, standard or complex, and the task runs on that model, whatever agent does it. Simple work does not spend the strongest model.'
+            ? 'Sovereign rates every task as simple, standard or complex, and the task runs on the model for that level, whatever agent does it. Auto picks the strongest model of each level across your providers, newest version first; simple work does not spend the strongest model.'
             : "Tasks run on their agent's own model unless Sovereign picks one."}
         </p>
         <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line" aria-label="Model for each complexity">
@@ -86,7 +88,7 @@ export function ModelSettings() {
               <ModelSelect
                 value={pinned[tier] ?? ''}
                 onChange={(ref) => setTier(tier, ref)}
-                emptyLabel={`Auto · ${routing.tiers[tier] ? nameOf(routing.tiers[tier]) : 'no model'}`}
+                emptyLabel={`Auto · ${routing.tiers[tier] ? `${nameOf(routing.tiers[tier])}${providerCount > 1 ? ` (${providerOf(routing.tiers[tier])})` : ''}` : 'no model'}`}
                 only={routing.refs}
                 disabled={!enabled}
                 className="h-7 w-56 shrink-0"

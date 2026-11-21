@@ -49,7 +49,7 @@ async function setup(page: Page) {
   };
 }
 
-test('one Claude subscription: each task gets the Claude model for its complexity', async ({ page }) => {
+test('each task gets the best model for its complexity across providers, and Sovereign may pick another provider', async ({ page }) => {
   const errors = trapErrors(page);
   const mock = await setup(page);
   await page.goto('/');
@@ -60,15 +60,16 @@ test('one Claude subscription: each task gets the Claude model for its complexit
 
   await expect(page.getByRole('button', { name: 'Model for Rename the button' })).toContainText('Claude Haiku 5.5');
   await expect(page.getByRole('button', { name: 'Model for Redesign the auth flow' })).toContainText('Claude Opus 5.5');
-  await expect(page.getByRole('button', { name: 'Model for Add the endpoint' })).toContainText('Claude Sonnet 5.5');
+  await expect(page.getByRole('button', { name: 'Model for Add the endpoint' })).toContainText('GPT-5 Codex');
   expect(mock.plan()).toContain('simple: anthropic:cli:claude-haiku-5-5');
-  expect(mock.plan()).not.toContain('openai:cli:gpt-5');
+  expect(mock.plan()).toContain('across 2 connected providers');
+  expect(mock.plan()).toMatch(/openai:cli:gpt-5 \| GPT-5 Codex \| OpenAI \| complex \| 90/);
 
   await pick(page, 'Complexity for Rename the button', 'Complex');
   await expect(page.getByRole('button', { name: 'Model for Rename the button' })).toContainText('Claude Opus 5.5');
   await page.getByRole('button', { name: 'Model for Rename the button' }).click();
   await expect(page.getByRole('option', { name: 'Claude Sonnet 5.5' })).toBeVisible();
-  await expect(page.getByRole('option', { name: 'GPT-5 Codex' })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'GPT-5 Codex' })).toBeVisible();
   await page.keyboard.press('Escape');
   expect(errors).toEqual([]);
 });
@@ -81,8 +82,8 @@ test('Settings pins tiers, and a newly released model is picked up by the update
   await pick(page, 'Sovereign model', 'Claude Opus 5.5');
   await nav(page, 'Settings');
   const section = page.locator('#settings-models');
-  await expect(section.getByRole('tab', { name: "Sovereign's provider only" })).toHaveAttribute('aria-selected', 'true');
-  await expect(section.getByRole('button', { name: 'Complex model' })).toContainText('Auto · Claude Opus 5.5');
+  await expect(section.getByRole('tab', { name: 'All connected providers' })).toHaveAttribute('aria-selected', 'true');
+  await expect(section.getByRole('button', { name: 'Complex model' })).toContainText('Auto · Claude Opus 5.5 (Anthropic)');
   await pick(page, 'Simple model', 'Claude Sonnet 5.5');
   await expect(section.getByText('pinned')).toBeVisible();
 
@@ -96,8 +97,26 @@ test('Settings pins tiers, and a newly released model is picked up by the update
   await expect(section.getByRole('button', { name: 'Simple model' })).toContainText('Claude Sonnet 5.5');
   expect(mock.rescans()).toBeGreaterThanOrEqual(2);
 
-  await section.getByRole('tab', { name: 'Any connected provider' }).click();
+  await section.getByRole('tab', { name: "Only Sovereign's provider" }).click();
+  await expect(section.getByText('even when others are connected')).toBeVisible();
   await section.getByRole('tab', { name: 'Off', exact: true }).first().click();
   await expect(section.getByText("Tasks run on their agent's own model")).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("0.10.0's saved one-provider default becomes all providers once, a choice made by hand stays", async ({ page }) => {
+  await setup(page);
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    localStorage.setItem('agent-hq.state', JSON.stringify({ state: { modelScope: 'sovereign' }, version: 2 }));
+  });
+  await page.goto('/');
+  await nav(page, 'Settings');
+  const section = page.locator('#settings-models');
+  await expect(section.getByRole('tab', { name: 'All connected providers' })).toHaveAttribute('aria-selected', 'true');
+  await section.getByRole('tab', { name: "Only Sovereign's provider" }).click();
+  await page.reload();
+  await nav(page, 'Settings');
+  await expect(page.locator('#settings-models').getByRole('tab', { name: "Only Sovereign's provider" })).toHaveAttribute('aria-selected', 'true');
 });

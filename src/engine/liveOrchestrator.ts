@@ -31,7 +31,7 @@ import { autoAppliesChanges, autoStartsRuns, selectAutoApply } from './approval'
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
-import { COMPLEXITIES, COMPLEXITY_HINT, routeTaskModel, routingFor } from './modelRouting';
+import { COMPLEXITIES, COMPLEXITY_HINT, compareModels, fallbackForTier, profileOf, routeTaskModel, routingFor } from './modelRouting';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
 
 const MAX_QA_LOOPS = 1;
@@ -76,7 +76,7 @@ async function callAgent(
   }
   const conns = useConnectionsStore.getState;
   const reroute = (reason: string): boolean => {
-    const fallback = pickFallbackModel(conns().providers, conns().exhausted, model);
+    const fallback = fallbackForTier(conns().providers, model, (id) => isProviderExhausted(conns().exhausted, id)) ?? pickFallbackModel(conns().providers, conns().exhausted, model);
     if (!fallback) return false;
     agentsState().logActivity({
       kind: 'info',
@@ -245,7 +245,16 @@ function availableModels(): Array<{ ref: string; name: string; provider: string;
 function modelCatalog(): string {
   const { models, tiers } = routing();
   if (!models.length) return 'Available models: none besides the agents\u2019 own assignments.';
-  const list = 'Available models (ref | name | provider):\n' + models.map((m) => `- ${m.ref} | ${m.name} | ${m.provider}${m.contextWindow ? ` | ${Math.round(m.contextWindow / 1000)}k context` : ''}`).join('\n');
+  const providerCount = new Set(models.map((m) => m.provider)).size;
+  const list =
+    `Available models across ${providerCount} connected provider${providerCount === 1 ? '' : 's'}, strongest first (ref | name | provider | level | strength 0-100):\n` +
+    [...models]
+      .sort(compareModels)
+      .map((m) => {
+        const p = profileOf(m);
+        return `- ${m.ref} | ${m.name} | ${m.provider} | ${p.tier} | ${p.score}${m.contextWindow ? ` | ${Math.round(m.contextWindow / 1000)}k context` : ''}`;
+      })
+      .join('\n');
   if (!agentsState().complexityRouting) return list;
   const name = (ref: string) => models.find((m) => m.ref === ref)?.name ?? ref;
   return `${list}\n\nModel for each task complexity (used when a task has no "model"):\n${COMPLEXITIES.map((c) => `- ${c}: ${tiers[c]} (${name(tiers[c])}) — ${COMPLEXITY_HINT[c]}`).join('\n')}`;
@@ -264,7 +273,7 @@ The role field is a workflow routing category only. Specialty is unrestricted: c
 Rules: as many tasks as the work needs, each one concrete and independently checkable. Split work so tasks that depend on each other say so in dependsOn (outputs of dependencies are handed to the dependent task). Juniors only get small, well-scoped tasks; their mentor reviews them automatically. Do not add a QA task: QA review by Sentinel runs automatically. Dependencies must reference earlier task ids.
 ${
   byComplexity
-    ? 'Model choice: rate EVERY task\'s "complexity" honestly (simple, standard or complex) and leave "model" out; the task then runs on the model listed for its complexity, so simple work does not spend the strongest model. Set "model" only to deliberately override that, and only with a ref from the available models list.'
+    ? 'Model choice: rate EVERY task\'s "complexity" honestly (simple, standard or complex). By default leave "model" out: the task then runs on the best model for its complexity across all connected providers, so simple work does not spend the strongest model. Set "model" yourself when another provider\'s model clearly fits a task better (for example a model known to be strong at that language or domain, a long context window for large files, or spreading parallel work over providers to avoid rate limits), and only with a ref from the available models list.'
     : 'Model choice: set "model" on a task only when it clearly benefits (a strong model for architecture or hard logic, a fast cheap model for simple edits); otherwise omit it and the agent\'s own model is used. Only use refs from the available models list. Still rate each task\'s "complexity".'
 }
 ${teamRule}`;
