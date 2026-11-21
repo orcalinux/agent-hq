@@ -71,6 +71,7 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
           <Badge className="shrink-0" tone={plan.status === 'executed' ? 'success' : plan.status === 'discarded' ? 'neutral' : 'accent'}>{plan.status}</Badge>
         </div>
         {plan.summary ? <p className="mt-1 text-[12px] text-fg-muted">{plan.summary}</p> : null}
+        {editable ? <p className="mt-1 text-[11.5px] text-fg-subtle">Models were picked automatically by complexity, and equally good ones take turns. Change any task&apos;s Complexity or Model before approving.</p> : null}
       </div>
       {newAgents.length ? (
         <div className="border-b border-line bg-accent-soft/40 px-3 py-2">

@@ -85,8 +85,17 @@ test('Settings pins tiers, and a newly released model is picked up by the update
   await expect(section.getByRole('tab', { name: 'All connected providers' })).toHaveAttribute('aria-selected', 'true');
   await expect(section.getByRole('button', { name: 'Complex model' })).toContainText('Auto · Claude Opus 5.5 (Anthropic)');
   await pick(page, 'Simple model', 'Claude Sonnet 5.5');
-  await expect(section.getByText('pinned')).toBeVisible();
+  await expect(section.getByText('pinned', { exact: true })).toBeVisible();
 
+  await expect(section.getByRole('region', { name: 'How model choice works' })).toContainText('It is dynamic, not a one-time setup');
+  await expect(section.getByRole('region', { name: 'How model choice works' })).toContainText('Choose models yourself');
+  const ranking = section.getByRole('table', { name: 'Model ranking' });
+  await expect(ranking).toContainText('GPT-5 Codex');
+  await expect(ranking.getByText('In use').first()).toBeVisible();
+  await section.getByRole('tab', { name: 'Simple', exact: true }).first().click();
+  await expect(ranking).toContainText('Claude Haiku 5.5');
+  await expect(ranking).not.toContainText('GPT-5 Codex');
+  await section.getByRole('tab', { name: 'All', exact: true }).click();
   await section.getByRole('button', { name: 'Check now' }).click();
   await expect(section.getByText(/Last checked/)).toBeVisible();
   mock.release([model('anthropic', 'claude-opus-6', 'Claude Opus 6'), ...CLAUDE]);

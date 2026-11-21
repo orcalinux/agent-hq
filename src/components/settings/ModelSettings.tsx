@@ -1,13 +1,16 @@
-import { RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { RefreshCw, RotateCcw } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { useModelWatchStore } from '@/store/useModelWatchStore';
 import { useRouting } from '@/components/models/useRouting';
-import { Badge, Button, Tabs } from '@/components/ui/primitives';
+import { Badge, Button, Tabs, Truncate } from '@/components/ui/primitives';
 import { ModelSelect, fmtRelative } from '@/components/ui/helpers';
 import { COMPLEXITIES, COMPLEXITY_HINT, COMPLEXITY_LABEL } from '@/engine/modelRouting';
 import { CHECK_INTERVALS } from '@/engine/modelWatch';
-import type { ModelScope } from '@/types';
+import type { Complexity, ModelScope } from '@/types';
+
+type LevelFilter = 'all' | Complexity;
 
 export function ModelSettings() {
   const scope = useAgentStore((s) => s.modelScope);
@@ -28,6 +31,8 @@ export function ModelSettings() {
   const history = useModelWatchStore((s) => s.history);
   const moves = useModelWatchStore((s) => s.tierMoves);
   const check = useModelWatchStore((s) => s.check);
+  const resetResults = useModelWatchStore((s) => s.resetResults);
+  const [level, setLevel] = useState<LevelFilter>('all');
   const nameOf = (ref: string) => providers.flatMap((p) => p.models).find((m) => m.ref === ref)?.name ?? ref;
   const recent = [
     ...history.map((c) => ({ at: c.at, text: [c.added.length ? `New: ${c.added.map((m) => m.name).join(', ')}` : '', c.removed.length ? `Removed: ${c.removed.map((m) => m.name).join(', ')}` : ''].filter(Boolean).join(' · '), who: c.provider })),
@@ -36,8 +41,29 @@ export function ModelSettings() {
     .sort((a, b) => b.at - a.at)
     .slice(0, 6);
 
+  const rows = routing.ranked.filter((m) => level === 'all' || m.tier === level).slice(0, 40);
+  const inUse = new Set(COMPLEXITIES.flatMap((c) => routing.peers[c]));
+  const learnedCount = Object.keys(routing.results).length;
+  const peerLabel = (tier: Complexity) => routing.peers[tier].map((r) => nameOf(r).split(' · ')[0]).join(' + ');
+
   return (
     <>
+      <section aria-label="How model choice works" className="space-y-2 rounded-xl border border-line bg-surface-2 p-3">
+        <p className="text-[12.5px] font-medium">How model choice works</p>
+        <ul className="list-disc space-y-1 pl-4 text-[11.5px] text-fg-muted">
+          <li><strong className="font-medium text-fg">It is dynamic, not a one-time setup.</strong> At every plan Sovereign rates each task as simple, standard or complex, and the model is chosen from whatever is connected at that moment.</li>
+          <li><strong className="font-medium text-fg">Auto</strong> levels follow your connections, new releases (a new GPT or Claude is recognised without an update) and real results. <strong className="font-medium text-fg">Pinned</strong> levels stay exactly as you set them.</li>
+          <li>Models are scored on one scale for every vendor, so no provider wins by being listed first. Models that are equally good take turns, which spreads the work over your subscriptions.</li>
+          <li>If a provider runs out of credit during a run, its tasks move to the best model of the same level elsewhere.</li>
+        </ul>
+        <p className="pt-1 text-[12px] font-medium text-fg-muted">Choose models yourself</p>
+        <ol className="list-decimal space-y-1 pl-4 text-[11.5px] text-fg-muted">
+          <li>Per task: in the plan card, before you approve, change a task&apos;s Complexity or Model.</li>
+          <li>Per level: pin a model below, in Models and routing, for Simple, Standard or Complex.</li>
+          <li>Per agent: turn &quot;Pick the model by task complexity&quot; Off, then set each agent&apos;s model in Agents, or the role defaults in Connections.</li>
+        </ol>
+      </section>
+
       <div className="space-y-1">
         <p className="text-[12px] font-medium text-fg-muted">Models agents may use</p>
         <Tabs<ModelScope>
@@ -81,9 +107,9 @@ export function ModelSettings() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-[12.5px] font-medium">{COMPLEXITY_LABEL[tier]}</span>
-                  {pinned[tier] ? <Badge>pinned</Badge> : <Badge tone="success">auto · newest</Badge>}
+                  {pinned[tier] ? <Badge>pinned</Badge> : <Badge tone="success" title={routing.peers[tier].length > 1 ? 'Equally strong models take turns' : undefined}>{routing.peers[tier].length > 1 ? 'auto · take turns' : 'auto'}</Badge>}
                 </div>
-                <p className="truncate text-[11.5px] text-fg-subtle">{COMPLEXITY_HINT[tier]}</p>
+                <Truncate as="p" className="block text-[11.5px] text-fg-subtle">{!pinned[tier] && routing.peers[tier].length > 1 ? `${peerLabel(tier)} · ${COMPLEXITY_HINT[tier]}` : COMPLEXITY_HINT[tier]}</Truncate>
               </div>
               <ModelSelect
                 value={pinned[tier] ?? ''}
@@ -97,6 +123,42 @@ export function ModelSettings() {
             </li>
           ))}
         </ul>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-[12px] font-medium text-fg-muted">Ranking</p>
+          <Tabs<LevelFilter>
+            label="Ranking level"
+            value={level}
+            onChange={setLevel}
+            items={[{ id: 'all', label: 'All' }, ...COMPLEXITIES.slice().reverse().map((c) => ({ id: c as LevelFilter, label: COMPLEXITY_LABEL[c] }))]}
+          />
+          <Button size="sm" icon={RotateCcw} disabled={!learnedCount} onClick={resetResults}>
+            Reset learned results
+          </Button>
+        </div>
+        <p className="text-[11.5px] text-fg-subtle">Why each model is picked. Score = size of the model, minus points when a newer version of it exists, plus or minus what real tasks on your projects taught (needs 3 results). Duplicates reached through Magpie are kept as backups.</p>
+        <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+          <table aria-label="Model ranking" className="w-full text-left text-[12px] [&_td]:whitespace-nowrap">
+            <thead className="border-b border-line bg-surface-2 text-[11px] uppercase tracking-wide text-fg-subtle">
+              <tr>{['Model', 'Provider', 'Level', 'Score', 'Results', 'Why'].map((h) => <th key={h} scope="col" className="whitespace-nowrap px-3 py-1.5 font-medium">{h}</th>)}</tr>
+            </thead>
+            <tbody>
+              {rows.map((m) => (
+                <tr key={m.ref} className={'border-b border-line last:border-0' + (m.duplicateOf ? ' opacity-55' : '')}>
+                  <td className="max-w-[16rem] px-3 py-1.5"><div className="flex min-w-0 items-center gap-1.5"><Truncate className="font-medium">{m.name.split(' · ')[0]}</Truncate>{inUse.has(m.ref) ? <Badge tone="success">In use</Badge> : m.duplicateOf ? <Badge>backup</Badge> : null}</div></td>
+                  <td className="max-w-[9rem] px-3 py-1.5 text-fg-muted"><Truncate>{m.provider ?? m.vendor}</Truncate></td>
+                  <td className="px-3 py-1.5 text-fg-muted">{COMPLEXITY_LABEL[m.tier]}</td>
+                  <td className="px-3 py-1.5 tabular-nums">{m.score}</td>
+                  <td className="px-3 py-1.5 tabular-nums text-fg-muted">{m.results ? `${m.results.passed} passed · ${m.results.failed} failed` : '—'}</td>
+                  <td className="max-w-[22rem] px-3 py-1.5 text-fg-subtle"><Truncate>{m.why}</Truncate></td>
+                </tr>
+              ))}
+              {!rows.length ? <tr><td colSpan={6} className="px-3 py-3 text-fg-subtle">No models connected yet.</td></tr> : null}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="space-y-2">

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api } from '@/api/client';
 import type { Complexity } from '@/types';
-import { COMPLEXITIES, COMPLEXITY_LABEL, routingFor } from '@/engine/modelRouting';
+import { COMPLEXITIES, COMPLEXITY_LABEL, modelKey, routingFor, type ModelResults } from '@/engine/modelRouting';
 import { diffModels, snapshotModels, type KnownModels, type ModelChange } from '@/engine/modelWatch';
 import { safeStorage } from './storage';
 import { resolveAgentModel, useAgentStore } from './useAgentStore';
@@ -24,6 +24,10 @@ interface ModelWatchState {
   tierMoves: TierMove[];
   checking: boolean;
   lastError: string | null;
+  /** Passed and failed tasks per model (keyed by the model, whoever serves it). */
+  results: ModelResults;
+  recordResult: (ref: string, passed: boolean) => void;
+  resetResults: () => void;
   setIntervalHours: (hours: number) => void;
   check: () => Promise<{ changes: ModelChange[]; moves: TierMove[] }>;
 }
@@ -35,6 +39,7 @@ export function currentRouting() {
     scope: agents.modelScope,
     overrides: agents.tierModels,
     sovereignModel: resolveAgentModel(agents.agents['agent-manager'], agents.roleDefaults),
+    results: useModelWatchStore.getState().results,
   });
 }
 
@@ -52,6 +57,18 @@ export const useModelWatchStore = create<ModelWatchState>()(
       tierMoves: [],
       checking: false,
       lastError: null,
+      results: {},
+
+      recordResult: (ref, passed) => {
+        if (!ref) return;
+        const known = useConnectionsStore.getState().providers.flatMap((p) => p.models).find((m) => m.ref === ref);
+        const key = modelKey({ ref: known?.canonicalRef ?? ref, name: known?.name ?? ref });
+        set((s) => {
+          const r = s.results[key] ?? { passed: 0, failed: 0 };
+          return { results: { ...s.results, [key]: passed ? { ...r, passed: r.passed + 1 } : { ...r, failed: r.failed + 1 } } };
+        });
+      },
+      resetResults: () => set({ results: {} }),
 
       setIntervalHours: (hours) => set({ intervalHours: Math.max(0, hours) }),
 
@@ -100,7 +117,7 @@ export const useModelWatchStore = create<ModelWatchState>()(
       name: 'agent-hq.model-watch',
       version: 1,
       storage: safeStorage,
-      partialize: (s) => ({ intervalHours: s.intervalHours, lastCheckedAt: s.lastCheckedAt, known: s.known, history: s.history, tierMoves: s.tierMoves }),
+      partialize: (s) => ({ intervalHours: s.intervalHours, lastCheckedAt: s.lastCheckedAt, known: s.known, history: s.history, tierMoves: s.tierMoves, results: s.results }),
     }
   )
 );

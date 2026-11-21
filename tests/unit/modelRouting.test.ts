@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fallbackForTier, parseComplexity, profileOf, resolveTiers, routeTaskModel, routingFor, scopeModels, suggestTiers, taskComplexity, tierOf, versionOf } from '../../src/engine/modelRouting';
+import { assignPlanModels, chooseTiers, fallbackForTier, learnedBonus, parseComplexity, profileOf, rankModels, resolveRouting, resolveTiers, routeTaskModel, routingFor, scopeModels, suggestTiers, taskComplexity, tierOf, versionOf } from '../../src/engine/modelRouting';
 import { diffModels, isCheckDue, snapshotModels } from '../../src/engine/modelWatch';
 import { parsePlan } from '../../src/engine/orchestratorParsing';
 import { DEFAULT_AGENTS } from '../../src/store/defaultState';
@@ -74,10 +74,11 @@ describe('across providers', () => {
   ];
 
   it('picks the strongest model of each level wherever it comes from', () => {
-    const tiers = suggestTiers(mixed);
-    expect(tiers.complex).toBe('openai:cli:gpt-5');
-    expect(tiers.standard).toBe('anthropic:cli:claude-sonnet-5-5');
-    expect(tiers.simple).toBe('openai:cli:gpt-5-mini');
+    const choice = chooseTiers(mixed);
+    expect([...choice.peers.complex].sort()).toEqual(['google:gemini-2.5-pro', 'openai:cli:gpt-5']);
+    expect(choice.tiers.standard).toBe('anthropic:cli:claude-sonnet-5-5');
+    expect(choice.peers.simple).toContain('openai:cli:gpt-5-mini');
+    expect(choice.peers.simple).toContain('anthropic:cli:claude-haiku-5-5');
     expect(suggestTiers([...mixed, claude('claude-opus-5-5', 'Claude Opus 5.5')]).complex).toBe('anthropic:cli:claude-opus-5-5');
   });
 
@@ -163,5 +164,92 @@ describe('model update check', () => {
     expect(isCheckDue(0, 6, 5 * 3_600_000)).toBe(false);
     expect(isCheckDue(0, 6, 6 * 3_600_000)).toBe(true);
     expect(isCheckDue(null, 0)).toBe(false);
+  });
+});
+
+const GPT = [
+  { ref: 'openai:cli:default', name: 'Codex CLI (configured default model)' },
+  { ref: 'openai:cli:gpt-6.1-sol', name: 'GPT-6.1-Sol · Codex CLI' },
+  { ref: 'openai:cli:gpt-6-astra', name: 'GPT-6-Astra · Codex CLI' },
+  { ref: 'openai:cli:gpt-6.1-terra', name: 'GPT-6.1 Terra · Codex CLI' },
+  { ref: 'openai:cli:gpt-6-luna', name: 'GPT-6-Luna · Codex CLI' },
+  { ref: 'openai:cli:gpt-5.6-sol', name: 'GPT-5.6-Sol · Codex CLI' },
+];
+
+describe('reading GPT models', () => {
+  it('understands Sol, Astra, Terra and Luna instead of calling GPT unknown', () => {
+    expect(tierOf(GPT[1])).toBe('complex');
+    expect(tierOf(GPT[2])).toBe('complex');
+    expect(tierOf(GPT[3])).toBe('standard');
+    expect(tierOf(GPT[4])).toBe('simple');
+    expect(tierOf({ ref: 'openai:gpt-5', name: 'GPT-5' })).toBe('complex');
+  });
+
+  it('prefers GPT-6.1 over GPT-5.6, and Codex alone covers every level', () => {
+    const choice = chooseTiers(GPT);
+    expect(choice.tiers).toEqual({ complex: 'openai:cli:gpt-6.1-sol', standard: 'openai:cli:gpt-6.1-terra', simple: 'openai:cli:gpt-6-luna' });
+  });
+
+  it('sizes a model it has never seen by its price, borrowed from its Magpie copy', () => {
+    const cheap = { ref: 'openai:cli:gpt-7-nova', name: 'GPT-7-Nova · Codex CLI' };
+    expect(tierOf(cheap)).toBe('standard');
+    const ranked = rankModels([cheap, { ref: 'magpie:codex/gpt-7-nova', name: 'GPT-7-Nova · Codex', price: 0.1 }]);
+    expect(ranked.find((m) => m.ref === cheap.ref)?.tier).toBe('simple');
+    expect(ranked.find((m) => m.ref === 'magpie:codex/gpt-7-nova')?.duplicateOf).toBe(cheap.ref);
+  });
+
+  it('excludes the "configured default" alias from the ranking', () => {
+    expect(rankModels(GPT).some((m) => m.ref === 'openai:cli:default')).toBe(false);
+  });
+});
+
+describe('fair sharing between providers', () => {
+  const both = [...CLAUDE, ...GPT.filter((m) => !m.ref.endsWith('default'))];
+
+  it('treats Opus 5.5 and GPT-6.1-Sol as complex peers and takes turns', () => {
+    const choice = chooseTiers(both);
+    expect(choice.peers.complex.length).toBeGreaterThan(1);
+    const tasks = assignPlanModels([{ complexity: 'complex' as const }, { complexity: 'complex' as const }, { complexity: 'complex' as const }], choice, new Set());
+    expect(new Set(tasks.map((t) => (t as { model?: string }).model)).size).toBe(2);
+    expect(tasks[0].model).toBe(tasks[2].model);
+  });
+
+  it('keeps a deliberate model and lets a pin replace the peers', () => {
+    const choice = chooseTiers(both);
+    const kept = assignPlanModels([{ complexity: 'complex' as const, model: 'x:y' }], choice, new Set());
+    expect(kept[0].model).toBe('x:y');
+    const pinned = resolveRouting(both, { complex: 'anthropic:cli:claude-opus-5-5' });
+    expect(pinned.peers.complex).toEqual(['anthropic:cli:claude-opus-5-5']);
+  });
+
+  it('marks Magpie copies as backups and keeps them out of the peers', () => {
+    const copy = { ref: 'magpie:claude/claude-opus-5-5', name: 'Claude Opus 5.5 · Claude Code' };
+    const ranked = rankModels([...CLAUDE, copy]);
+    expect(ranked.find((m) => m.ref === copy.ref)?.duplicateOf).toBe('anthropic:cli:claude-opus-5-5');
+    expect(chooseTiers([...CLAUDE, copy]).peers.complex).not.toContain(copy.ref);
+  });
+});
+
+describe('learning from results', () => {
+  it('needs 3 results, then moves the score between -10 and +5', () => {
+    expect(learnedBonus(undefined)).toBe(0);
+    expect(learnedBonus({ passed: 2, failed: 0 })).toBe(0);
+    expect(learnedBonus({ passed: 10, failed: 0 })).toBe(5);
+    expect(learnedBonus({ passed: 0, failed: 10 })).toBe(-10);
+  });
+
+  it('lets a failing model fall behind its peer', () => {
+    const models = [claude('claude-opus-5-5', 'Claude Opus 5.5'), { ref: 'openai:cli:gpt-6.1-sol', name: 'GPT-6.1-Sol' }];
+    const before = rankModels(models);
+    const worse = rankModels(models, { 'Anthropic|claude opus 5.5': { passed: 0, failed: 5 } });
+    expect(worse[0].ref).toBe('openai:cli:gpt-6.1-sol');
+    expect(worse.find((m) => m.ref.includes('opus'))!.score).toBeLessThan(before.find((m) => m.ref.includes('opus'))!.score);
+  });
+});
+
+describe('Codex names', () => {
+  it('calls a Codex-named model large but not every model served through Codex', () => {
+    expect(tierOf({ ref: 'openai:gpt-5-codex', name: 'GPT-5 Codex' })).toBe('complex');
+    expect(tierOf({ ref: 'openai:cli:gpt-6.1-terra', name: 'GPT-6.1 Terra · Codex CLI' })).toBe('standard');
   });
 });

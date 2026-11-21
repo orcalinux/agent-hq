@@ -11,6 +11,24 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.12.0] — 2026-11-21
+
+### Fixed
+- **GPT models were read as "unknown".** Names such as GPT-6.1-Sol, Astra, Terra and Luna were not understood, so every GPT scored the same and Claude always won. Tier names are now understood (Astra and Sol large, Terra mid, Luna small), and a model the name does not explain is sized by its price, borrowed from the same model's Magpie listing.
+
+### Added
+- **Fair ranking across vendors.** One scale for every provider, with points lost for older versions and no vendor favoured.
+- **Equally good models take turns.** Peers within 2 points (for example Claude Opus 5.5 and GPT-6.1-Sol) share a level's tasks.
+- **Learning from real results.** QA approvals and rejections, mentor revisions and task errors adjust a model's score once it has 3 results.
+- **Ranking table** in Settings → Models and routing, with level filters, an "In use" badge, backups for Magpie duplicates, why each model scored as it did, and **Reset learned results**.
+- **In-app explanation** that model choice is dynamic per task, with a short guide to choosing models by hand, plus a hint in the plan card.
+
+### Changed
+- Magpie copies of a model you also have directly are backups, and the "configured default" alias is left out of the ranking.
+
+### Verification
+- Unit tests for GPT name reading, price-based sizing, alias and duplicate handling, peer alternation, pins and learning; browser tests for the explanation panel and ranking table.
+
 ## [0.11.0] — 2026-11-21
 
 ### Changed

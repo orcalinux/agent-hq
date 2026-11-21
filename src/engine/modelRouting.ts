@@ -17,40 +17,42 @@ export const COMPLEXITY_HINT: Record<Complexity, string> = {
 export interface RoutingModel {
   ref: AIModelId;
   name: string;
+  /** Input price in USD per million tokens, when the provider says. Bigger models cost more. */
+  price?: number;
 }
 
-interface Profile {
-  match: RegExp;
-  tier: Complexity;
-  /** Rough strength for coding work, 0-100. Only used to compare models with each other. */
-  score: number;
-}
+/** Size class of a model inside its own family line-up. Every provider is scored on the same scale. */
+type SizeClass = 'large' | 'mid' | 'small' | 'unknown';
 
-/**
- * Known model families from every provider, strongest first within a tier. First match wins, so the
- * small variants (mini, nano, flash) come before the family they belong to. Anything unknown is
- * treated as a standard model, so a brand-new family still works and can be pinned in Settings.
- */
-const PROFILES: Profile[] = [
-  { match: /opus/, tier: 'complex', score: 95 },
-  { match: /fable/, tier: 'complex', score: 94 },
-  { match: /sonnet/, tier: 'standard', score: 85 },
-  { match: /haiku/, tier: 'simple', score: 62 },
-  { match: /\bnano\b/, tier: 'simple', score: 45 },
-  { match: /flash-?lite|\blite\b/, tier: 'simple', score: 50 },
-  { match: /\bsmall\b/, tier: 'simple', score: 50 },
-  { match: /\bmini\b/, tier: 'simple', score: 64 },
-  { match: /\bflash\b/, tier: 'simple', score: 66 },
-  { match: /gpt-?5/, tier: 'complex', score: 90 },
-  { match: /\bo[1345]\b/, tier: 'complex', score: 88 },
-  { match: /\bpro\b/, tier: 'complex', score: 88 },
-  { match: /\bultra\b|\blarge\b|\bmax\b/, tier: 'complex', score: 80 },
-  { match: /gpt-?4/, tier: 'standard', score: 72 },
-  { match: /\bmedium\b/, tier: 'standard', score: 70 },
-];
+const CLASS_TIER: Record<SizeClass, Complexity> = { large: 'complex', mid: 'standard', small: 'simple', unknown: 'standard' };
+/** Same numbers for every provider, so no vendor wins just by being listed here. */
+const CLASS_SCORE: Record<SizeClass, number> = { large: 90, mid: 80, small: 60, unknown: 75 };
+const CLASS_LABEL: Record<SizeClass, string> = { large: 'Large model', mid: 'Mid-size model', small: 'Small, fast model', unknown: 'Unknown family, treated as mid-size' };
+const PRICE_LABEL = 'sized by its price';
 
 function text(model: RoutingModel): string {
   return `${model.name} ${model.ref}`.toLowerCase().replace(/[_:/()]/g, ' ');
+}
+
+/** The company that trained the model, whichever provider or gateway serves it. */
+export function vendorOf(model: RoutingModel): string {
+  const t = text(model);
+  if (providerOfRef(model.ref) === 'ollama') return 'local';
+  if (/claude|opus|sonnet|haiku|fable/.test(t)) return 'Anthropic';
+  if (/\bgpt|codex|\bo[1-9]\b/.test(t)) return 'OpenAI';
+  if (/gemini/.test(t)) return 'Google';
+  return providerOfRef(model.ref) ?? 'other';
+}
+
+function sizeClass(model: RoutingModel): SizeClass {
+  const t = text(model);
+  if (/\bnano\b|\bmini\b|flash-?lite|\blite\b|\bsmall\b|haiku|\bflash\b|\bluna\b/.test(t)) return 'small';
+  if (/opus|fable|\bultra\b|\blarge\b|\bmax\b|\bpro\b|\bo[1-9]\b|\bastra\b|\bsol\b/.test(t)) return 'large';
+  if (/sonnet|\bmedium\b|gemini|\bterra\b/.test(t)) return 'mid';
+  if (/\bcodex\b/.test(model.name.split(' · ')[0].toLowerCase())) return 'large';
+  if (model.price !== undefined) return model.price >= 3 ? 'large' : model.price >= 0.8 ? 'mid' : 'small';
+  if (/^gpt[- ]?\d+(\.\d+)?$/.test(model.name.split(' · ')[0].trim().toLowerCase())) return 'large';
+  return 'unknown';
 }
 
 /** Parameter size of a local model ("qwen2.5:32b" → 32), if it says. */
@@ -59,15 +61,17 @@ function paramsOf(model: RoutingModel): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
-/** Tier and strength of a model. Local Ollama models are free but weaker, so they rank below hosted ones. */
+/**
+ * Level and base strength of one model on its own. Hosted models: large 90, mid 80, small 60,
+ * unknown 75, the same for every vendor. Local Ollama models are free but weaker, so they rank lower.
+ */
 export function profileOf(model: RoutingModel): { tier: Complexity; score: number } {
   if (providerOfRef(model.ref) === 'ollama') {
     const size = paramsOf(model) ?? 7;
     return size >= 30 ? { tier: 'standard', score: 55 } : { tier: 'simple', score: Math.min(48, 30 + size) };
   }
-  const t = text(model);
-  const hit = PROFILES.find((p) => p.match.test(t));
-  return hit ? { tier: hit.tier, score: hit.score } : { tier: 'standard', score: 70 };
+  const size = sizeClass(model);
+  return { tier: CLASS_TIER[size], score: CLASS_SCORE[size] };
 }
 
 export function tierOf(model: RoutingModel): Complexity {
@@ -75,9 +79,11 @@ export function tierOf(model: RoutingModel): Complexity {
 }
 
 /** Version numbers in a model id ("claude-opus-5-5" → [5, 5]); dates such as 20251001 are ignored. */
-export function versionOf(ref: AIModelId): number[] {
+export function versionOf(ref: AIModelId, name = ''): number[] {
   const id = ref.slice(ref.indexOf(':') + 1).replace(/^cli:/, '');
-  return (id.match(/\d+/g) ?? []).filter((n) => n.length < 6).map(Number);
+  const pick = (s: string) => (s.match(/\d+/g) ?? []).filter((n) => n.length < 6).map(Number);
+  const fromId = pick(id);
+  return fromId.length ? fromId : pick(name);
 }
 
 export function compareVersions(a: number[], b: number[]): number {
@@ -94,37 +100,154 @@ function flatRate(ref: AIModelId): boolean {
   return ref.includes(':cli:') || provider === 'magpie' || provider === 'ollama';
 }
 
-/** Stronger first; within a family the newest version; then flat-rate over per-token. */
-export function compareModels(a: RoutingModel, b: RoutingModel): number {
-  return profileOf(b).score - profileOf(a).score || compareVersions(versionOf(b.ref), versionOf(a.ref)) || Number(flatRate(b.ref)) - Number(flatRate(a.ref));
+/** Same model, whoever serves it: "Claude Opus 5.5 · Claude Code" via Magpie is Claude Opus 5.5. */
+export function modelKey(model: RoutingModel): string {
+  const name = model.name.split(' · ')[0].replace(/\(latest\)/i, '').trim().toLowerCase();
+  return `${vendorOf(model)}|${name || model.ref}`;
+}
+
+function isAlias(ref: AIModelId): boolean {
+  return /:(cli:)?default$/.test(ref);
+}
+
+export interface ModelResult {
+  passed: number;
+  failed: number;
+}
+export type ModelResults = Record<string, ModelResult>;
+
+/** Points from real results on your projects, once a model has at least 3: -10 to +5. */
+export function learnedBonus(result: ModelResult | undefined): number {
+  if (!result) return 0;
+  const total = result.passed + result.failed;
+  if (total < 3) return 0;
+  return Math.max(-10, Math.min(5, Math.round((result.passed / total - 0.75) * 20)));
+}
+
+export interface RankedModel extends RoutingModel {
+  provider?: string;
+  contextWindow?: number;
+  vendor: string;
+  tier: Complexity;
+  base: number;
+  /** Points lost for being an older version than the vendor's newest model of the same size. */
+  agePenalty: number;
+  learned: number;
+  score: number;
+  results?: ModelResult;
+  /** Set when the same model is also offered directly; this copy is only used if that one is unavailable. */
+  duplicateOf?: AIModelId;
+  why: string;
+}
+
+/** Stronger first, then newer, then flat-rate over per-token; ties keep the providers' order. */
+function byStrength(a: RankedModel, b: RankedModel): number {
+  return b.score - a.score || compareVersions(versionOf(b.ref, b.name), versionOf(a.ref, a.name)) || Number(flatRate(b.ref)) - Number(flatRate(a.ref));
 }
 
 /**
- * The best model for each tier across every provider given: the strongest model of that tier,
- * newest version first. A model released later is picked up as soon as its provider lists it.
- * A tier with no model of its own borrows from its neighbours.
+ * Scores every model in context: the base for its size, minus 3 points per newer version the same
+ * vendor has at that size (at most 9), plus what real results taught. A copy of a model that is also
+ * offered directly (Claude through Magpie when Claude Code is connected) is marked as a duplicate.
  */
-export function suggestTiers(models: RoutingModel[]): Record<Complexity, AIModelId> {
-  const best = (tier: Complexity) => [...models].filter((m) => tierOf(m) === tier).sort(compareModels)[0]?.ref;
-  const found = { simple: best('simple'), standard: best('standard'), complex: best('complex') };
-  const any = [...models].sort(compareModels)[0]?.ref ?? '';
-  return {
-    simple: found.simple ?? found.standard ?? found.complex ?? any,
-    standard: found.standard ?? found.complex ?? found.simple ?? any,
-    complex: found.complex ?? found.standard ?? found.simple ?? any,
-  };
+export function rankModels<T extends RoutingModel & { provider?: string; contextWindow?: number }>(input: T[], results: ModelResults = {}): Array<RankedModel & T> {
+  const priceByKey = new Map<string, number>();
+  for (const m of input) if (m.price !== undefined && !priceByKey.has(modelKey(m))) priceByKey.set(modelKey(m), m.price);
+  const enriched = input.map((m) => (m.price === undefined && priceByKey.has(modelKey(m)) ? { ...m, price: priceByKey.get(modelKey(m)) } : m));
+  const models = enriched.some((m) => !isAlias(m.ref)) ? enriched.filter((m) => !isAlias(m.ref)) : enriched;
+  const versions = new Map<string, number[][]>();
+  for (const m of models) {
+    const group = `${vendorOf(m)}|${tierOf(m)}`;
+    const v = versionOf(m.ref, m.name);
+    const list = versions.get(group) ?? [];
+    if (!list.some((x) => compareVersions(x, v) === 0)) list.push(v);
+    versions.set(group, list);
+  }
+  for (const list of versions.values()) list.sort((a, b) => compareVersions(b, a));
+  const direct = new Map<string, AIModelId>();
+  for (const m of models) if (providerOfRef(m.ref) !== 'magpie' && !direct.has(modelKey(m))) direct.set(modelKey(m), m.ref);
+
+  const ranked = models.map((m) => {
+    const { tier, score: base } = profileOf(m);
+    const vendor = vendorOf(m);
+    const index = versions.get(`${vendor}|${tier}`)!.findIndex((x) => compareVersions(x, versionOf(m.ref, m.name)) === 0);
+    const agePenalty = Math.min(9, 3 * index);
+    const res = results[modelKey(m)];
+    const learned = learnedBonus(res);
+    const dup = providerOfRef(m.ref) === 'magpie' ? direct.get(modelKey(m)) : undefined;
+    const size = providerOfRef(m.ref) === 'ollama' ? null : sizeClass(m);
+    const parts = [
+      size ? `${CLASS_LABEL[size]}${m.price !== undefined && size !== 'unknown' && !/opus|fable|sonnet|haiku|luna|sol\b|terra|astra/i.test(text(m)) ? ` (${PRICE_LABEL})` : ''}` : 'Local model, free but weaker',
+      index === 0 ? `newest ${vendor === 'local' ? 'local' : vendor} at this size` : `${index} newer version${index === 1 ? '' : 's'} exist (−${agePenalty})`,
+      learned ? `${learned > 0 ? '+' : ''}${learned} from ${res!.passed + res!.failed} real tasks` : '',
+      dup ? 'also offered directly, used as backup' : '',
+    ].filter(Boolean);
+    return { ...m, vendor, tier, base, agePenalty, learned, score: base - agePenalty + learned, results: res, ...(dup ? { duplicateOf: dup } : {}), why: parts.join(' · ') } as RankedModel & T;
+  });
+  return ranked.sort(byStrength);
 }
 
-/** Suggested tiers with the user's own choices on top, as long as those models are still in scope. */
-export function resolveTiers(models: RoutingModel[], overrides: Partial<Record<Complexity, AIModelId>> = {}): Record<Complexity, AIModelId> {
-  const suggested = suggestTiers(models);
+/** Stronger first; within a family the newest version; then flat-rate over per-token. */
+export function compareModels(a: RoutingModel, b: RoutingModel): number {
+  const ranked = rankModels([a, b]);
+  return ranked[0].ref === a.ref ? -1 : ranked[0].ref === b.ref && a.ref !== b.ref ? 1 : 0;
+}
+
+/** Models within this many points of the best are treated as equally good and share the work. */
+export const PEER_MARGIN = 2;
+
+export interface TierChoice {
+  /** The best model for each level. */
+  tiers: Record<Complexity, AIModelId>;
+  /** Equally good models from different vendors for each level; tasks take turns between them. */
+  peers: Record<Complexity, AIModelId[]>;
+}
+
+/**
+ * The best model for each level across every provider given. Equally strong models from different
+ * vendors become peers that share the work. A level with no model of its own borrows from its neighbours.
+ */
+export function chooseTiers(models: RoutingModel[], results: ModelResults = {}): TierChoice {
+  const ranked = rankModels(models, results);
+  const usable = ranked.filter((m) => !m.duplicateOf);
+  const peersOf = (tier: Complexity): AIModelId[] => {
+    const inTier = usable.filter((m) => m.tier === tier);
+    if (!inTier.length) return [];
+    const top = inTier[0].score;
+    const seen = new Set<string>();
+    return inTier.filter((m) => m.score >= top - PEER_MARGIN && !seen.has(m.vendor) && seen.add(m.vendor)).map((m) => m.ref);
+  };
+  const found = { simple: peersOf('simple'), standard: peersOf('standard'), complex: peersOf('complex') };
+  const any = usable[0]?.ref ? [usable[0].ref] : [];
+  const peers: Record<Complexity, AIModelId[]> = {
+    simple: found.simple.length ? found.simple : found.standard.length ? found.standard : found.complex.length ? found.complex : any,
+    standard: found.standard.length ? found.standard : found.complex.length ? found.complex : found.simple.length ? found.simple : any,
+    complex: found.complex.length ? found.complex : found.standard.length ? found.standard : found.simple.length ? found.simple : any,
+  };
+  return { peers, tiers: { simple: peers.simple[0] ?? '', standard: peers.standard[0] ?? '', complex: peers.complex[0] ?? '' } };
+}
+
+export function suggestTiers(models: RoutingModel[], results: ModelResults = {}): Record<Complexity, AIModelId> {
+  return chooseTiers(models, results).tiers;
+}
+
+/** Suggested levels with the user's pinned models on top, as long as those models are still offered. */
+export function resolveRouting(models: RoutingModel[], overrides: Partial<Record<Complexity, AIModelId>> = {}, results: ModelResults = {}): TierChoice {
+  const choice = chooseTiers(models, results);
   const inScope = new Set(models.map((m) => m.ref));
-  const out = { ...suggested };
+  const out: TierChoice = { tiers: { ...choice.tiers }, peers: { ...choice.peers } };
   for (const tier of COMPLEXITIES) {
     const chosen = overrides[tier];
-    if (chosen && inScope.has(chosen)) out[tier] = chosen;
+    if (chosen && inScope.has(chosen)) {
+      out.tiers[tier] = chosen;
+      out.peers[tier] = [chosen];
+    }
   }
   return out;
+}
+
+export function resolveTiers(models: RoutingModel[], overrides: Partial<Record<Complexity, AIModelId>> = {}, results: ModelResults = {}): Record<Complexity, AIModelId> {
+  return resolveRouting(models, overrides, results).tiers;
 }
 
 /** With scope `sovereign`, only models of the provider Sovereign itself runs on (one subscription). */
@@ -166,22 +289,44 @@ export function routeTaskModel(
   return tiers[taskComplexity(task, junior)] || undefined;
 }
 
+/**
+ * Models for every task of a plan: a deliberate model stays (if allowed); otherwise the task gets a
+ * model for its complexity, taking turns between equally good peers so the work is spread over providers.
+ */
+export function assignPlanModels<T extends { model?: AIModelId; complexity?: Complexity; stage?: string; priority?: string }>(
+  tasks: T[],
+  choice: TierChoice,
+  allowed: ReadonlySet<AIModelId>,
+  isJunior: (task: T) => boolean = () => false
+): T[] {
+  const turn: Record<Complexity, number> = { simple: 0, standard: 0, complex: 0 };
+  return tasks.map((t) => {
+    if (t.model && (!allowed.size || allowed.has(t.model))) return t;
+    const tier = taskComplexity(t, isJunior(t));
+    const peers = choice.peers[tier].length ? choice.peers[tier] : [choice.tiers[tier]].filter(Boolean);
+    const model = peers.length ? peers[turn[tier]++ % peers.length] : undefined;
+    return model ? { ...t, model } : t;
+  });
+}
+
 export interface RoutingSettings {
   scope: ModelScope;
   overrides: Partial<Record<Complexity, AIModelId>>;
   sovereignModel: AIModelId | undefined;
   /** Providers to leave out, such as ones out of credit. */
   skip?: (providerId: string) => boolean;
+  /** Real results per model, which nudge the ranking. */
+  results?: ModelResults;
 }
 
 /** The models agents may use and the model for each complexity, from the live provider lists. */
-export function routingFor(providers: ProviderState[], settings: RoutingSettings): { models: Array<RoutingModel & { provider: string; contextWindow?: number }>; tiers: Record<Complexity, AIModelId> } {
+export function routingFor(providers: ProviderState[], settings: RoutingSettings): { models: Array<RoutingModel & { provider: string; contextWindow?: number }>; tiers: Record<Complexity, AIModelId>; peers: Record<Complexity, AIModelId[]> } {
   const all = providers
     .filter((p) => p.connection && !settings.skip?.(p.id))
-    .flatMap((p) => p.models.filter((m) => m.selectable !== false).map((m) => ({ ref: m.ref, name: m.name, provider: p.name, contextWindow: m.contextWindow })));
+    .flatMap((p) => p.models.filter((m) => m.selectable !== false).map((m) => ({ ref: m.ref, name: m.name, provider: p.name, contextWindow: m.contextWindow, price: m.pricing?.inputPerM })));
   const canonical = providers.flatMap((p) => p.models).find((m) => m.ref === settings.sovereignModel)?.canonicalRef ?? settings.sovereignModel;
   const models = scopeModels(all, settings.scope, canonical);
-  return { models, tiers: resolveTiers(models, settings.overrides) };
+  return { models, ...resolveRouting(models, settings.overrides, settings.results) };
 }
 
 /**

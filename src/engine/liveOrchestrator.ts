@@ -31,7 +31,8 @@ import { autoAppliesChanges, autoStartsRuns, selectAutoApply } from './approval'
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
-import { COMPLEXITIES, COMPLEXITY_HINT, compareModels, fallbackForTier, profileOf, routeTaskModel, routingFor } from './modelRouting';
+import { COMPLEXITIES, COMPLEXITY_HINT, assignPlanModels, fallbackForTier, rankModels, routingFor } from './modelRouting';
+import { useModelWatchStore } from '@/store/useModelWatchStore';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
 
 const MAX_QA_LOOPS = 1;
@@ -235,7 +236,12 @@ function routing() {
     overrides: store.tierModels,
     sovereignModel: resolveAgentModel(store.agents['agent-manager'], store.roleDefaults),
     skip: (id) => isProviderExhausted(exhausted, id),
+    results: useModelWatchStore.getState().results,
   });
+}
+
+function recordModelResult(model: string | undefined, passed: boolean) {
+  if (model) useModelWatchStore.getState().recordResult(model, passed);
 }
 
 function availableModels(): Array<{ ref: string; name: string; provider: string; contextWindow?: number }> {
@@ -243,21 +249,16 @@ function availableModels(): Array<{ ref: string; name: string; provider: string;
 }
 
 function modelCatalog(): string {
-  const { models, tiers } = routing();
+  const { models, peers } = routing();
   if (!models.length) return 'Available models: none besides the agents\u2019 own assignments.';
   const providerCount = new Set(models.map((m) => m.provider)).size;
+  const ranked = rankModels(models, useModelWatchStore.getState().results).filter((m) => !m.duplicateOf);
   const list =
-    `Available models across ${providerCount} connected provider${providerCount === 1 ? '' : 's'}, strongest first (ref | name | provider | level | strength 0-100):\n` +
-    [...models]
-      .sort(compareModels)
-      .map((m) => {
-        const p = profileOf(m);
-        return `- ${m.ref} | ${m.name} | ${m.provider} | ${p.tier} | ${p.score}${m.contextWindow ? ` | ${Math.round(m.contextWindow / 1000)}k context` : ''}`;
-      })
-      .join('\n');
+    `Available models across ${providerCount} connected provider${providerCount === 1 ? '' : 's'}, strongest first (ref | name | provider | level | strength 0-100, same scale for every vendor, adjusted by real results):\n` +
+    ranked.map((m) => `- ${m.ref} | ${m.name} | ${m.provider} | ${m.tier} | ${m.score}${m.contextWindow ? ` | ${Math.round(m.contextWindow / 1000)}k context` : ''}`).join('\n');
   if (!agentsState().complexityRouting) return list;
   const name = (ref: string) => models.find((m) => m.ref === ref)?.name ?? ref;
-  return `${list}\n\nModel for each task complexity (used when a task has no "model"):\n${COMPLEXITIES.map((c) => `- ${c}: ${tiers[c]} (${name(tiers[c])}) — ${COMPLEXITY_HINT[c]}`).join('\n')}`;
+  return `${list}\n\nModel for each task complexity (used when a task has no "model"; equally good models take turns):\n${COMPLEXITIES.map((c) => `- ${c}: ${peers[c].map((r) => `${r} (${name(r)})`).join(' or ')} — ${COMPLEXITY_HINT[c]}`).join('\n')}`;
 }
 
 const ASK_INSTRUCTIONS = 'Mode: ASK. Discuss, explain, inspect and advise. Do not propose an execution plan unless asked, and do not claim to have changed any files.';
@@ -394,17 +395,13 @@ const ROLE_PLACEMENT: Record<ProposedAgent['role'], { department: AgentProfile['
 export function routePlanModels(plan: OrchestratorPlan): OrchestratorPlan {
   const store = agentsState();
   if (!store.complexityRouting) return plan;
-  const { models, tiers } = routing();
+  const { models, tiers, peers } = routing();
   const allowed = new Set(models.map((m) => m.ref));
   const juniorKeys = new Set((plan.newAgents ?? []).filter((n) => n.junior).map((n) => n.key));
   return {
     ...plan,
     newAgents: plan.newAgents?.map((n) => (n.model && allowed.has(n.model) ? n : { ...n, model: tiers[n.junior ? 'simple' : n.role === 'architect' || n.role === 'qa' ? 'complex' : 'standard'] || undefined })),
-    tasks: plan.tasks.map((t) => {
-      const junior = juniorKeys.has(t.agentId) || Boolean(store.agents[t.agentId]?.internship?.isIntern);
-      const model = routeTaskModel(t, tiers, allowed, junior);
-      return model ? { ...t, model } : t;
-    }),
+    tasks: assignPlanModels(plan.tasks, { tiers, peers }, allowed, (t) => juniorKeys.has(t.agentId) || Boolean(store.agents[t.agentId]?.internship?.isIntern)),
   };
 }
 
@@ -600,6 +597,7 @@ When you change an existing file, start from its current contents (provided belo
       tokens += (review.usage?.inputTokens ?? 0) + (review.usage?.outputTokens ?? 0) || review.usage?.totalTokens || 0;
       const verdict = parseMentorVerdict(review.text);
       if (verdict.verdict === 'revise' && verdict.revised) output = verdict.revised;
+      if (verdict.verdict === 'revise') recordModelResult(result.model, false);
       if (verdict.verdict === 'revise' && verdict.notes) noteFeedback(mission.id, { agentId: agent.id, source: 'mentor', text: verdict.notes, taskId: task.id });
       agentsState().updateTask(task.id, {
         n1ReviewStatus: verdict.verdict === 'approve' ? 'approved' : 'bug_fixed',
@@ -694,6 +692,7 @@ When you change an existing file, start from its current contents (provided belo
       taskId: task.id,
       text: aborted ? `${agent.name} stopped "${task.title}"` : `${agent.name} failed "${task.title}": ${(err as Error).message}`,
     });
+    if (!aborted && !isQuotaError((err as Error).message)) recordModelResult(task.model || resolveAgentModel(agent, agentsState().roleDefaults), false);
     if (aborted) throw err;
   }
 }
@@ -748,6 +747,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
       return 'rejected';
     }
     for (const t of targets) {
+      recordModelResult(t.model, false);
       const feedback = verdict.issues.filter((i) => i.taskId === t.id || !i.taskId).map((i) => `- ${i.problem}`).join('\n') || verdict.summary;
       store.updateTask(t.id, { status: 'rejected', qaFeedback: feedback, stage: 'implementation' });
       noteFeedback(mission.id, { agentId: t.assignedAgentId, source: 'qa', text: `${t.title}: ${feedback}`, taskId: t.id });
@@ -784,6 +784,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
   }
 
   store.updateTask(QA_TASK_ID, { status: 'completed', progress: 100, completedAt: Date.now() });
+  for (const t of workTasks) if (currentMission()?.tasks.find((x) => x.id === t.id)?.status === 'completed') recordModelResult(currentMission()!.tasks.find((x) => x.id === t.id)!.model, true);
   store.logActivity({ kind: 'qa', level: 'success', runId: mission.id, agentId: qa.id, text: `Sentinel approved the run: ${verdict.summary}` });
   return 'approved';
 }
