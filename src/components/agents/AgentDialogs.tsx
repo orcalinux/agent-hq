@@ -5,6 +5,7 @@ import { Button, Field, Input, Select, Textarea } from '@/components/ui/primitiv
 import { Dialog } from '@/components/ui/Dialog';
 import { ModelSelect } from '@/components/ui/helpers';
 import { BUILTIN_SPECIALTIES } from '@/engine/internshipSystem';
+import { mentorCandidates, suggestMentor } from '@/engine/team';
 
 const CUSTOM = '__custom__';
 
@@ -77,7 +78,7 @@ export function OnboardInternDialog({ open, onClose }: { open: boolean; onClose:
   const agents = useAgentStore((s) => s.agents);
   const onboard = useAgentStore((s) => s.onboardIntern);
   const select = useAgentStore((s) => s.selectAgent);
-  const seniors = Object.values(agents).filter((a) => !a.internship?.isIntern && a.role !== 'manager');
+  const seniors = mentorCandidates(agents);
   const [name, setName] = useState('');
   const [choice, setChoice] = useState<string>('Frontend');
   const [customName, setCustomName] = useState('');
@@ -85,10 +86,11 @@ export function OnboardInternDialog({ open, onClose }: { open: boolean; onClose:
   const [focus, setFocus] = useState('');
   const [mentorId, setMentorId] = useState('');
   const [model, setModel] = useState('');
-  const mentor = mentorId || seniors[0]?.id || '';
   const known = Array.from(new Set(Object.values(agents).map((a) => a.internship?.specialty).filter((s): s is string => !!s && !(BUILTIN_SPECIALTIES as readonly string[]).includes(s))));
   const specialty: InternSpecialty = choice === CUSTOM ? customName.trim() : choice;
   const isCustom = choice === CUSTOM;
+  const suggested = suggestMentor(agents, specialty || 'Backend', isCustom ? baseRole : undefined);
+  const mentor = mentorId || suggested;
 
   const submit = () => {
     const id = onboard({ name: name.trim(), specialty, mentorId: mentor, model: model || undefined, baseRole: isCustom ? baseRole : undefined, focus: focus.trim() || undefined });
@@ -97,6 +99,7 @@ export function OnboardInternDialog({ open, onClose }: { open: boolean; onClose:
     setCustomName('');
     setFocus('');
     setChoice('Frontend');
+    setMentorId('');
     onClose();
   };
 
@@ -106,14 +109,14 @@ export function OnboardInternDialog({ open, onClose }: { open: boolean; onClose:
         <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Specialty">
-            <Select value={choice} onChange={(e) => setChoice(e.target.value)}>
+            <Select value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="Specialty">
               {[...BUILTIN_SPECIALTIES, ...known].map((s) => <option key={s} value={s}>{s}</option>)}
               <option value={CUSTOM}>New specialty…</option>
             </Select>
           </Field>
-          <Field label="Mentor (reviewer)">
-            <Select value={mentor} onChange={(e) => setMentorId(e.target.value)}>
-              {seniors.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          <Field label="Mentor (N+1 reviewer)" hint={mentor === suggested ? 'Suggested for this specialty' : undefined}>
+            <Select value={mentor} onChange={(e) => setMentorId(e.target.value)} aria-label="Mentor">
+              {seniors.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.role === 'manager' ? 'direct manager' : a.specialty || a.title}</option>)}
             </Select>
           </Field>
         </div>

@@ -30,6 +30,7 @@ import { selectRelevantFiles } from './taskContext';
 import { autoAppliesChanges, autoStartsRuns, selectAutoApply } from './approval';
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
+import { juniorsOf, pickModel, suggestMentor } from './team';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
 
 const MAX_QA_LOOPS = 1;
@@ -213,10 +214,13 @@ async function taskFileContext(task: KanbanTaskCard, mission: MissionState): Pro
 }
 
 function rosterDescription(): string {
-  return Object.values(agentsState().agents)
+  const agents = agentsState().agents;
+  return Object.values(agents)
     .map((a) => {
-      const mentor = a.internship?.isIntern ? `, junior — reviewed by ${agentsState().agents[a.internship.mentorId]?.name ?? a.internship.mentorId}` : '';
-      return `- ${a.id} | ${a.name} | ${a.title} (${a.role}${mentor})${a.specialty ? ` | Specialty: ${a.specialty}` : ''}${a.focus ? ` | Focus: ${a.focus}` : ''}`;
+      const mentor = a.internship?.isIntern ? `, junior — reports to and is reviewed by ${agents[a.internship.mentorId]?.name ?? a.internship.mentorId}` : '';
+      const juniors = juniorsOf(agents, a.id).map((j) => j.name);
+      const mentors = juniors.length ? ` | Mentors: ${juniors.join(', ')}` : '';
+      return `- ${a.id} | ${a.name} | ${a.title} (${a.role}${mentor})${a.specialty ? ` | Specialty: ${a.specialty}` : ''}${a.focus ? ` | Focus: ${a.focus}` : ''}${mentors}`;
     })
     .join('\n');
 }
@@ -239,12 +243,12 @@ const ASK_INSTRUCTIONS = 'Mode: ASK. Discuss, explain, inspect and advise. Do no
 function planInstructions(strategy: TeamStrategy): string {
   const teamRule =
     strategy === 'adaptive'
-      ? `Team design: first think about what THIS project actually needs (stack, domain, risk). Use existing roster agents where they fit. When the project needs a specialist the roster lacks (for example mobile, data/ML, DevOps, database, game, embedded, security), add up to 4 agents in "newAgents"; give each a short distinct name, a role (architect|frontend|backend|qa), a title, focused systemPrompt instructions for this project, an optional model ref from the available models, and a one-line reason. Assign tasks to them by their "key". Do not add agents you do not use.`
+      ? `Team design: you build the team yourself; the user does not edit it. First think about what THIS request actually needs (stack, domain, size, risk) and size the team to the work: one agent for a small fix, as many as the work needs for a large feature. There is no limit on the number of agents. Use existing roster agents where they fit. When the work needs a specialist the roster lacks (for example mobile, data/ML, DevOps, database, game, embedded, security), add it in "newAgents" with a short distinct name that is not already on the roster, a role (architect|frontend|backend|qa), a title, a specialty, focused systemPrompt instructions for this project, and a one-line reason. Always set "model" on every new agent to an exact ref from the available models: a strong model for architecture, security and hard logic, a fast and cheap one for simple, well-scoped work. For small, well-scoped work that a senior should review, add a junior instead: set "junior": true and "mentor" to the roster agent id or the key of a new senior in this plan who reviews it (N+1); prefer a mentor with the same specialty. Assign tasks to new agents by their "key". Do not add agents you do not use. New agents stay on the team for later requests and keep learning.`
       : 'Team design: use ONLY agents from the roster. Do not propose new agents.';
   return `Mode: PLAN. Produce an execution plan. Respond with ONLY a JSON object (no prose outside it) of the form:
-{"summary": "one paragraph", "newAgents": [{"key": "mobile", "name": "Orion", "role": "frontend", "title": "Mobile Engineer", "specialty": "<any project domain, such as IoT & Embedded>", "focus": "<domain instructions and verification requirements>", "systemPrompt": "...", "model": "<optional model ref>", "reason": "..."}], "tasks": [{"id": "t1", "title": "...", "description": "concrete instructions", "stage": "briefing|architecture|implementation", "agentId": "<roster agent id or new agent key>", "model": "<optional model ref for this task>", "priority": "critical|high|medium|low", "dependsOn": ["t0"]}]}
+{"summary": "one paragraph", "newAgents": [{"key": "mobile", "name": "Orion", "role": "frontend", "title": "Mobile Engineer", "specialty": "<any project domain, such as IoT & Embedded>", "focus": "<domain instructions and verification requirements>", "systemPrompt": "...", "model": "<exact model ref>", "reason": "...", "junior": false, "mentor": "<for juniors: roster agent id or new senior key>"}], "tasks": [{"id": "t1", "title": "...", "description": "concrete instructions", "stage": "briefing|architecture|implementation", "agentId": "<roster agent id or new agent key>", "model": "<optional model ref for this task>", "priority": "critical|high|medium|low", "dependsOn": ["t0"]}]}
 The role field is a workflow routing category only. Specialty is unrestricted: choose the expertise required by the project, including IoT, embedded firmware, electronics, robotics or any other domain.
-Rules: 2-10 tasks. Split work so tasks that depend on each other say so in dependsOn (outputs of dependencies are handed to the dependent task). Juniors only get small, well-scoped tasks. Do not add a QA task: QA review by Sentinel runs automatically. Dependencies must reference earlier task ids.
+Rules: as many tasks as the work needs, each one concrete and independently checkable. Split work so tasks that depend on each other say so in dependsOn (outputs of dependencies are handed to the dependent task). Juniors only get small, well-scoped tasks; their mentor reviews them automatically. Do not add a QA task: QA review by Sentinel runs automatically. Dependencies must reference earlier task ids.
 Model choice: set "model" on a task only when it clearly benefits (a strong model for architecture or hard logic, a fast cheap model for simple edits); otherwise omit it and the agent's own model is used. Only use refs from the available models list.
 ${teamRule}`;
 }
@@ -363,14 +367,29 @@ function materializeNewAgents(plan: OrchestratorPlan): OrchestratorPlan {
   if (!proposed.length) return plan;
   const store = agentsState();
   const idFor = new Map<string, string>();
-  for (const p of proposed) {
+  const available = availableModels().map((m) => m.ref);
+  const sovereignModel = resolveAgentModel(store.agents['agent-manager'], store.roleDefaults);
+  const ordered = [...proposed.filter((p) => !p.junior), ...proposed.filter((p) => p.junior)];
+  for (const p of ordered) {
     const existing = Object.values(store.agents).find((a) => a.name.toLowerCase() === p.name.toLowerCase());
     if (existing) {
       idFor.set(p.key, existing.id);
       continue;
     }
     const place = ROLE_PLACEMENT[p.role];
-    const id = store.addCustomAgent({ name: p.name, role: p.role, title: p.title, specialty: p.specialty, focus: p.focus, department: place.department, roomLocation: place.room, model: p.model ?? 'auto', systemPrompt: p.systemPrompt });
+    const roleDefaults = agentsState().roleDefaults;
+    const model = pickModel(p.model, p.junior ? 'intern' : p.role, roleDefaults, sovereignModel, available) || pickModel(undefined, p.role, roleDefaults, sovereignModel, available);
+    if (p.junior) {
+      const specialty = p.specialty || p.title;
+      const current = agentsState().agents;
+      const asked = p.mentor ? (idFor.get(p.mentor) ?? p.mentor) : '';
+      const mentorId = current[asked] && !current[asked].internship?.isIntern ? asked : suggestMentor(current, specialty, p.role);
+      const id = store.onboardIntern({ name: p.name, specialty, baseRole: p.role, focus: p.focus, mentorId, model, systemPrompt: p.systemPrompt });
+      idFor.set(p.key, id);
+      store.logActivity({ kind: 'info', level: 'info', agentId: id, text: `Sovereign added junior ${p.name} (${specialty}), mentored by ${agentsState().agents[mentorId]?.name ?? mentorId}${p.reason ? `: ${p.reason}` : ''}` });
+      continue;
+    }
+    const id = store.addCustomAgent({ name: p.name, role: p.role, title: p.title, specialty: p.specialty, focus: p.focus, department: place.department, roomLocation: place.room, model, systemPrompt: p.systemPrompt });
     idFor.set(p.key, id);
     store.logActivity({ kind: 'info', level: 'info', agentId: id, text: `Sovereign added ${p.name} (${p.title})${p.reason ? `: ${p.reason}` : ''}` });
   }

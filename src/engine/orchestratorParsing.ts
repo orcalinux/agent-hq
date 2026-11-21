@@ -64,7 +64,8 @@ function parseNewAgents(raw: unknown, agents: Record<string, AgentProfile>, mode
   if (!Array.isArray(raw)) return [];
   const taken = new Set(Object.values(agents).map((a) => a.name.toLowerCase()));
   const out: ProposedAgent[] = [];
-  for (const item of raw.slice(0, 4) as Array<Record<string, unknown>>) {
+  for (const item of raw as Array<Record<string, unknown>>) {
+    if (!item || typeof item !== 'object') continue;
     const name = String(item.name ?? '').trim().slice(0, 40);
     if (!name || taken.has(name.toLowerCase())) continue;
     taken.add(name.toLowerCase());
@@ -83,9 +84,28 @@ function parseNewAgents(raw: unknown, agents: Record<string, AgentProfile>, mode
         `You are ${name}, ${title} on an AI software engineering team coordinated by Sovereign. Be precise and output complete files.`,
       model,
       reason: typeof item.reason === 'string' ? item.reason.slice(0, 300) : undefined,
+      ...(item.junior === true || item.level === 'junior' ? { junior: true, mentor: typeof item.mentor === 'string' ? item.mentor.trim() : undefined } : {}),
     });
   }
-  return out;
+  return resolveMentors(out, agents);
+}
+
+/** Points each junior's mentor at a roster agent id or a senior's plan key; unknown mentors are left for later matching. */
+function resolveMentors(proposed: ProposedAgent[], agents: Record<string, AgentProfile>): ProposedAgent[] {
+  const byName = new Map(Object.values(agents).filter((a) => !a.internship?.isIntern).map((a) => [a.name.toLowerCase(), a.id]));
+  const seniorKeys = new Map<string, string>();
+  proposed.filter((p) => !p.junior).forEach((p) => {
+    seniorKeys.set(p.key, p.key);
+    seniorKeys.set(p.key.slice(4), p.key);
+    seniorKeys.set(p.name.toLowerCase(), p.key);
+  });
+  return proposed.map((p) => {
+    if (!p.junior) return p;
+    const ref = (p.mentor ?? '').trim();
+    const roster = agents[ref] && !agents[ref].internship?.isIntern ? ref : byName.get(ref.toLowerCase());
+    const mentor = roster ?? seniorKeys.get(ref) ?? seniorKeys.get(ref.toLowerCase()) ?? seniorKeys.get(slug(ref.replace(/^new:/, '')));
+    return { ...p, mentor };
+  });
 }
 
 export function parsePlan(text: string, agents: Record<string, AgentProfile>, availableModels?: string[]): OrchestratorPlan {
@@ -101,7 +121,7 @@ export function parsePlan(text: string, agents: Record<string, AgentProfile>, av
     newByRef.set(n.name.toLowerCase(), n);
   });
   const usedIds = new Set<string>();
-  const tasks: PlanTask[] = raw.tasks.slice(0, 20).map((t: Record<string, unknown>, idx: number) => {
+  const tasks: PlanTask[] = raw.tasks.map((t: Record<string, unknown>, idx: number) => {
     let id = String(t.id ?? `t${idx + 1}`).trim() || `t${idx + 1}`;
     while (usedIds.has(id)) id = `${id}-${idx}`;
     usedIds.add(id);
@@ -127,6 +147,9 @@ export function parsePlan(text: string, agents: Record<string, AgentProfile>, av
   for (const t of tasks) t.dependsOn = t.dependsOn.filter((d) => ids.has(d) && d !== t.id);
   topoOrder(tasks);
   const used = new Set(tasks.map((t) => t.agentId));
+  newAgents.forEach((n) => {
+    if (n.junior && n.mentor && used.has(n.key)) used.add(n.mentor);
+  });
   return { summary: String(raw.summary ?? ''), tasks, newAgents: newAgents.filter((n) => used.has(n.key)), status: 'proposed' };
 }
 

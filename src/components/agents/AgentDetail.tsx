@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Cpu, GraduationCap, ListChecks, ScrollText, Sparkles, Trash2 } from 'lucide-react';
+import { Activity, AlertTriangle, Cpu, GraduationCap, ListChecks, ScrollText, Sparkles, Trash2, Users } from 'lucide-react';
 import { useAgentStore, resolveAgentModel, formatClock } from '@/store/useAgentStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { SidePanel } from '@/components/ui/Dialog';
@@ -11,6 +11,7 @@ import type { AgentProfile, AutonomyLevel } from '@/types';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { AgentAvatar } from './vizShared';
 import { AgentMemory } from './AgentMemory';
+import { juniorsOf, mentorCandidates } from '@/engine/team';
 
 const TINT = {
   model: '#2563EB',
@@ -114,6 +115,7 @@ export function AgentDetail({ selectedId, open }: { selectedId: string; open: bo
   const select = useAgentStore((s) => s.selectAgent);
   const remove = useAgentStore((s) => s.removeAgent);
   const graduate = useAgentStore((s) => s.graduateIntern);
+  const setMentor = useAgentStore((s) => s.setMentor);
   const width = useLayoutStore((s) => s.detailWidth);
 
   const mine = useMemo(() => activity.filter((e) => e.agentId === selectedId), [activity, selectedId]);
@@ -126,6 +128,7 @@ export function AgentDetail({ selectedId, open }: { selectedId: string; open: bo
   const tone = statusTone(agent.status);
   const done = agent.velocityMetrics.tasksCompleted;
   const failed = agent.velocityMetrics.tasksFailed;
+  const juniors = juniorsOf(agents, agent.id);
 
   return (
     <SidePanel
@@ -156,12 +159,35 @@ export function AgentDetail({ selectedId, open }: { selectedId: string; open: bo
 
       {intern?.isIntern ? (
         <PanelCard icon={GraduationCap} tint={TINT.intern} title="Internship" hint={`Level ${intern.level} · ${intern.levelTitle}`}>
-          <p className="text-[12.5px] text-fg-muted">Reviewed by {agents[intern.mentorId]?.name ?? intern.mentorId}</p>
+          <Field label="Mentor (N+1 reviewer)" hint="Reviews this junior's work before QA. Change it any time.">
+            <Select value={intern.mentorId} onChange={(e) => setMentor(agent.id, e.target.value)} aria-label="Mentor">
+              {agents[intern.mentorId] ? null : <option value={intern.mentorId}>{intern.mentorId} (removed)</option>}
+              {mentorCandidates(agents).map((a) => <option key={a.id} value={a.id}>{a.name} · {a.role === 'manager' ? 'direct manager' : a.specialty || a.title}</option>)}
+            </Select>
+          </Field>
           <ProgressBar value={(intern.xp / intern.targetXp) * 100} />
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11.5px] text-fg-subtle">{intern.xp} / {intern.targetXp} XP from approved reviews</p>
             {intern.graduatedAt ? <Badge tone="success">Graduated</Badge> : <Button size="sm" disabled={!intern.graduationEligible} onClick={() => graduate(agent.id)}>Graduate to senior</Button>}
           </div>
+        </PanelCard>
+      ) : null}
+
+      {juniors.length ? (
+        <PanelCard icon={Users} tint={TINT.intern} title="Mentors" hint={`${juniors.length} junior${juniors.length === 1 ? '' : 's'} report to ${agent.name}`} bodyClassName="p-0">
+          <ul className="divide-y divide-line" aria-label={`${agent.name}'s juniors`}>
+            {juniors.map((j) => (
+              <li key={j.id}>
+                <button type="button" onClick={() => select(j.id)} className="flex w-full min-w-0 items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-surface-2">
+                  <AgentAvatar agent={j} size={24} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12.5px] font-medium">{j.name}</span>
+                    <span className="block truncate text-[11px] text-fg-subtle">{j.internship?.specialty} · Level {j.internship?.level} · {j.internship?.xp} XP</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </PanelCard>
       ) : null}
 

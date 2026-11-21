@@ -321,6 +321,10 @@ export interface ProposedAgent {
   systemPrompt: string;
   model?: string;
   reason?: string;
+  /** A junior agent, reviewed by `mentor` (N+1) before QA. */
+  junior?: boolean;
+  /** Roster agent id or the key of a senior in the same plan. */
+  mentor?: string;
 }
 
 export interface OrchestratorPlan {

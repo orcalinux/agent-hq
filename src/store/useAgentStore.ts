@@ -45,6 +45,7 @@ import {
   emptyUsage,
 } from './defaultState';
 import { createNewInternProfile, promoteGraduatedIntern, applyInternXpGain } from '../engine/internshipSystem';
+import { juniorsOf, mentorCandidates, suggestMentor } from '../engine/team';
 import { getSOPStageIndex, simulationController } from '../engine/simulationEngine';
 import { safeStorage } from './storage';
 
@@ -55,6 +56,15 @@ export function formatClock(ts: number): string {
 
 function uid(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function withMentor(junior: AgentProfile, mentor: AgentProfile): AgentProfile {
+  const old = junior.internship!.mentorId;
+  return {
+    ...junior,
+    internship: { ...junior.internship!, mentorId: mentor.id },
+    waitingFor: junior.waitingFor && junior.waitingFor.agentId === old ? { ...junior.waitingFor, agentId: mentor.id, agentName: `${mentor.name} (N+1 Mentor)` } : junior.waitingFor,
+  };
 }
 
 /** The model an agent actually runs on: its own override, else the default for its role. */
@@ -127,6 +137,8 @@ export interface AgentStoreState {
   addCustomAgent: (spec: NewAgentSpec) => string;
   removeAgent: (agentId: string) => void;
   onboardIntern: (spec: InternOnboardSpec) => string;
+  /** Makes another senior the junior's N+1 mentor (reviewer). */
+  setMentor: (internId: string, mentorId: string) => void;
   awardInternXp: (internId: string, xpDelta: number, reason: string, skillUnlocked?: string, seniorAgentId?: string) => void;
   graduateIntern: (internId: string) => void;
   resetAgentUsage: () => void;
@@ -322,7 +334,26 @@ export const useAgentStore = create<AgentStoreState>()(
             if (CORE_AGENT_IDS.includes(agentId) || !s.agents[agentId]) return s;
             const agents = { ...s.agents };
             delete agents[agentId];
-            return { agents, selectedAgentId: s.selectedAgentId === agentId ? null : s.selectedAgentId };
+            let logs = s.terminalLogs;
+            for (const junior of juniorsOf(agents, agentId)) {
+              const next = suggestMentor(agents, junior.internship!.specialty, junior.internship!.baseRole);
+              if (!next) continue;
+              agents[junior.id] = withMentor(junior, agents[next]);
+              logs = pushLog({ level: 'info', agentId: junior.id, agentName: junior.name, text: `${junior.name} is now mentored by ${agents[next].name}` }, logs);
+            }
+            return { agents, terminalLogs: logs, selectedAgentId: s.selectedAgentId === agentId ? null : s.selectedAgentId };
+          }),
+
+        setMentor: (internId, mentorId) =>
+          set((s) => {
+            const junior = s.agents[internId];
+            const mentor = s.agents[mentorId];
+            if (!junior?.internship?.isIntern || !mentor || mentorId === internId || !mentorCandidates(s.agents).some((a) => a.id === mentorId)) return s;
+            if (junior.internship.mentorId === mentorId) return s;
+            return {
+              agents: { ...s.agents, [internId]: withMentor(junior, mentor) },
+              terminalLogs: pushLog({ level: 'info', agentId: internId, agentName: junior.name, text: `${junior.name} is now mentored by ${mentor.name}` }, s.terminalLogs),
+            };
           }),
 
         onboardIntern: (spec) => {

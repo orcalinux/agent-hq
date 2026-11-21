@@ -66,25 +66,29 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
       </div>
       {newAgents.length ? (
         <div className="border-b border-line bg-accent-soft/40 px-3 py-2">
-          <div className="mb-1.5 truncate text-[12px] font-semibold">Sovereign wants to add {newAgents.length === 1 ? 'an agent' : `${newAgents.length} agents`} for this project</div>
+          <div className="mb-1.5 truncate text-[12px] font-semibold">Sovereign is adding {newAgents.length === 1 ? 'an agent' : `${newAgents.length} agents`} to the team</div>
           <ul className="space-y-1.5">
-            {newAgents.map((n) => (
-              <li key={n.key} className="rounded-lg border border-line bg-surface px-2 py-1.5">
+            {newAgents.map((n) => {
+              const mentor = n.junior ? (n.mentor ? agents[n.mentor]?.name ?? newAgents.find((m) => m.key === n.mentor)?.name : undefined) : undefined;
+              return (
+              <li key={n.key} className="rounded-lg border border-line bg-surface px-2 py-1.5" data-testid="new-agent">
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[12.5px] font-medium"><span className="min-w-0 truncate">{n.name} <span className="font-normal text-fg-muted">· {n.title}</span></span> <Badge className="shrink-0">{n.role}</Badge></div>
+                    <div className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[12.5px] font-medium"><span className="min-w-0 truncate">{n.name} <span className="font-normal text-fg-muted">· {n.title}</span></span> {n.junior ? <Badge tone="accent" className="shrink-0">junior</Badge> : <Badge className="shrink-0">{n.role}</Badge>}</div>
+                    {n.junior ? <p className="truncate text-[11.5px] text-fg-muted">Reports to {mentor ?? 'the best-matching senior'} (N+1 review)</p> : null}
                     {n.reason ? <p className="text-[11.5px] text-fg-muted">{n.reason}</p> : null}
                   </div>
                   {editable ? <IconButton icon={X} label={`Don't add ${n.name}`} size="sm" onClick={() => dropNewAgent(n.key)} /> : null}
                 </div>
                 <div className="mt-1 flex items-center gap-2">
                   <span className="shrink-0 text-[11px] text-fg-subtle">Model</span>
-                  <ModelSelect value={n.model ?? ''} onChange={(ref) => setNewAgentModel(n.key, ref)} emptyLabel={`${n.role} default`} disabled={!editable} className="h-6 flex-1" aria-label={`Model for ${n.name}`} />
+                  <ModelSelect value={n.model ?? ''} onChange={(ref) => setNewAgentModel(n.key, ref)} emptyLabel={`${n.junior ? 'Junior' : n.role} default`} disabled={!editable} className="h-6 flex-1" aria-label={`Model for ${n.name}`} />
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
-          {editable ? <p className="mt-1 text-[11px] text-fg-subtle">They are created only if you approve. Remove one to give its tasks to an existing agent.</p> : null}
+          {editable ? <p className="mt-1 text-[11px] text-fg-subtle">They join the team when the plan runs and keep learning on later tasks. Nothing to edit; remove one only if you want its tasks given to an existing agent.</p> : null}
         </div>
       ) : null}
       <ol className="divide-y divide-line">

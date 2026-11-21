@@ -49,6 +49,7 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
 - **Plan first, then build.** Sovereign proposes tasks, agents and models; you edit and approve before anything runs.
 - **Parallel by design.** Independent tasks run in waves, up to 3 at once and never two at once for the same agent.
 - **Reviewed work.** Juniors get an N+1 senior review, and Sentinel QA can send work back once for rework.
+- **Sovereign builds the team.** For each plan, Sovereign decides how many agents are needed, their names and exact models, and which are juniors under which senior. There is no cap on agents or tasks, and new agents stay on the team. See [Team building and mentors](#team-building-and-mentors).
 - **Agents that learn.** Each project has a long-term memory in `.agent-hq/memory/lessons.json`. Agents are taught with `/remember`, learn from QA and mentor feedback and from a short reflection after every run, and receive the relevant lessons in their next prompt. **Insights → Growth** shows each agent's level, focus areas and learning over time. See [Agent memory](#agent-memory).
 - **You choose how much to trust the agents.** By default edits arrive as diffs in the **Changes** tab and are only written when you apply them. **Auto-apply** writes QA-approved changes for you, and **Full access** also skips plan approval. Every auto-applied file can be undone.
 - **Local and bring-your-own-model.** Claude Code, Codex, Gemini, Ollama and the Magpie gateway, with automatic failover when a provider runs out of credit.
@@ -132,14 +133,21 @@ Agents keep what they learn **per project**, in plain JSON you can read, edit an
 - **Lessons, confirmations, uses and tasks** with the success rate, the mix of lesson kinds, lessons per week over the last 8 weeks, how many came from reviews or from you, and the latest lesson.
 - Team totals, a team learning chart and a feed of the newest lessons. **Open memory** jumps to the agent's Memory panel. On the desktop, the tray's quick status shows the lesson count and the most experienced agent.
 
+## Team building and mentors
+
+- **Every junior has a mentor.** A senior, or Sovereign as the direct manager, reviews their work (N+1). Onboarding suggests one by specialty; change it any time in the agent's **Internship** card. A senior's **Mentors** card lists their juniors.
+- **Sovereign builds the team.** In a plan it chooses the number of agents, their names, exact models, and juniors with mentors, then creates them when you approve. They stay on the team.
+- **No caps** on agents or tasks. Runs still execute up to 3 tasks at once.
+- **Settings → Team building:** *Sovereign, automatically* (default) or *Only my agents*.
+
 ## Features
 
 | Area | What you get |
 | --- | --- |
 | **Workspace** | File explorer, multi-tab editor, integrated terminal with tabs, diff view, an **Agent commands** runner (allow-listed commands, no shell), agent logs, problems, and the orchestrator chat. Resizable panels, code and chat layouts. |
 | **Orchestrator** | Ask, Plan and Build modes. Plans list tasks, assigned agents and models; you can edit, remove or reassign before approving. Runs execute in dependency waves, up to 3 tasks at once and never two at once for the same agent. Each task receives the current contents of the files attached to the request and of the workspace files its description names, so agents edit existing code instead of rewriting it. |
-| **Adaptive team** | Sovereign can design the team for the project, including new agents, or you can restrict it to your own agents. |
-| **Agents** | Graph, Office and List views. The graph supports zoom, pan, dragging nodes and reset. The Office is a live floor plan with a glass HUD, minimap, daylight that fades to night, animated avatars and speech bubbles; monitors light up while an agent works. Change models, add agents, onboard juniors. |
+| **Adaptive team** | Sovereign designs the team for the work, with no limit on agents or tasks, exact models and juniors with mentors; or restrict it to your own agents in Settings → Team building. |
+| **Agents** | Graph, Office and List views. The graph supports zoom, pan, dragging nodes and reset. The Office is a live floor plan with a glass HUD, minimap, daylight that fades to night, animated avatars and speech bubbles; monitors light up while an agent works. Change models, add agents, onboard juniors with an N+1 mentor you can change any time. |
 | **Custom specialties** | Create or edit any agent with a free-text role/specialty (IoT, embedded firmware, robotics, or any domain) and domain instructions. Sovereign sees these when assigning tasks, and the agent receives them on every task. Workflow categories preserve routing and model defaults. Junior agents also support custom study tracks. |
 | **Connections & Models** | Detects installed CLIs, connects providers, discovers real models, and sets default models per role. |
 | **Failover** | If a provider runs out of credit during a run, affected agents are rerouted to another connected provider and the switch is logged. |

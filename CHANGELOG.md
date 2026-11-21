@@ -11,6 +11,23 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.8.0] — 2026-11-21
+
+### Added
+- **N+1 mentors for juniors.** Every junior has a direct manager: a senior, or Sovereign. Onboarding suggests the best match for the specialty (shared words, same role, and the senior with the fewest juniors), and you can change the **Mentor** at any time in the agent's Internship card.
+- **Mentors card.** A senior with juniors lists them in their details; click one to open it.
+- **Sovereign builds the team by itself.** In a plan, Sovereign decides how many agents the work needs, their names, an exact model for each, and which are juniors with which mentor. Nothing needs to be edited by hand, and new agents stay on the team after the run.
+- **No caps.** The 4-agent and 20-task limits on a plan are gone. Seniors are created before their juniors so every mentor exists.
+- **Settings → Team building.** Choose **Sovereign, automatically** (default) or **Only my agents**.
+- The plan card shows a junior badge and who it reports to (N+1 review).
+
+### Changed
+- Removing a senior moves their juniors to the best remaining mentor and logs each move.
+- Sovereign's roster shows who each junior reports to and who each senior mentors.
+
+### Verification
+- Unit tests for mentor candidates, suggestion and model picking; browser tests for onboarding with a suggested mentor, changing a mentor, Settings, and a Sovereign plan that adds a senior with a junior under it.
+
 ## [0.7.0] — 2026-11-20
 
 ### Added

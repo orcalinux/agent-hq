@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { Bell, Brain, CircleArrowUp, Database, FolderOpen, Keyboard, Palette, ShieldCheck, TestTube2, type LucideIcon } from 'lucide-react';
+import { Bell, Brain, CircleArrowUp, Database, FolderOpen, Keyboard, Palette, ShieldCheck, TestTube2, Users, type LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { Badge, Button, Field, Input, PageTitle, Tabs } from '@/components/ui/primitives';
-import type { ThemePreference } from '@/types';
+import type { TeamStrategy, ThemePreference } from '@/types';
 import { fmtDateTime } from '@/components/ui/helpers';
 import { SHORTCUTS } from '@/components/shell/useShortcuts';
 import { ApprovalModeCards } from '@/components/shell/ApprovalMode';
@@ -17,6 +17,7 @@ const SECTIONS: Array<{ id: string; title: string; hint: string; icon: LucideIco
   { id: 'project', title: 'Project', hint: 'The folder agents work in', icon: FolderOpen, tint: '#2563EB' },
   { id: 'permissions', title: 'Agent permissions', hint: 'How much they may do alone', icon: ShieldCheck, tint: '#16A34A' },
   { id: 'memory', title: 'Memory and learning', hint: 'What agents learn and how it is found', icon: Brain, tint: '#9333EA' },
+  { id: 'team', title: 'Team building', hint: 'Who decides which agents work', icon: Users, tint: '#EA580C' },
   { id: 'appearance', title: 'Appearance', hint: 'Theme and layout', icon: Palette, tint: '#DB2777' },
   { id: 'updates', title: 'Updates', hint: 'Version and new releases', icon: CircleArrowUp, tint: '#0EA5E9' },
   { id: 'qa', title: 'QA verification', hint: 'Checks run after each task', icon: TestTube2, tint: '#D97706' },
@@ -39,6 +40,38 @@ function Section({ id, children }: { id: string; children: ReactNode }) {
       </div>
       <div className="space-y-3 px-5 py-4">{children}</div>
     </section>
+  );
+}
+
+const TEAM_HINT: Record<TeamStrategy, string> = {
+  adaptive: 'For each request Sovereign decides how many agents are needed, creates the specialists and juniors it is missing with names, models and mentors, and assigns the tasks. New agents stay on the team and keep learning. With Full access the plan also runs without waiting for you.',
+  fixed: 'Sovereign only assigns tasks to the agents you already have and never adds new ones.',
+};
+
+function TeamSettings() {
+  const strategy = useAgentStore((s) => s.teamStrategy);
+  const setStrategy = useAgentStore((s) => s.setTeamStrategy);
+  const juniors = useAgentStore((s) => Object.values(s.agents).filter((a) => a.internship?.isIntern).length);
+  return (
+    <>
+      <div className="space-y-1">
+        <p className="text-[12px] font-medium text-fg-muted">Who builds the team</p>
+        <Tabs<TeamStrategy>
+          label="Who builds the team"
+          value={strategy}
+          onChange={setStrategy}
+          className="w-fit"
+          items={[
+            { id: 'adaptive', label: 'Sovereign, automatically' },
+            { id: 'fixed', label: 'Only my agents' },
+          ]}
+        />
+        <p className="text-[11.5px] text-fg-subtle">{TEAM_HINT[strategy]}</p>
+      </div>
+      <p className="text-[11.5px] text-fg-subtle">
+        Every junior has an N+1 mentor, a senior or Sovereign as direct manager, who reviews its work before QA.{juniors ? ` ${juniors} junior${juniors === 1 ? '' : 's'} on the team;` : ''} change a mentor from the junior's details in Agents.
+      </p>
+    </>
   );
 }
 
@@ -140,6 +173,10 @@ export default function SettingsView() {
 
           <Section id="memory">
             <MemorySettings />
+          </Section>
+
+          <Section id="team">
+            <TeamSettings />
           </Section>
 
           <Section id="appearance">
