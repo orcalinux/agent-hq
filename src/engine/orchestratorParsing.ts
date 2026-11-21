@@ -134,6 +134,7 @@ export function parsePlan(text: string, agents: Record<string, AgentProfile>, av
     const priority = PRIORITIES.includes(t.priority as (typeof PRIORITIES)[number]) ? (t.priority as PlanTask['priority']) : 'medium';
     const model = typeof t.model === 'string' && t.model && (!models || models.has(t.model)) ? t.model : undefined;
     const complexity = parseComplexity(t.complexity ?? t.difficulty);
+    const modelReason = model && typeof t.modelReason === 'string' && t.modelReason.trim() ? t.modelReason.trim().slice(0, 200) : undefined;
     return {
       id,
       title: String(t.title ?? `Task ${idx + 1}`).slice(0, 160),
@@ -144,6 +145,7 @@ export function parsePlan(text: string, agents: Record<string, AgentProfile>, av
       dependsOn: Array.isArray(t.dependsOn) ? t.dependsOn.map(String) : [],
       ...(model ? { model } : {}),
       ...(complexity ? { complexity } : {}),
+      ...(modelReason ? { modelReason } : {}),
     };
   });
   const ids = new Set(tasks.map((t) => t.id));

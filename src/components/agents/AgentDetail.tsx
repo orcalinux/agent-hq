@@ -4,7 +4,7 @@ import { useAgentStore, resolveAgentModel, formatClock } from '@/store/useAgentS
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { SidePanel } from '@/components/ui/Dialog';
 import { PanelCard, StatTile } from '@/components/ui/Card';
-import { Badge, Button, Field, Input, ProgressBar, Select, StatusDot, Textarea } from '@/components/ui/primitives';
+import { Badge, Button, Field, Input, ProgressBar, Select, StatusDot, Tabs, Textarea } from '@/components/ui/primitives';
 import { ModelSelect, fmtDuration, fmtRelative, fmtTokens, modelLabel, statusTone, usageCostLabel } from '@/components/ui/helpers';
 import { CORE_AGENT_IDS } from '@/store/defaultState';
 import type { AgentProfile, AutonomyLevel } from '@/types';
@@ -26,6 +26,7 @@ const TINT = {
 function ConfigForm({ agent }: { agent: AgentProfile }) {
   const update = useAgentStore((s) => s.updateAgent);
   const reassign = useAgentStore((s) => s.reassignModel);
+  const setLocked = useAgentStore((s) => s.setAgentModelLocked);
   const roleDefaults = useAgentStore((s) => s.roleDefaults);
   const providers = useConnectionsStore((s) => s.providers);
   const initial = {
@@ -64,6 +65,27 @@ function ConfigForm({ agent }: { agent: AgentProfile }) {
       <PanelCard icon={Cpu} tint={TINT.model} title="Model" hint={agent.model ? 'Chosen for this agent' : 'Follows the role default'}>
         <Field label="Model" hint={agent.model ? undefined : 'Using the role default: ' + (effective ? modelLabel(providers, effective) : 'none set')}>
           <ModelSelect value={agent.model} onChange={(ref) => reassign(agent.id, ref)} emptyLabel="Use role default" />
+        </Field>
+        <Field
+          label="How this model is used"
+          hint={
+            !agent.model
+              ? 'Choose a model for this agent to lock it.'
+              : agent.modelLocked
+                ? "Always: this agent's tasks run on this model, whatever their complexity or Sovereign suggests."
+                : 'Dynamic: tasks use the model for their complexity (Settings → Models and routing); this model is the fallback.'
+          }
+        >
+          <Tabs<string>
+            label={`How ${agent.name}'s model is used`}
+            value={agent.model && agent.modelLocked ? 'locked' : 'dynamic'}
+            onChange={(id) => setLocked(agent.id, id === 'locked')}
+            className="w-fit"
+            items={[
+              { id: 'dynamic', label: 'Dynamic' },
+              { id: 'locked', label: 'Always this model', disabled: !agent.model },
+            ]}
+          />
         </Field>
         <Field label="Autonomy">
           <Select value={form.autonomy} onChange={(e) => set('autonomy')(e.target.value as AutonomyLevel)}>

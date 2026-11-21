@@ -23,6 +23,7 @@ import type {
   OrchestratorMode,
   TeamStrategy,
   Complexity,
+  LevelMode,
   ModelScope,
   ProposedFileChange,
   QADebateMessage,
@@ -97,6 +98,10 @@ export interface AgentStoreState {
   modelScopeChosen: boolean;
   complexityRouting: boolean;
   tierModels: Partial<Record<Complexity, AIModelId>>;
+  /** Preferred (default) or Locked, per pinned level. */
+  tierModes: Partial<Record<Complexity, LevelMode>>;
+  /** Force my setup: pins and locked agents always win; Sovereign cannot change models. */
+  forceSetup: boolean;
   approvalMode: ApprovalMode;
   learningMode: LearningMode;
   managerChatMessages: ManagerChatMessage[];
@@ -138,6 +143,9 @@ export interface AgentStoreState {
   setComplexityRouting: (on: boolean) => void;
   /** Pin a model for a complexity, or pass '' to go back to the automatic (newest) choice. */
   setTierModel: (tier: Complexity, model: AIModelId) => void;
+  setTierMode: (tier: Complexity, mode: LevelMode) => void;
+  setForceSetup: (on: boolean) => void;
+  setAgentModelLocked: (agentId: string, locked: boolean) => void;
   setApprovalMode: (mode: ApprovalMode) => void;
   setLearningMode: (mode: LearningMode) => void;
 
@@ -240,6 +248,8 @@ export const useAgentStore = create<AgentStoreState>()(
         modelScopeChosen: false,
         complexityRouting: true,
         tierModels: {},
+        tierModes: {},
+        forceSetup: false,
         approvalMode: 'ask',
         learningMode: 'every-run',
         managerChatMessages: DEFAULT_MANAGER_CHAT_MESSAGES,
@@ -289,6 +299,14 @@ export const useAgentStore = create<AgentStoreState>()(
             if (model) next[tier] = model;
             else delete next[tier];
             return { tierModels: next };
+          }),
+        setTierMode: (tier, mode) => set((s) => ({ tierModes: { ...s.tierModes, [tier]: mode } })),
+        setForceSetup: (on) => set({ forceSetup: on }),
+        setAgentModelLocked: (agentId, locked) =>
+          set((s) => {
+            const agent = s.agents[agentId];
+            if (!agent) return {};
+            return { agents: { ...s.agents, [agentId]: { ...agent, modelLocked: locked || undefined } } };
           }),
         setApprovalMode: (mode) => set({ approvalMode: mode }),
         setLearningMode: (mode) => set({ learningMode: mode }),
@@ -904,6 +922,8 @@ export const useAgentStore = create<AgentStoreState>()(
         modelScopeChosen: s.modelScopeChosen,
         complexityRouting: s.complexityRouting,
         tierModels: s.tierModels,
+        tierModes: s.tierModes,
+        forceSetup: s.forceSetup,
         approvalMode: s.approvalMode,
         learningMode: s.learningMode,
         managerChatMessages: s.managerChatMessages.slice(-100).map((m) => (m.streaming ? { ...m, streaming: false, error: m.error ?? 'Interrupted' } : m)),

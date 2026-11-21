@@ -72,6 +72,9 @@ function taskReply(title: string): string {
 export async function mockProvider(page: Page, delayMs = 700, opts: { magpie?: boolean } = {}): Promise<ChatCall[]> {
   const calls: ChatCall[] = [];
   const providers = opts.magpie ? [MAGPIE_PROVIDER, ...PROVIDERS] : PROVIDERS;
+  await page.route('**/api/magpie/**', (route) =>
+    route.fulfill({ json: route.request().url().includes('/quotas') ? { ok: true, quotas: [] } : { ok: true, results: [] } })
+  );
   await page.route('**/api/connections', (route) => route.fulfill({ json: { ok: true, providers } }));
   await page.route('**/api/connections/detect', (route) =>
     route.fulfill({
@@ -131,5 +134,5 @@ export function trapErrors(page: Page): string[] {
 
 export async function pick(page: Page, label: string, option: string | RegExp) {
   await page.getByRole('button', { name: label, exact: true }).click();
-  await page.getByRole('option', { name: option }).click();
+  await page.getByRole('option', typeof option === 'string' ? { name: option, exact: true } : { name: option }).click();
 }

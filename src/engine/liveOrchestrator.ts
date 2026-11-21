@@ -31,7 +31,8 @@ import { autoAppliesChanges, autoStartsRuns, selectAutoApply } from './approval'
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
-import { COMPLEXITIES, COMPLEXITY_HINT, assignPlanModels, fallbackForTier, rankModels, routingFor } from './modelRouting';
+import { COMPLEXITIES, COMPLEXITY_HINT, assignAgentModels, assignPlanModels, fallbackForTier, isGroupRef, rankModels, routingFor, taskComplexity, type RoutingPolicy } from './modelRouting';
+import { BALANCES, activeMagpieGroups, isLowQuota, useMagpieStore } from '@/store/useMagpieStore';
 import { useModelWatchStore } from '@/store/useModelWatchStore';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
 
@@ -126,11 +127,12 @@ async function callAgent(
   }
   const { providers, userPricing } = useConnectionsStore.getState();
   const usage = result.usage;
-  const pricing = pricingFor(providers, userPricing, model);
+  const served = result.servedModel ?? model;
+  const pricing = pricingFor(providers, userPricing, served);
   const cost = usage
     ? calculateTokenCostUSD(pricing, usage.inputTokens ?? 0, usage.outputTokens ?? 0, usage)
     : null;
-  agentsState().recordAgentCall(agent.id, { model, usage, costUSD: usage ? cost : null, referenceCost: pricing?.source === 'account', note: args.note });
+  agentsState().recordAgentCall(agent.id, { model: served, usage, costUSD: usage ? cost : null, referenceCost: pricing?.source === 'account', note: args.note });
   if (args.countInRun) {
     runTotals.promptTokens += usage?.inputTokens ?? 0;
     runTotals.completionTokens += usage?.outputTokens ?? 0;
@@ -139,7 +141,7 @@ async function callAgent(
     if (cost === null || !usage) runTotals.unpricedTokens += total;
     else runTotals.costUSD += cost;
   }
-  return { ...result, model };
+  return { ...result, model: served };
 }
 
 function throttle(fn: (v: string) => void, ms = 200) {
@@ -240,6 +242,18 @@ function routing() {
   });
 }
 
+/** Your manual setup as the router applies it: pins with their mode, locked agents, Force, Magpie groups and quota. */
+function routingPolicy(models: Array<{ ref: string }>): RoutingPolicy {
+  const store = agentsState();
+  const inScope = new Set(models.map((m) => m.ref));
+  const pinned = Object.fromEntries(Object.entries(store.tierModels).filter(([, ref]) => ref && inScope.has(ref)));
+  const lockedAgents = Object.fromEntries(Object.values(store.agents).filter((a) => a.modelLocked && a.model).map((a) => [a.id, a.model]));
+  return { pinned, modes: store.tierModes, force: store.forceSetup, lockedAgents, groups: activeMagpieGroups(), low: isLowQuota };
+}
+
+/** The model that really did a task: the member of a Magpie group that answered, when known. */
+const servedByTask = new Map<string, string>();
+
 function recordModelResult(model: string | undefined, passed: boolean) {
   if (model) useModelWatchStore.getState().recordResult(model, passed);
 }
@@ -256,9 +270,25 @@ function modelCatalog(): string {
   const list =
     `Available models across ${providerCount} connected provider${providerCount === 1 ? '' : 's'}, strongest first (ref | name | provider | level | strength 0-100, same scale for every vendor, adjusted by real results):\n` +
     ranked.map((m) => `- ${m.ref} | ${m.name} | ${m.provider} | ${m.tier} | ${m.score}${m.contextWindow ? ` | ${Math.round(m.contextWindow / 1000)}k context` : ''}`).join('\n');
-  if (!agentsState().complexityRouting) return list;
-  const name = (ref: string) => models.find((m) => m.ref === ref)?.name ?? ref;
-  return `${list}\n\nModel for each task complexity (used when a task has no "model"; equally good models take turns):\n${COMPLEXITIES.map((c) => `- ${c}: ${peers[c].map((r) => `${r} (${name(r)})`).join(' or ')} — ${COMPLEXITY_HINT[c]}`).join('\n')}`;
+  const store = agentsState();
+  const policy = routingPolicy(models);
+  const name = (ref: string) => models.find((m) => m.ref === ref)?.name ?? store.agents[ref]?.name ?? ref;
+  const lockedAgents = Object.entries(policy.lockedAgents ?? {});
+  const notes = [
+    policy.force ? 'The user forced their setup: do NOT set "model" on tasks, it is ignored. Only rate complexity.' : '',
+    lockedAgents.length ? `Agents with a locked model (their tasks always use it): ${lockedAgents.map(([id, ref]) => `${name(id)} → ${ref}`).join(', ')}.` : '',
+  ].filter(Boolean);
+  if (!store.complexityRouting) return [list, ...notes].join('\n\n');
+  const balance = BALANCES.find((b) => b.id === useMagpieStore.getState().balance)?.label.toLowerCase() ?? 'quota left';
+  const level = (c: (typeof COMPLEXITIES)[number]) => {
+    const pin = policy.pinned?.[c];
+    if (pin && (policy.force || policy.modes?.[c] === 'locked')) return `${pin} (${name(pin)}) — LOCKED by the user, always used`;
+    if (pin) return `${pin} (${name(pin)}) — the user's preferred model; set another "model" on a task only with a one-line "modelReason"`;
+    const group = policy.groups?.[c];
+    if (group) return `${group} — Magpie group of ${peers[c].map(name).join(' and ')}; Magpie picks the account by ${balance}`;
+    return peers[c].map((r) => `${r} (${name(r)})`).join(' or ');
+  };
+  return `${list}\n\nModel for each task complexity (used when a task has no "model"; equally good models take turns):\n${COMPLEXITIES.map((c) => `- ${c}: ${level(c)} — ${COMPLEXITY_HINT[c]}`).join('\n')}${notes.length ? `\n\n${notes.join('\n')}` : ''}`;
 }
 
 const ASK_INSTRUCTIONS = 'Mode: ASK. Discuss, explain, inspect and advise. Do not propose an execution plan unless asked, and do not claim to have changed any files.';
@@ -269,12 +299,12 @@ function planInstructions(strategy: TeamStrategy, byComplexity: boolean): string
       ? `Team design: you build the team yourself; the user does not edit it. First think about what THIS request actually needs (stack, domain, size, risk) and size the team to the work: one agent for a small fix, as many as the work needs for a large feature. There is no limit on the number of agents. Use existing roster agents where they fit. When the work needs a specialist the roster lacks (for example mobile, data/ML, DevOps, database, game, embedded, security), add it in "newAgents" with a short distinct name that is not already on the roster, a role (architect|frontend|backend|qa), a title, a specialty, focused systemPrompt instructions for this project, and a one-line reason. Always set "model" on every new agent to an exact ref from the available models: a strong model for architecture, security and hard logic, a fast and cheap one for simple, well-scoped work. For small, well-scoped work that a senior should review, add a junior instead: set "junior": true and "mentor" to the roster agent id or the key of a new senior in this plan who reviews it (N+1); prefer a mentor with the same specialty. Assign tasks to new agents by their "key". Do not add agents you do not use. New agents stay on the team for later requests and keep learning.`
       : 'Team design: use ONLY agents from the roster. Do not propose new agents.';
   return `Mode: PLAN. Produce an execution plan. Respond with ONLY a JSON object (no prose outside it) of the form:
-{"summary": "one paragraph", "newAgents": [{"key": "mobile", "name": "Orion", "role": "frontend", "title": "Mobile Engineer", "specialty": "<any project domain, such as IoT & Embedded>", "focus": "<domain instructions and verification requirements>", "systemPrompt": "...", "model": "<exact model ref>", "reason": "...", "junior": false, "mentor": "<for juniors: roster agent id or new senior key>"}], "tasks": [{"id": "t1", "title": "...", "description": "concrete instructions", "stage": "briefing|architecture|implementation", "agentId": "<roster agent id or new agent key>", "complexity": "simple|standard|complex", "model": "<optional model ref for this task>", "priority": "critical|high|medium|low", "dependsOn": ["t0"]}]}
+{"summary": "one paragraph", "newAgents": [{"key": "mobile", "name": "Orion", "role": "frontend", "title": "Mobile Engineer", "specialty": "<any project domain, such as IoT & Embedded>", "focus": "<domain instructions and verification requirements>", "systemPrompt": "...", "model": "<exact model ref>", "reason": "...", "junior": false, "mentor": "<for juniors: roster agent id or new senior key>"}], "tasks": [{"id": "t1", "title": "...", "description": "concrete instructions", "stage": "briefing|architecture|implementation", "agentId": "<roster agent id or new agent key>", "complexity": "simple|standard|complex", "model": "<optional model ref for this task>", "modelReason": "<one line, only when you set model>", "priority": "critical|high|medium|low", "dependsOn": ["t0"]}]}
 The role field is a workflow routing category only. Specialty is unrestricted: choose the expertise required by the project, including IoT, embedded firmware, electronics, robotics or any other domain.
 Rules: as many tasks as the work needs, each one concrete and independently checkable. Split work so tasks that depend on each other say so in dependsOn (outputs of dependencies are handed to the dependent task). Juniors only get small, well-scoped tasks; their mentor reviews them automatically. Do not add a QA task: QA review by Sentinel runs automatically. Dependencies must reference earlier task ids.
 ${
   byComplexity
-    ? 'Model choice: rate EVERY task\'s "complexity" honestly (simple, standard or complex). By default leave "model" out: the task then runs on the best model for its complexity across all connected providers, so simple work does not spend the strongest model. Set "model" yourself when another provider\'s model clearly fits a task better (for example a model known to be strong at that language or domain, a long context window for large files, or spreading parallel work over providers to avoid rate limits), and only with a ref from the available models list.'
+    ? 'Model choice: rate EVERY task\'s "complexity" honestly (simple, standard or complex). By default leave "model" out: the task then runs on the best model for its complexity across all connected providers, so simple work does not spend the strongest model. Set "model" yourself when another provider\'s model clearly fits a task better (for example a model known to be strong at that language or domain, a long context window for large files, or spreading parallel work over providers to avoid rate limits), and only with a ref from the available models list, and say why in "modelReason".'
     : 'Model choice: set "model" on a task only when it clearly benefits (a strong model for architecture or hard logic, a fast cheap model for simple edits); otherwise omit it and the agent\'s own model is used. Only use refs from the available models list. Still rate each task\'s "complexity".'
 }
 ${teamRule}`;
@@ -322,6 +352,7 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
   const controller = new AbortController();
   chatController = controller;
 
+  if (mode !== 'ask' && useMagpieStore.getState().enabled) await useMagpieStore.getState().loadQuotas();
   const content = `${text}${await attachmentContext(attachments)}`;
   const lessons = await memoryBrief(sovereign.id, text);
   const system = `${sovereign.systemPrompt}${lessons}\n\n${mode === 'ask' ? ASK_INSTRUCTIONS : planInstructions(store.teamStrategy, store.complexityRouting)}\n\nTeam roster (id | name | title):\n${rosterDescription()}\n\n${mode === 'ask' ? '' : modelCatalog() + '\n\n'}${projectContext()}`;
@@ -394,14 +425,16 @@ const ROLE_PLACEMENT: Record<ProposedAgent['role'], { department: AgentProfile['
  */
 export function routePlanModels(plan: OrchestratorPlan): OrchestratorPlan {
   const store = agentsState();
-  if (!store.complexityRouting) return plan;
   const { models, tiers, peers } = routing();
   const allowed = new Set(models.map((m) => m.ref));
+  const policy = routingPolicy(models);
+  void useMagpieStore.getState().sync();
+  if (!store.complexityRouting) return { ...plan, tasks: assignAgentModels(plan.tasks, allowed, policy) };
   const juniorKeys = new Set((plan.newAgents ?? []).filter((n) => n.junior).map((n) => n.key));
   return {
     ...plan,
     newAgents: plan.newAgents?.map((n) => (n.model && allowed.has(n.model) ? n : { ...n, model: tiers[n.junior ? 'simple' : n.role === 'architect' || n.role === 'qa' ? 'complex' : 'standard'] || undefined })),
-    tasks: assignPlanModels(plan.tasks, { tiers, peers }, allowed, (t) => juniorKeys.has(t.agentId) || Boolean(store.agents[t.agentId]?.internship?.isIntern)),
+    tasks: assignPlanModels(plan.tasks, { tiers, peers }, allowed, (t) => juniorKeys.has(t.agentId) || Boolean(store.agents[t.agentId]?.internship?.isIntern), policy),
   };
 }
 
@@ -503,6 +536,24 @@ function buildMission(plan: OrchestratorPlan, request: string, contextFiles?: st
   };
 }
 
+function recordDecisions(plan: OrchestratorPlan) {
+  const store = agentsState();
+  const juniors = new Set((plan.newAgents ?? []).filter((n) => n.junior).map((n) => n.key));
+  const at = Date.now();
+  useModelWatchStore.getState().recordDecisions(
+    plan.tasks.map((t) => ({
+      at,
+      task: t.title,
+      agent: store.agents[t.agentId]?.name ?? plan.newAgents?.find((n) => n.key === t.agentId)?.name ?? t.agentId,
+      tier: taskComplexity(t, juniors.has(t.agentId) || Boolean(store.agents[t.agentId]?.internship?.isIntern)),
+      model: t.model || resolveAgentModel(store.agents[t.agentId], store.roleDefaults) || '',
+      source: t.modelSource ?? (t.model ? 'sovereign' : 'agent'),
+      ...(t.modelReason ? { reason: t.modelReason } : {}),
+      ...(isGroupRef(t.model) ? { viaMagpie: true } : {}),
+    }))
+  );
+}
+
 export async function approveAndRun(messageId: string) {
   const store = agentsState();
   if (store.isLiveRunning || store.isSimulating) throw new Error('Another run is in progress.');
@@ -511,6 +562,7 @@ export async function approveAndRun(messageId: string) {
   const idx = store.managerChatMessages.findIndex((m) => m.id === messageId);
   const requestMessage = [...store.managerChatMessages.slice(0, idx)].reverse().find((m) => m.sender === 'user');
   const request = requestMessage?.text ?? msg.plan.summary;
+  recordDecisions(msg.plan);
   const plan = materializeNewAgents(msg.plan);
   const mission = buildMission(plan, request, requestMessage?.attachedFiles);
   store.updateChatMessage(messageId, { plan: { ...plan, status: 'executed', runId: mission.id } });
@@ -571,6 +623,7 @@ When you change an existing file, start from its current contents (provided belo
   const update = throttle((full) => agentsState().updateTask(task.id, { output: full, progress: Math.min(90, 10 + Math.floor(full.length / 80)) }), 250);
   try {
     let result = await callAgent(agent, { system, messages: [{ role: 'user', content: user }], signal, onDelta: update, note: `Task: ${task.title}`, countInRun: true, modelOverride: task.model });
+    servedByTask.set(task.id, result.model);
     update.flush();
     let output = result.text;
     let tokens = (result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0) || result.usage?.totalTokens || 0;
@@ -747,7 +800,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
       return 'rejected';
     }
     for (const t of targets) {
-      recordModelResult(t.model, false);
+      recordModelResult(servedByTask.get(t.id) ?? t.model, false);
       const feedback = verdict.issues.filter((i) => i.taskId === t.id || !i.taskId).map((i) => `- ${i.problem}`).join('\n') || verdict.summary;
       store.updateTask(t.id, { status: 'rejected', qaFeedback: feedback, stage: 'implementation' });
       noteFeedback(mission.id, { agentId: t.assignedAgentId, source: 'qa', text: `${t.title}: ${feedback}`, taskId: t.id });
@@ -784,7 +837,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
   }
 
   store.updateTask(QA_TASK_ID, { status: 'completed', progress: 100, completedAt: Date.now() });
-  for (const t of workTasks) if (currentMission()?.tasks.find((x) => x.id === t.id)?.status === 'completed') recordModelResult(currentMission()!.tasks.find((x) => x.id === t.id)!.model, true);
+  for (const t of workTasks) if (currentMission()?.tasks.find((x) => x.id === t.id)?.status === 'completed') recordModelResult(servedByTask.get(t.id) ?? currentMission()!.tasks.find((x) => x.id === t.id)!.model, true);
   store.logActivity({ kind: 'qa', level: 'success', runId: mission.id, agentId: qa.id, text: `Sentinel approved the run: ${verdict.summary}` });
   return 'approved';
 }

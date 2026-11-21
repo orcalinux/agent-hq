@@ -311,6 +311,10 @@ export interface PlanTask {
   model?: string;
   /** simple | standard | complex, set by Sovereign; picks the model when routing by complexity. */
   complexity?: Complexity;
+  /** Who chose the model: you, a locked agent or level, Sovereign, your preferred model, or Auto. */
+  modelSource?: ModelSource;
+  /** Sovereign's one-line reason when it chose a model itself. */
+  modelReason?: string;
 }
 
 export type TeamStrategy = 'adaptive' | 'fixed';
@@ -319,6 +323,11 @@ export type Complexity = 'simple' | 'standard' | 'complex';
 
 /** `sovereign`: every agent uses a model from Sovereign's own provider (one subscription). `any`: any connected provider. */
 export type ModelScope = 'sovereign' | 'any';
+
+/** How a pinned level is used: a starting point Sovereign may change with a reason, or always. */
+export type LevelMode = 'preferred' | 'locked';
+
+export type ModelSource = 'you' | 'agent' | 'locked' | 'sovereign' | 'preferred' | 'auto';
 
 export interface ProposedAgent {
   key: string;

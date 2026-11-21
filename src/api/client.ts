@@ -85,6 +85,23 @@ export interface TestResult {
   connection?: ProviderConnectionInfo;
 }
 
+export interface MagpieQuota {
+  provider: string;
+  name: string;
+  kind: string;
+  plan?: string;
+  windows: Array<{ name: string; remaining: number; resetsAt?: string }>;
+}
+
+export type MagpieBalance = 'usage' | 'pace' | 'rotate' | 'weight';
+
+export interface MagpieGroupSync {
+  id: string;
+  models: string[];
+  routing: MagpieBalance;
+  weights?: Record<string, number>;
+}
+
 export const api = {
   connections: () => call<ConnectionsResponse>('GET', '/api/connections'),
   detect: () => call<DetectResponse>('GET', '/api/connections/detect'),
@@ -92,6 +109,9 @@ export const api = {
   connect: (p: ConnectPayload) => call<TestResult>('POST', '/api/connections/connect', p),
   disconnect: (providerId: AIProviderId) => call<{ ok: boolean }>('POST', '/api/connections/disconnect', { providerId }),
   refresh: (providerId: AIProviderId) => call<TestResult>('POST', '/api/connections/refresh', { providerId }),
+  magpieQuotas: () => call<{ ok: boolean; quotas: MagpieQuota[]; error?: string }>('GET', '/api/magpie/quotas'),
+  syncMagpieGroups: (groups: MagpieGroupSync[]) => call<{ ok: boolean; results: Array<{ id: string; ok: boolean; error?: string }> }>('POST', '/api/magpie/groups', { groups }),
+  removeMagpieGroups: () => call<{ ok: boolean }>('POST', '/api/magpie/groups/remove'),
   rescanModels: () => call<{ ok: boolean; results: Array<{ providerId: AIProviderId; ok: boolean; count?: number; error?: string }> }>('POST', '/api/models/rescan'),
 
   terminalSessions: () => call<{ sessions: TerminalInfo[]; root: string }>('GET', '/api/terminal/sessions'),
@@ -174,6 +194,8 @@ export interface ChatStreamResult {
   usage?: ChatUsage;
   latencyMs: number;
   models?: ModelInfo[];
+  /** The model a gateway actually routed the call to, such as one member of a Magpie group. */
+  servedModel?: string;
 }
 
 export async function streamChat(req: ChatStreamRequest): Promise<ChatStreamResult> {
@@ -215,6 +237,7 @@ export async function streamChat(req: ChatStreamRequest): Promise<ChatStreamResu
         usage?: ChatUsage | null;
         latencyMs?: number;
         models?: ModelInfo[];
+        servedModel?: string;
       };
       if (ev.type === 'delta' && ev.text) {
         text += ev.text;
@@ -222,7 +245,7 @@ export async function streamChat(req: ChatStreamRequest): Promise<ChatStreamResu
       } else if (ev.type === 'error') {
         throw new ApiError(502, ev.message || 'Model call failed.');
       } else if (ev.type === 'done') {
-        result = { text, usage: ev.usage ?? undefined, latencyMs: ev.latencyMs ?? 0, models: ev.models };
+        result = { text, usage: ev.usage ?? undefined, latencyMs: ev.latencyMs ?? 0, models: ev.models, ...(ev.servedModel ? { servedModel: ev.servedModel } : {}) };
       }
     }
   }

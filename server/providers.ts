@@ -38,6 +38,8 @@ export interface ChatResult {
   usage?: ChatUsage;
   latencyMs: number;
   resolvedModels?: string[];
+  /** The model that actually answered, when a gateway routed the request (Magpie groups). */
+  servedModel?: string;
 }
 
 export interface ChatRequest {
@@ -386,7 +388,7 @@ async function* readSseData(body: ReadableStream<Uint8Array>): AsyncGenerator<st
   }
 }
 
-async function streamingPost(url: string, headers: Record<string, string>, payload: unknown, signal: AbortSignal) {
+async function streamingPost(url: string, headers: Record<string, string>, payload: unknown, signal: AbortSignal, onResponse?: (res: Response) => void) {
   let res: Response;
   try {
     res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(payload), signal });
@@ -404,6 +406,7 @@ async function streamingPost(url: string, headers: Record<string, string>, paylo
     }
     throw new Error(describeHttpError(res.status, body));
   }
+  onResponse?.(res);
   return res.body;
 }
 
@@ -703,6 +706,7 @@ export async function chat(req: ChatRequest): Promise<ChatResult> {
   const key = apiKeyFor(connection);
   let text = '';
   const usage: ChatUsage = {};
+  let servedModel: string | undefined;
   const emit = (t: string) => {
     if (!t) return;
     text += t;
@@ -754,7 +758,11 @@ export async function chat(req: ChatRequest): Promise<ChatResult> {
           stream_options: { include_usage: true },
           messages: [...(system ? [{ role: 'system', content: system }] : []), ...messages],
         },
-        signal
+        signal,
+        (res) => {
+          const served = res.headers.get('x-magpie-model');
+          if (isMagpie && served && served !== model) servedModel = `magpie:${served}`;
+        }
       );
       for await (const data of readSseData(body)) {
         if (data === '[DONE]') break;
@@ -829,7 +837,7 @@ export async function chat(req: ChatRequest): Promise<ChatResult> {
       throw new Error('Unsupported provider.');
   }
   const hasUsage = usage.inputTokens !== undefined || usage.outputTokens !== undefined;
-  return { text, usage: hasUsage ? usage : undefined, latencyMs: Date.now() - start };
+  return { text, usage: hasUsage ? usage : undefined, latencyMs: Date.now() - start, ...(servedModel ? { servedModel } : {}) };
 }
 
 export async function verifyConnection(conn: StoredConnection, cwd: string): Promise<{ models: ModelInfo[]; detail: string }> {

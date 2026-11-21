@@ -68,6 +68,16 @@ export function usageCostLabel(usage: Pick<AgentTokenUsage, 'estimatedCostUSD' |
   return usage.unpricedTokens > 0 ? `${fmtCost(usage.estimatedCostUSD)}+` : fmtCost(usage.estimatedCostUSD);
 }
 
+/** How long until a moment in the future: "in 3h", "in 2d". */
+export function fmtUntil(ts: number | undefined): string {
+  if (!ts || Number.isNaN(ts)) return '—';
+  const diff = ts - Date.now();
+  if (diff <= 60_000) return 'now';
+  if (diff < 3_600_000) return `in ${Math.round(diff / 60_000)}m`;
+  if (diff < 86_400_000) return `in ${Math.round(diff / 3_600_000)}h`;
+  return `in ${Math.round(diff / 86_400_000)}d`;
+}
+
 export function fmtRelative(ts: number | undefined): string {
   if (!ts) return '—';
   const diff = Date.now() - ts;

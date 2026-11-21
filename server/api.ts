@@ -29,6 +29,7 @@ import {
   verifyConnection,
 } from './providers';
 import { INSTALL_GUIDES, installCommandFor } from './installers';
+import { GROUP_ROUTINGS, MANAGED_GROUPS, magpieQuotas, removeGroups, syncGroups, type GroupRouting, type ManagedGroup } from './magpieControl';
 import { buildTerminalLaunch } from './terminal';
 import { observeCliModels } from './cliModelIdentity';
 import { deleteFile, gitStatus, readFile, scanTree, writeFile } from './workspace';
@@ -230,6 +231,43 @@ const routes: Record<string, Handler> = {
       Object.values(INSTALL_GUIDES).map((g) => [g.id, { name: g.name, command: installCommandFor(g.id, process.platform), url: g.url }])
     );
     send(res, 200, { ok: true, clis, ollama, magpie, installs });
+  },
+
+  'GET /api/magpie/quotas': async (_req, res) => {
+    try {
+      send(res, 200, { ok: true, quotas: await magpieQuotas() });
+    } catch (err) {
+      send(res, 200, { ok: false, quotas: [], error: (err as Error).name === 'TimeoutError' ? 'Magpie did not answer in time.' : 'The Magpie gateway is not running.' });
+    }
+  },
+
+  'POST /api/magpie/groups': async (req, res) => {
+    const body = await readJson(req);
+    const list = Array.isArray(body.groups) ? body.groups : [];
+    const groups: ManagedGroup[] = list.flatMap((g) => {
+      const raw = g as Record<string, unknown>;
+      const id = String(raw.id ?? '');
+      const routing = String(raw.routing ?? 'usage') as GroupRouting;
+      if (!(MANAGED_GROUPS as readonly string[]).includes(id) || !(GROUP_ROUTINGS as readonly string[]).includes(routing)) return [];
+      const models = Array.isArray(raw.models) ? raw.models.map(String) : [];
+      const weights = raw.weights && typeof raw.weights === 'object' ? Object.fromEntries(Object.entries(raw.weights as Record<string, unknown>).map(([k, v]) => [k, Number(v)])) : undefined;
+      return [{ id, routing, models, ...(weights ? { weights } : {}) }];
+    });
+    if (!groups.length) throw new HttpError(400, 'No Agent HQ groups to sync.');
+    try {
+      send(res, 200, { ok: true, results: await syncGroups(groups) });
+    } catch (err) {
+      throw new HttpError(409, (err as Error).message);
+    }
+  },
+
+  'POST /api/magpie/groups/remove': async (_req, res) => {
+    try {
+      await removeGroups([...MANAGED_GROUPS]);
+      send(res, 200, { ok: true });
+    } catch (err) {
+      throw new HttpError(409, (err as Error).message);
+    }
   },
 
   'GET /api/terminal/sessions': async (_req, res) => {
@@ -437,7 +475,7 @@ const routes: Record<string, Handler> = {
         });
       }
       const models = result.resolvedModels?.length ? await ensureModels(conn.providerId) : undefined;
-      write({ type: 'done', usage: result.usage ?? null, latencyMs: result.latencyMs, models });
+      write({ type: 'done', usage: result.usage ?? null, latencyMs: result.latencyMs, models, ...(result.servedModel ? { servedModel: result.servedModel } : {}) });
     } catch (err) {
       if ((err as Error).name !== 'AbortError') write({ type: 'error', message: (err as Error).message });
     }

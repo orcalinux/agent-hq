@@ -20,7 +20,7 @@ export function snapshotModels(providers: ProviderState[]): KnownModels {
   const out: KnownModels = {};
   for (const p of providers) {
     if (!p.connection) continue;
-    out[p.id] = p.models.filter((m) => m.selectable !== false).map((m) => ({ ref: m.ref, name: m.name }));
+    out[p.id] = p.models.filter((m) => m.selectable !== false && !/^magpie:group\/agenthq-/.test(m.ref)).map((m) => ({ ref: m.ref, name: m.name }));
   }
   return out;
 }

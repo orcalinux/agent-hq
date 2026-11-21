@@ -1,12 +1,25 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api } from '@/api/client';
-import type { Complexity } from '@/types';
-import { COMPLEXITIES, COMPLEXITY_LABEL, modelKey, routingFor, type ModelResults } from '@/engine/modelRouting';
+import type { Complexity, ModelSource } from '@/types';
+import { COMPLEXITIES, COMPLEXITY_LABEL, isGroupRef, modelKey, routingFor, type ModelResults } from '@/engine/modelRouting';
 import { diffModels, snapshotModels, type KnownModels, type ModelChange } from '@/engine/modelWatch';
 import { safeStorage } from './storage';
 import { resolveAgentModel, useAgentStore } from './useAgentStore';
 import { useConnectionsStore } from './useConnectionsStore';
+
+/** One task's model choice at approval: what was picked and which part of Agent HQ decided. */
+export interface RoutingDecision {
+  at: number;
+  task: string;
+  agent: string;
+  tier: Complexity;
+  model: string;
+  source: ModelSource;
+  reason?: string;
+  /** Set when Magpie picks the account inside an Agent HQ group. */
+  viaMagpie?: boolean;
+}
 
 export interface TierMove {
   at: number;
@@ -28,6 +41,8 @@ interface ModelWatchState {
   results: ModelResults;
   recordResult: (ref: string, passed: boolean) => void;
   resetResults: () => void;
+  decisions: RoutingDecision[];
+  recordDecisions: (list: RoutingDecision[]) => void;
   setIntervalHours: (hours: number) => void;
   check: () => Promise<{ changes: ModelChange[]; moves: TierMove[] }>;
 }
@@ -60,7 +75,7 @@ export const useModelWatchStore = create<ModelWatchState>()(
       results: {},
 
       recordResult: (ref, passed) => {
-        if (!ref) return;
+        if (!ref || isGroupRef(ref)) return;
         const known = useConnectionsStore.getState().providers.flatMap((p) => p.models).find((m) => m.ref === ref);
         const key = modelKey({ ref: known?.canonicalRef ?? ref, name: known?.name ?? ref });
         set((s) => {
@@ -69,6 +84,8 @@ export const useModelWatchStore = create<ModelWatchState>()(
         });
       },
       resetResults: () => set({ results: {} }),
+      decisions: [],
+      recordDecisions: (list) => set((s) => ({ decisions: [...list, ...s.decisions].slice(0, 40) })),
 
       setIntervalHours: (hours) => set({ intervalHours: Math.max(0, hours) }),
 
@@ -117,7 +134,7 @@ export const useModelWatchStore = create<ModelWatchState>()(
       name: 'agent-hq.model-watch',
       version: 1,
       storage: safeStorage,
-      partialize: (s) => ({ intervalHours: s.intervalHours, lastCheckedAt: s.lastCheckedAt, known: s.known, history: s.history, tierMoves: s.tierMoves, results: s.results }),
+      partialize: (s) => ({ intervalHours: s.intervalHours, lastCheckedAt: s.lastCheckedAt, known: s.known, history: s.history, tierMoves: s.tierMoves, results: s.results, decisions: s.decisions }),
     }
   )
 );

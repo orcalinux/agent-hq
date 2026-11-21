@@ -1,4 +1,4 @@
-import { providerOfRef, type AIModelId, type Complexity, type ModelScope, type ProviderState } from '@/types';
+import { providerOfRef, type AIModelId, type Complexity, type LevelMode, type ModelScope, type ModelSource, type ProviderState } from '@/types';
 
 export const COMPLEXITIES: Complexity[] = ['simple', 'standard', 'complex'];
 
@@ -289,23 +289,130 @@ export function routeTaskModel(
   return tiers[taskComplexity(task, junior)] || undefined;
 }
 
+export const SOURCE_LABEL: Record<ModelSource, string> = {
+  you: 'You',
+  agent: "Agent's model",
+  locked: 'Locked',
+  sovereign: 'Sovereign',
+  preferred: 'Preferred',
+  auto: 'Auto',
+};
+
+export const SOURCE_HINT: Record<ModelSource, string> = {
+  you: 'You chose this model in the plan.',
+  agent: "The agent's own model is used.",
+  locked: 'Your locked setup; nothing changes it.',
+  sovereign: 'Sovereign chose this model for the task.',
+  preferred: 'Your preferred model for this level.',
+  auto: 'The strongest model for this level right now.',
+};
+
+/** Groups Agent HQ keeps in Magpie, one per level. */
+export const MAGPIE_GROUP: Record<Complexity, string> = { simple: 'agenthq-simple', standard: 'agenthq-standard', complex: 'agenthq-complex' };
+
+export function isGroupRef(ref: AIModelId | undefined): boolean {
+  return Boolean(ref && /^magpie:group\//.test(ref));
+}
+
+export function isManagedGroup(ref: AIModelId | undefined): boolean {
+  return Boolean(ref && /^magpie:group\/agenthq-/.test(ref));
+}
+
+/** Your manual setup, and how strictly it applies. */
+export interface RoutingPolicy {
+  /** Models pinned per level (only those still offered). */
+  pinned?: Partial<Record<Complexity, AIModelId>>;
+  /** Preferred (default) or Locked, per pinned level. */
+  modes?: Partial<Record<Complexity, LevelMode>>;
+  /** Force my setup: every pin is locked and Sovereign's own model choices are ignored. */
+  force?: boolean;
+  /** Agents whose own model is locked: agent id → model. */
+  lockedAgents?: Record<string, AIModelId>;
+  /** Magpie groups that stand in for Auto levels, letting Magpie pick the account. */
+  groups?: Partial<Record<Complexity, AIModelId>>;
+  /** Models whose subscription is nearly used up; avoided while a peer still has room. */
+  low?: (ref: AIModelId) => boolean;
+}
+
+type RoutableTask = { model?: AIModelId; complexity?: Complexity; stage?: string; priority?: string; agentId?: string; modelSource?: ModelSource; modelReason?: string };
+
 /**
- * Models for every task of a plan: a deliberate model stays (if allowed); otherwise the task gets a
- * model for its complexity, taking turns between equally good peers so the work is spread over providers.
+ * Models for every task of a plan, and who chose each. In order: a model you set in the plan, an agent's
+ * locked model, a locked level (or every pin under Force my setup), Sovereign's own choice, your preferred
+ * model for the level, then Auto: the level's Magpie group, or its equally good peers taking turns.
  */
-export function assignPlanModels<T extends { model?: AIModelId; complexity?: Complexity; stage?: string; priority?: string }>(
+export function assignPlanModels<T extends RoutableTask>(
   tasks: T[],
   choice: TierChoice,
   allowed: ReadonlySet<AIModelId>,
-  isJunior: (task: T) => boolean = () => false
+  isJunior: (task: T) => boolean = () => false,
+  policy: RoutingPolicy = {}
 ): T[] {
   const turn: Record<Complexity, number> = { simple: 0, standard: 0, complex: 0 };
+  const ok = (ref: AIModelId | undefined): ref is AIModelId => Boolean(ref && (!allowed.size || allowed.has(ref)));
   return tasks.map((t) => {
-    if (t.model && (!allowed.size || allowed.has(t.model))) return t;
+    if (t.modelSource === 'you' && t.model) return t;
+    const agentModel = t.agentId ? policy.lockedAgents?.[t.agentId] : undefined;
+    if (agentModel) return { ...t, model: agentModel, modelSource: 'agent' as const };
     const tier = taskComplexity(t, isJunior(t));
-    const peers = choice.peers[tier].length ? choice.peers[tier] : [choice.tiers[tier]].filter(Boolean);
+    const pin = policy.pinned?.[tier];
+    if (ok(pin) && (policy.force || policy.modes?.[tier] === 'locked')) return { ...t, model: pin, modelSource: 'locked' as const };
+    if (ok(t.model) && !policy.force && (!t.modelSource || t.modelSource === 'sovereign')) return { ...t, modelSource: 'sovereign' as const };
+    if (ok(pin)) return { ...t, model: pin, modelSource: 'preferred' as const };
+    const group = policy.groups?.[tier];
+    if (group) return { ...t, model: group, modelSource: 'auto' as const };
+    const all = choice.peers[tier].length ? choice.peers[tier] : [choice.tiers[tier]].filter(Boolean);
+    const roomy = policy.low ? all.filter((r) => !policy.low!(r)) : all;
+    const peers = roomy.length ? roomy : all;
     const model = peers.length ? peers[turn[tier]++ % peers.length] : undefined;
-    return model ? { ...t, model } : t;
+    return model ? { ...t, model, modelSource: 'auto' as const } : t;
+  });
+}
+
+/**
+ * With complexity routing off, tasks run on their agent's model unless you or Sovereign chose one;
+ * locked agents and Force my setup still win over Sovereign.
+ */
+export function assignAgentModels<T extends RoutableTask>(tasks: T[], allowed: ReadonlySet<AIModelId>, policy: RoutingPolicy = {}): T[] {
+  return tasks.map((t) => {
+    if (t.modelSource === 'you' && t.model) return t;
+    const agentModel = t.agentId ? policy.lockedAgents?.[t.agentId] : undefined;
+    if (agentModel) return { ...t, model: agentModel, modelSource: 'agent' as const };
+    if (t.model && !policy.force && (!allowed.size || allowed.has(t.model))) return { ...t, modelSource: 'sovereign' as const };
+    const rest = { ...t, modelSource: 'agent' as const };
+    delete rest.model;
+    delete rest.modelReason;
+    return rest;
+  });
+}
+
+/** Which subscription a model draws on, for quota checks: Magpie's provider id ("claude", "codex"…). */
+export function quotaKeyOf(ref: AIModelId): string | undefined {
+  const viaMagpie = /^magpie:([^/]+)\//.exec(ref);
+  if (viaMagpie) return viaMagpie[1] === 'group' ? undefined : viaMagpie[1];
+  if (ref.startsWith('anthropic:cli:')) return 'claude';
+  if (ref.startsWith('openai:cli:')) return 'codex';
+  if (ref.startsWith('google:cli:')) return 'gemini';
+  return undefined;
+}
+
+/**
+ * The Magpie group for each level: the level's peers, each mapped to its Magpie id (a model you have
+ * directly joins through its Magpie copy), weighted by score. Levels with no model in Magpie are left out.
+ */
+export function magpieGroupsFor(ranked: RankedModel[], peers: Record<Complexity, AIModelId[]>): Array<{ tier: Complexity; id: string; models: string[]; weights: Record<string, number> }> {
+  const magpieId = (ref: AIModelId): string | undefined => {
+    if (ref.startsWith('magpie:')) return isGroupRef(ref) ? undefined : ref.slice('magpie:'.length);
+    const copy = ranked.find((m) => m.duplicateOf === ref);
+    return copy ? copy.ref.slice('magpie:'.length) : undefined;
+  };
+  return COMPLEXITIES.flatMap((tier) => {
+    const members = peers[tier].flatMap((ref) => {
+      const id = magpieId(ref);
+      return id ? [{ id, score: ranked.find((m) => m.ref === ref)?.score ?? 50 }] : [];
+    });
+    if (!members.length) return [];
+    return [{ tier, id: MAGPIE_GROUP[tier], models: members.map((m) => m.id), weights: Object.fromEntries(members.map((m) => [m.id, Math.max(1, m.score)])) }];
   });
 }
 
@@ -323,7 +430,7 @@ export interface RoutingSettings {
 export function routingFor(providers: ProviderState[], settings: RoutingSettings): { models: Array<RoutingModel & { provider: string; contextWindow?: number }>; tiers: Record<Complexity, AIModelId>; peers: Record<Complexity, AIModelId[]> } {
   const all = providers
     .filter((p) => p.connection && !settings.skip?.(p.id))
-    .flatMap((p) => p.models.filter((m) => m.selectable !== false).map((m) => ({ ref: m.ref, name: m.name, provider: p.name, contextWindow: m.contextWindow, price: m.pricing?.inputPerM })));
+    .flatMap((p) => p.models.filter((m) => m.selectable !== false && !isManagedGroup(m.ref)).map((m) => ({ ref: m.ref, name: m.name, provider: p.name, contextWindow: m.contextWindow, price: m.pricing?.inputPerM })));
   const canonical = providers.flatMap((p) => p.models).find((m) => m.ref === settings.sovereignModel)?.canonicalRef ?? settings.sovereignModel;
   const models = scopeModels(all, settings.scope, canonical);
   return { models, ...resolveRouting(models, settings.overrides, settings.results) };

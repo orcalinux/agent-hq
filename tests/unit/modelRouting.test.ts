@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignPlanModels, chooseTiers, fallbackForTier, learnedBonus, parseComplexity, profileOf, rankModels, resolveRouting, resolveTiers, routeTaskModel, routingFor, scopeModels, suggestTiers, taskComplexity, tierOf, versionOf } from '../../src/engine/modelRouting';
+import { assignAgentModels, assignPlanModels, chooseTiers, isManagedGroup, magpieGroupsFor, quotaKeyOf, fallbackForTier, learnedBonus, parseComplexity, profileOf, rankModels, resolveRouting, resolveTiers, routeTaskModel, routingFor, scopeModels, suggestTiers, taskComplexity, tierOf, versionOf } from '../../src/engine/modelRouting';
 import { diffModels, isCheckDue, snapshotModels } from '../../src/engine/modelWatch';
 import { parsePlan } from '../../src/engine/orchestratorParsing';
 import { DEFAULT_AGENTS } from '../../src/store/defaultState';
@@ -251,5 +251,110 @@ describe('Codex names', () => {
   it('calls a Codex-named model large but not every model served through Codex', () => {
     expect(tierOf({ ref: 'openai:gpt-5-codex', name: 'GPT-5 Codex' })).toBe('complex');
     expect(tierOf({ ref: 'openai:cli:gpt-6.1-terra', name: 'GPT-6.1 Terra · Codex CLI' })).toBe('standard');
+  });
+});
+
+describe('who decides each model', () => {
+  const both = [...CLAUDE, ...GPT.filter((m) => !m.ref.endsWith('default'))];
+  const choice = chooseTiers(both);
+  const opus = 'anthropic:cli:claude-opus-5-5';
+  const sonnet = 'anthropic:cli:claude-sonnet-5-5';
+  const task = (extra: Record<string, unknown> = {}) => ({ complexity: 'complex' as const, agentId: 'agent-backend', ...extra });
+
+  it('applies you, a locked agent, a locked level, Sovereign, your preferred model, then Auto', () => {
+    const policy = { pinned: { complex: sonnet }, modes: { complex: 'preferred' as const }, lockedAgents: { 'agent-qa': 'openai:cli:gpt-6-luna' } };
+    const [mine, agent, sovereign, preferred] = assignPlanModels(
+      [task({ model: 'x:y', modelSource: 'you' }), task({ agentId: 'agent-qa', model: opus }), task({ model: opus, modelReason: 'long context' }), task()],
+      choice,
+      new Set(),
+      () => false,
+      policy
+    );
+    expect(mine).toMatchObject({ model: 'x:y', modelSource: 'you' });
+    expect(agent).toMatchObject({ model: 'openai:cli:gpt-6-luna', modelSource: 'agent' });
+    expect(sovereign).toMatchObject({ model: opus, modelSource: 'sovereign', modelReason: 'long context' });
+    expect(preferred).toMatchObject({ model: sonnet, modelSource: 'preferred' });
+    const [auto] = assignPlanModels([task({ complexity: 'simple' })], choice, new Set(), () => false, policy);
+    expect(auto.modelSource).toBe('auto');
+  });
+
+  it('a locked level and Force my setup override Sovereign', () => {
+    const locked = assignPlanModels([task({ model: opus })], choice, new Set(), () => false, { pinned: { complex: sonnet }, modes: { complex: 'locked' } });
+    expect(locked[0]).toMatchObject({ model: sonnet, modelSource: 'locked' });
+    const forced = assignPlanModels([task({ model: opus })], choice, new Set(), () => false, { pinned: { complex: sonnet }, force: true });
+    expect(forced[0]).toMatchObject({ model: sonnet, modelSource: 'locked' });
+    const forcedAuto = assignPlanModels([task({ model: opus, complexity: 'standard' })], choice, new Set(), () => false, { force: true });
+    expect(forcedAuto[0].modelSource).toBe('auto');
+  });
+
+  it('re-routing does not mistake an earlier Auto or Preferred pick for Sovereign', () => {
+    const once = assignPlanModels([task()], choice, new Set(), () => false, { pinned: { complex: sonnet } });
+    const again = assignPlanModels(once, choice, new Set(), () => false, {});
+    expect(again[0].modelSource).toBe('auto');
+  });
+
+  it('sends Auto levels to their Magpie group, but never pinned ones', () => {
+    const groups = { complex: 'magpie:group/agenthq-complex' };
+    expect(assignPlanModels([task()], choice, new Set(), () => false, { groups })[0]).toMatchObject({ model: groups.complex, modelSource: 'auto' });
+    expect(assignPlanModels([task()], choice, new Set(), () => false, { groups, pinned: { complex: sonnet } })[0].model).toBe(sonnet);
+  });
+
+  it('avoids a peer whose subscription is nearly used up while another has room', () => {
+    const low = (ref: string) => quotaKeyOf(ref) === 'claude';
+    const tasks = assignPlanModels([task(), task(), task()], choice, new Set(), () => false, { low });
+    expect(tasks.every((t) => t.model?.startsWith('openai:'))).toBe(true);
+    const allLow = assignPlanModels([task()], choice, new Set(), () => false, { low: () => true });
+    expect(allLow[0].model).toBeTruthy();
+  });
+
+  it('with complexity routing off, keeps the agent model unless Sovereign chose one, and Force removes that', () => {
+    const [sov, plain] = assignAgentModels([task({ model: opus, modelReason: 'r' }), task()], new Set());
+    expect(sov).toMatchObject({ model: opus, modelSource: 'sovereign' });
+    expect(plain).toMatchObject({ modelSource: 'agent' });
+    expect(plain.model).toBeUndefined();
+    const [forced] = assignAgentModels([task({ model: opus, modelReason: 'r' })], new Set(), { force: true });
+    expect(forced.model).toBeUndefined();
+    expect(forced.modelReason).toBeUndefined();
+  });
+});
+
+describe('Magpie groups', () => {
+  it('maps each subscription', () => {
+    expect(quotaKeyOf('anthropic:cli:claude-opus-5-5')).toBe('claude');
+    expect(quotaKeyOf('openai:cli:gpt-6.1-sol')).toBe('codex');
+    expect(quotaKeyOf('magpie:codex/gpt-6.2-sol')).toBe('codex');
+    expect(quotaKeyOf('magpie:group/smart-coding')).toBeUndefined();
+    expect(quotaKeyOf('anthropic:claude-opus-5-5')).toBeUndefined();
+  });
+
+  it('builds one group per level from the peers, joining direct models through their Magpie copy', () => {
+    const models = [
+      claude('claude-opus-5-5', 'Claude Opus 5.5'),
+      { ref: 'openai:cli:gpt-6.1-sol', name: 'GPT-6.1-Sol · Codex CLI' },
+      { ref: 'magpie:claude/claude-opus-5-5', name: 'Claude Opus 5.5 · Claude Code' },
+      { ref: 'magpie:codex/gpt-6.1-sol', name: 'GPT-6.1-Sol · Codex' },
+      { ref: 'ollama:llama3:8b', name: 'llama3:8b' },
+    ];
+    const ranked = rankModels(models);
+    const groups = magpieGroupsFor(ranked, chooseTiers(models).peers);
+    const complex = groups.find((g) => g.tier === 'complex')!;
+    expect(complex.id).toBe('agenthq-complex');
+    expect([...complex.models].sort()).toEqual(['claude/claude-opus-5-5', 'codex/gpt-6.1-sol']);
+    expect(complex.weights['claude/claude-opus-5-5']).toBeGreaterThan(1);
+    expect(groups.find((g) => g.tier === 'simple')).toBeUndefined();
+  });
+
+  it('keeps its own groups out of the models agents are offered', () => {
+    const magpie = provider('magpie', 'Magpie', [{ ref: 'magpie:group/agenthq-complex', name: 'agenthq-complex · routing group' }, { ref: 'magpie:group/smart-coding', name: 'smart-coding · routing group' }]);
+    const refs = routingFor([magpie], { scope: 'any', overrides: {}, sovereignModel: '' }).models.map((m) => m.ref);
+    expect(refs).toEqual(['magpie:group/smart-coding']);
+    expect(isManagedGroup('magpie:group/agenthq-simple')).toBe(true);
+    expect(snapshotModels([magpie]).magpie.map((m) => m.ref)).toEqual(['magpie:group/smart-coding']);
+  });
+
+  it('reads the reason Sovereign gives for a model, only with a model', () => {
+    const plan = parsePlan(JSON.stringify({ summary: 's', tasks: [{ id: 't1', title: 'A', agentId: 'agent-backend', model: 'm:1', modelReason: ' long context ' }, { id: 't2', title: 'B', agentId: 'agent-backend', modelReason: 'no model' }] }), DEFAULT_AGENTS);
+    expect(plan.tasks[0].modelReason).toBe('long context');
+    expect(plan.tasks[1].modelReason).toBeUndefined();
   });
 });

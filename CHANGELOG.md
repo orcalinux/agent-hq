@@ -11,6 +11,23 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.13.0] — 2026-11-21
+
+### Added
+- **Who decides each model, made explicit.** Order: you, a locked agent, a Locked level, Sovereign (with a reason), a Preferred pin, the level's Magpie group, then Auto peers. Each task in the plan card shows a badge for who decided, and Sovereign's reason.
+- **Preferred / Locked levels and Force my setup.** Pins can be a starting point Sovereign may override, or locked; Force locks everything.
+- **Always this model** per agent (Agents → agent → How this model is used).
+- **Magpie account routing** (off by default): managed `agenthq-simple|standard|complex` groups created through the Magpie CLI, weighted by score, with usage, pace, rotate and weight balancing.
+- **Quota-aware routing** that avoids a subscription with less than 10% left while another has room, plus quota cards in Settings.
+- **Recent model decisions** table, and learning credited to the model that really served the request.
+- **In-app guide** explaining the order of decision and the manual setup.
+
+### Changed
+- Ranking and update checks ignore the managed `agenthq` groups.
+
+### Verification
+- Unit tests for the decision order, Magpie groups and the CLI command builder; browser tests for badges, Force, locked agent, Magpie sync/remove and the decisions table.
+
 ## [0.12.0] — 2026-11-21
 
 ### Fixed

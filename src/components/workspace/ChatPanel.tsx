@@ -3,15 +3,37 @@ import { AlertTriangle, ArrowUp, Paperclip, Square, Trash2, X } from 'lucide-rea
 import { useAgentStore, resolveAgentModel } from '@/store/useAgentStore';
 import { useConnectionsStore, isModelAvailable } from '@/store/useConnectionsStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
-import { approveAndRun, resumeRun, sendToOrchestrator, stopChat, stopRun, updatePlan } from '@/engine/liveOrchestrator';
+import { approveAndRun, resumeRun, routePlanModels, sendToOrchestrator, stopChat, stopRun, updatePlan } from '@/engine/liveOrchestrator';
 import { stripThinking } from '@/engine/orchestratorParsing';
-import type { Complexity, ManagerChatMessage, OrchestratorMode, OrchestratorPlan, TeamStrategy } from '@/types';
+import type { Complexity, ManagerChatMessage, ModelSource, OrchestratorMode, OrchestratorPlan, PlanTask, TeamStrategy } from '@/types';
 import { Badge, Button, EmptyState, IconButton, Input, ProgressBar, Select, Tabs } from '@/components/ui/primitives';
 import { ModelSelect, fmtTokens, modelLabel } from '@/components/ui/helpers';
 import { ApprovalModeSelect } from '@/components/shell/ApprovalMode';
 import { useRouting } from '@/components/models/useRouting';
-import { COMPLEXITIES, COMPLEXITY_LABEL, taskComplexity } from '@/engine/modelRouting';
+import { COMPLEXITIES, COMPLEXITY_LABEL, SOURCE_HINT, SOURCE_LABEL, isGroupRef, taskComplexity } from '@/engine/modelRouting';
 import { Markdown } from './Markdown';
+
+const SOURCE_TONE: Record<ModelSource, 'neutral' | 'accent' | 'success' | 'warning'> = {
+  you: 'accent',
+  agent: 'neutral',
+  locked: 'warning',
+  sovereign: 'accent',
+  preferred: 'neutral',
+  auto: 'success',
+};
+
+/** Who chose a task's model, with Sovereign's reason in the tooltip. */
+function SourceBadge({ task }: { task: PlanTask }) {
+  const source = task.modelSource ?? (task.model ? 'sovereign' : 'agent');
+  const via = isGroupRef(task.model) ? ' · via Magpie' : '';
+  const title = `${SOURCE_HINT[source]}${task.modelReason ? ` ${task.modelReason}` : ''}${via ? ' Magpie picks the account with room left.' : ''}`;
+  return (
+    <Badge tone={SOURCE_TONE[source]} title={title} className="shrink-0">
+      {SOURCE_LABEL[source]}
+      {via}
+    </Badge>
+  );
+}
 
 const MODES: Array<{ id: OrchestratorMode; label: string; hint: string }> = [
   { id: 'ask', label: 'Ask', hint: 'Discuss and inspect. Never starts work or changes files.' },
@@ -30,12 +52,20 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
   const setAgent = (taskId: string, agentId: string) =>
     updatePlan(message.id, { ...plan, tasks: plan.tasks.map((t) => (t.id === taskId ? { ...t, agentId } : t)) });
   const setTaskModel = (taskId: string, model: string) =>
-    updatePlan(message.id, { ...plan, tasks: plan.tasks.map((t) => (t.id === taskId ? { ...t, model: model || undefined } : t)) });
+    updatePlan(
+      message.id,
+      model
+        ? { ...plan, tasks: plan.tasks.map((t) => (t.id === taskId ? { ...t, model, modelSource: 'you' as const, modelReason: undefined } : t)) }
+        : routePlanModels({ ...plan, tasks: plan.tasks.map((t) => (t.id === taskId ? { ...t, model: undefined, modelSource: undefined, modelReason: undefined } : t)) })
+    );
   const setComplexity = (taskId: string, complexity: Complexity) =>
-    updatePlan(message.id, {
-      ...plan,
-      tasks: plan.tasks.map((t) => (t.id === taskId ? { ...t, complexity, ...(routing.enabled && routing.tiers[complexity] ? { model: routing.tiers[complexity] } : {}) } : t)),
-    });
+    updatePlan(
+      message.id,
+      routePlanModels({
+        ...plan,
+        tasks: plan.tasks.map((t) => (t.id === taskId ? { ...t, complexity, ...(t.modelSource === 'you' ? {} : { model: undefined, modelSource: undefined, modelReason: undefined }) } : t)),
+      })
+    );
   const newAgents = plan.newAgents ?? [];
   const setNewAgentModel = (key: string, model: string) =>
     updatePlan(message.id, { ...plan, newAgents: newAgents.map((n) => (n.key === key ? { ...n, model: model || undefined } : n)) });
@@ -71,7 +101,7 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
           <Badge className="shrink-0" tone={plan.status === 'executed' ? 'success' : plan.status === 'discarded' ? 'neutral' : 'accent'}>{plan.status}</Badge>
         </div>
         {plan.summary ? <p className="mt-1 text-[12px] text-fg-muted">{plan.summary}</p> : null}
-        {editable ? <p className="mt-1 text-[11.5px] text-fg-subtle">Models were picked automatically by complexity, and equally good ones take turns. Change any task&apos;s Complexity or Model before approving.</p> : null}
+        {editable ? <p className="mt-1 text-[11.5px] text-fg-subtle">Each model shows who chose it: Auto, your Preferred or Locked setup, Sovereign (hover for its reason) or You. Change any task&apos;s Complexity or Model before approving; your change wins.</p> : null}
       </div>
       {newAgents.length ? (
         <div className="border-b border-line bg-accent-soft/40 px-3 py-2">
@@ -145,7 +175,9 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
                 ))}
               </Select>
               <ModelSelect value={t.model ?? ''} onChange={(ref) => setTaskModel(t.id, ref)} emptyLabel="Agent's model" disabled={!editable} className="h-6 w-44" aria-label={`Model for ${t.title}`} only={routing.scope === 'sovereign' ? routing.refs : undefined} />
+              <SourceBadge task={t} />
             </div>
+            {t.modelSource === 'sovereign' && t.modelReason ? <p className="truncate pl-4 text-[11.5px] text-fg-subtle" title={t.modelReason}>Sovereign: {t.modelReason}</p> : null}
           </li>
         ))}
       </ol>

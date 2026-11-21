@@ -108,6 +108,8 @@ export interface AgentProfile {
   systemPrompt: string;
   /** Model reference ("provider:model"). Empty string when the agent uses its role default. */
   model: AIModelId;
+  /** Always run this agent's tasks on its own model, whatever the level or Sovereign suggests. */
+  modelLocked?: boolean;
   capabilities: string[];
   reviewResponsibilities: string;
   taskHistory: AgentTaskRecord[];

@@ -170,6 +170,7 @@ export interface TabItem<T extends string> {
   id: T;
   label: string;
   count?: number;
+  disabled?: boolean;
 }
 
 /**
@@ -194,10 +195,12 @@ export function Tabs<T extends string>({ items, value, onChange, className, labe
           role="tab"
           type="button"
           aria-selected={value === item.id}
+          disabled={item.disabled}
           onClick={() => onChange(item.id)}
           className={cn(
             'relative inline-flex h-6 shrink items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[12.5px] transition-colors',
-            value === item.id ? 'text-fg' : 'text-fg-muted hover:text-fg'
+            value === item.id ? 'text-fg' : 'text-fg-muted hover:text-fg',
+            item.disabled && 'cursor-not-allowed opacity-50 hover:text-fg-muted'
           )}
         >
           <span className="ahq-min-label truncate">{item.label}</span>
