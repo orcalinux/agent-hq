@@ -266,6 +266,8 @@ To run the same flow against a real model with nothing mocked, pass an installed
 
 Desktop tests also open every view from the built app, check the role cards and Settings navigation, and simulate a missing JavaScript module to verify reload recovery. Desktop traces are stored separately in `test-results-desktop/`.
 
+`npm run demo` makes a narrated walkthrough video of the whole app from the same scripted run, with no credit used; see [docs/demo-video.md](docs/demo-video.md).
+
 To regenerate the README screenshots: `AGENT_HQ_SCREENSHOTS=1 npm run test:e2e -- screenshots`. After changing the logo, `npm run icons` renders the app, installer and tray icons. CI (`.github/workflows/ci.yml`) runs typecheck, unit tests, build, the e2e suite and the desktop tests on every push and pull request.
 
 ## Architecture and security

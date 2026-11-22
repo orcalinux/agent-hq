@@ -1,0 +1,218 @@
+{
+  "voice": "en-US-AndrewNeural",
+  "rate": "+4%",
+  "scenes": [
+    {
+      "id": "intro",
+      "kind": "title",
+      "lines": [
+        "This is Agent HQ.",
+        "An AI software team that lives on your desktop.",
+        "You describe what you want. The team plans it, builds it, and reviews it.",
+        "And you see every change before it lands."
+      ]
+    },
+    {
+      "id": "flow",
+      "kind": "flow",
+      "chapter": "How a task works",
+      "lines": [
+        "Every task follows the same path.",
+        "You ask. Sovereign plans. You approve.",
+        "The agents build it, Sentinel reviews it, and you read the changes."
+      ]
+    },
+    {
+      "id": "team",
+      "kind": "team",
+      "chapter": "Meet the team",
+      "lines": [
+        "Meet the team.",
+        "Sovereign is the orchestrator. It's not a separate product, just the name of Agent HQ's lead agent.",
+        "It talks to you and plans the work.",
+        "Aegis designs the system, Pulse builds the interface, and Titan builds the back end.",
+        "Sentinel tests and reviews everything.",
+        "Juniors like Nova and Byte take small tasks, and a senior mentor checks their work."
+      ]
+    },
+    {
+      "id": "connect",
+      "kind": "shots",
+      "chapter": "Step 1 · Connect a model",
+      "lines": [
+        "Step one: connect a model.",
+        "Open Connections. If you already pay for Claude Code, Codex or Gemini, just sign in to its command-line tool.",
+        "Agent HQ uses that subscription directly. No API key needed.",
+        "Missing a tool? Click Install, or copy the command.",
+        "Ollama and the Magpie gateway are found automatically."
+      ],
+      "steps": [
+        { "shot": "connections", "at": 0, "action": "point" },
+        { "shot": "local-tools", "at": 3, "action": "click", "zoom": true }
+      ]
+    },
+    {
+      "id": "roles",
+      "kind": "shots",
+      "chapter": "Step 2 · A model for every role",
+      "lines": [
+        "Step two: give every role a model.",
+        "Under Role defaults, click Fill empty roles.",
+        "Each role gets a strong starting model, and you can change any of them."
+      ],
+      "steps": [
+        { "shot": "roles-empty", "at": 0, "action": "click" },
+        { "shot": "roles-filled", "at": 2 }
+      ]
+    },
+    {
+      "id": "project",
+      "kind": "shots",
+      "chapter": "Step 3 · Open your project",
+      "lines": [
+        "Step three: open your project.",
+        "Click the project switcher, then pick a folder or create a new project.",
+        "Agents only read, write and run commands inside that folder."
+      ],
+      "steps": [
+        { "shot": "project-trigger", "at": 0, "action": "click" },
+        { "shot": "project", "at": 1, "zoom": true }
+      ]
+    },
+    {
+      "id": "plan",
+      "kind": "shots",
+      "chapter": "Step 4 · Ask, plan, approve",
+      "lines": [
+        "Now ask for something. In Workspace, switch to Plan, describe the change, and press Send.",
+        "Sovereign breaks it into tasks, and gives each one an agent, a complexity, and a model.",
+        "Every task shows who chose its model. Here, Sovereign picked Codex, and says why.",
+        "Change anything you like. Nothing runs until you click Approve and run."
+      ],
+      "steps": [
+        { "shot": "plan-ask", "at": 0, "action": "click" },
+        { "shot": "plan-card", "at": 1, "zoom": true },
+        { "shot": "plan-card", "at": 2, "action": "point", "zoom": true },
+        { "shot": "plan-approve", "at": 3, "action": "click" }
+      ]
+    },
+    {
+      "id": "run",
+      "kind": "shots",
+      "chapter": "Step 5 · Watch the team work",
+      "lines": [
+        "The team gets to work.",
+        "Tasks moves each card across the board.",
+        "The graph shows who is working with whom.",
+        "And the office shows every agent at their desk, live."
+      ],
+      "steps": [
+        { "shot": "tasks", "at": 0 },
+        { "shot": "graph", "at": 2 },
+        { "shot": "office", "at": 3 }
+      ]
+    },
+    {
+      "id": "review",
+      "kind": "shots",
+      "chapter": "Step 6 · Review the changes",
+      "lines": [
+        "When the work is done, Sentinel reviews it.",
+        "Open Changes to see exactly what each agent changed, file by file.",
+        "Need a shell? The built-in terminal opens your own shell, right in the project."
+      ],
+      "steps": [
+        { "shot": "changes", "at": 0 },
+        { "shot": "terminal", "at": 2, "zoom": true }
+      ]
+    },
+    {
+      "id": "ladder",
+      "kind": "ladder",
+      "chapter": "Who picks each model",
+      "lines": [
+        "So who picks the model for each task? The first rule that applies wins.",
+        "One: you, if you chose a model in the plan.",
+        "Two: an agent you locked to its own model.",
+        "Three: a level you locked in Settings.",
+        "Four: Sovereign, which may choose a better model, and tells you why.",
+        "Five: your preferred model for that level.",
+        "Six: Magpie, which picks the subscription with the most room left.",
+        "And seven: Auto, where the best-ranked models take turns.",
+        "It's decided fresh for every task. It's not a one-time setup."
+      ]
+    },
+    {
+      "id": "controls",
+      "kind": "shots",
+      "chapter": "Your controls",
+      "lines": [
+        "You control all of this in Settings, under Models and routing.",
+        "Pin a model for simple, standard, or complex work.",
+        "Preferred is a starting point Sovereign may change. Locked always wins.",
+        "Force my setup locks every pin at once.",
+        "To keep one agent on one model, open it, and choose Always this model."
+      ],
+      "steps": [
+        { "shot": "settings-models", "at": 0, "zoom": true },
+        { "shot": "levels", "at": 1, "action": "click", "zoom": true },
+        { "shot": "force", "at": 3, "action": "click" },
+        { "shot": "agent-lock", "at": 4, "action": "click", "zoom": true }
+      ]
+    },
+    {
+      "id": "magpie",
+      "kind": "shots",
+      "chapter": "Several subscriptions",
+      "lines": [
+        "Have more than one subscription? Turn on Let Magpie pick the account.",
+        "Agent HQ sets up routing groups in Magpie, and Magpie spreads the work by the quota each account has left.",
+        "An account that's almost empty is skipped.",
+        "Recent model decisions shows who chose every model.",
+        "And the ranking learns from real results, like QA approvals and rejections."
+      ],
+      "steps": [
+        { "shot": "magpie-off", "at": 0, "action": "click" },
+        { "shot": "magpie-on", "at": 1, "zoom": true },
+        { "shot": "decisions", "at": 3, "zoom": true },
+        { "shot": "ranking", "at": 4, "zoom": true }
+      ]
+    },
+    {
+      "id": "growth",
+      "kind": "shots",
+      "chapter": "A team that grows",
+      "lines": [
+        "Your team grows with you.",
+        "Onboard a junior, and Agent HQ suggests the right mentor.",
+        "After every run, agents write lessons from QA and mentor feedback, and you can teach them too."
+      ],
+      "steps": [
+        { "shot": "onboard", "at": 0, "action": "point", "zoom": true },
+        { "shot": "growth", "at": 2 }
+      ]
+    },
+    {
+      "id": "settings",
+      "kind": "shots",
+      "chapter": "Permissions and reports",
+      "lines": [
+        "Decide how much freedom agents have: ask every time, auto-apply approved changes, or full access.",
+        "And Reports shows runs, tokens, and estimated cost."
+      ],
+      "steps": [
+        { "shot": "permissions", "at": 0, "action": "point", "zoom": true },
+        { "shot": "reports", "at": 1 }
+      ]
+    },
+    {
+      "id": "outro",
+      "kind": "outro",
+      "lines": [
+        "That's Agent HQ.",
+        "Install the deb or rpm package from GitHub Releases, connect one subscription, and give your team its first task.",
+        "New versions show up right in the app. Just look for the arrow."
+      ]
+    }
+  ]
+}

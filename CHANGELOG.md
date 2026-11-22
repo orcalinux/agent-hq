@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.13.1] — 2026-11-21
+
+### Added
+- **Walkthrough video.** `npm run demo` makes a narrated, animated 1080p tour of the whole app (about 4½ minutes): connecting, role defaults, a full plan → approve → run → review, who picks each model, Models and routing, Magpie account routing, juniors and mentors, permissions and reports. It drives the real app with scripted providers, so no credit is used. Built with Playwright, edge-tts voices, Remotion and ffmpeg; see `docs/demo-video.md`.
+
 ## [0.13.0] — 2026-11-21
 
 ### Added
