@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.13.2] — 2026-11-21
+
+### Fixed
+- **Duplicate GitHub releases.** The Linux, Windows and macOS builds could each create their own release for the same version, splitting the installers between two releases and failing the release notes step. The release is now created once before the builds start, and all installers are uploaded to it.
+
 ## [0.13.1] — 2026-11-21
 
 ### Added
