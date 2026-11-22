@@ -2,12 +2,12 @@
   "name": "agent-hq-demo",
   "private": true,
   "type": "module",
-  "description": "The Agent HQ walkthrough video: real app stills, animated scenes and narration, rendered with Remotion.",
+  "description": "The Agent HQ video series: a narrated overview and recorded tutorials, rendered with Remotion.",
   "scripts": {
     "voice": "node scripts/voice.mjs",
     "studio": "remotion studio src/index.ts",
-    "render": "remotion render src/index.ts AgentHQDemo out/agent-hq-demo.mp4 --codec h264 --crf 18",
-    "still": "remotion still src/index.ts AgentHQDemo out/still.png",
+    "render": "remotion render src/index.ts Overview out/00-overview.mp4 --codec h264 --crf 16",
+    "still": "remotion still src/index.ts Overview out/still.png",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

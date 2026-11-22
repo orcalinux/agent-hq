@@ -60,13 +60,13 @@ export const TeamScene = ({ scene }: { scene: Scene }) => {
         const lit = speaking === m.line || (m.name === 'Sovereign' && speaking === 2);
         return (
           <div key={m.name} style={{ position: 'absolute', left: m.x - W / 2, top: m.y - H / 2, width: W, ...rise(p, 30) }}>
-            <Card glow={lit ? m.color : undefined} style={{ height: H, display: 'flex', alignItems: 'center', gap: 18, padding: '0 22px' }}>
+            <Card glow={lit ? m.color : undefined} style={{ boxSizing: 'border-box', width: '100%', height: H, display: 'flex', alignItems: 'center', gap: 18, padding: '0 22px' }}>
               <Tile color={m.color} size={66}>
                 <Icon name={m.icon} size={32} />
               </Tile>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: 32, fontWeight: 700, color: C.fg }}>{m.name}</span>
-                <span style={{ fontSize: 20, color: C.muted, whiteSpace: 'nowrap' }}>{m.title}</span>
+                <span style={{ fontSize: 20, lineHeight: 1.25, color: C.muted, overflowWrap: 'break-word' }}>{m.title}</span>
               </div>
             </Card>
           </div>

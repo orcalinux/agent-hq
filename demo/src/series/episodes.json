@@ -1,0 +1,233 @@
+{
+  "series": "Agent HQ tutorials",
+  "episodes": [
+    {
+      "id": "01-setup",
+      "number": 1,
+      "title": "Set up Agent HQ",
+      "subtitle": "Connect a model, fill every role, open a project",
+      "file": "01 - Set up Agent HQ",
+      "intro": [
+        "Episode one: setting up Agent HQ.",
+        "In three short steps, you'll connect a model, give every role a model, and open your project."
+      ],
+      "steps": [
+        { "id": "connect", "label": "Connect a provider" },
+        { "id": "roles", "label": "Give every role a model" },
+        { "id": "project", "label": "Open your project" },
+        { "id": "ready", "label": "Ready to work" }
+      ],
+      "cues": [
+        { "id": "home", "step": "connect", "text": "This is Agent HQ on first launch. Sovereign's chat says it needs a model first, so let's connect one." },
+        { "id": "open", "step": "connect", "text": "Open Connections, then click Connect provider." },
+        { "id": "provider", "step": "connect", "text": "Choose the company whose models you want. We'll pick Anthropic." },
+        { "id": "method", "step": "connect", "text": "Choose Signed-in CLI. If you already pay for Claude Code, Agent HQ uses that subscription. No API key." },
+        { "id": "verify", "step": "connect", "text": "Agent HQ checks that the tool is installed and signed in, and lists its models." },
+        { "id": "save", "step": "connect", "text": "Save the connection, and Anthropic shows as connected." },
+        { "id": "tools", "step": "connect", "text": "Local tools lists what's on this computer. A missing tool gets an Install button, and a command you can copy." },
+        { "id": "roles", "step": "roles", "text": "Next, open Role defaults. Every role needs a model before the team can work." },
+        { "id": "fill", "step": "roles", "text": "Click Fill empty roles. Each role gets a strong starting model, and you can change any of them later." },
+        { "id": "switcher", "step": "project", "text": "Now open your project. Click the project switcher at the top of the sidebar." },
+        { "id": "folder", "step": "project", "text": "Select the folder, then click Open. Agents can only read, write and run commands inside it." },
+        { "id": "workspace", "step": "ready", "text": "This is the Workspace: files on the left, the editor and terminal in the middle, and Sovereign on the right." },
+        { "id": "ready", "step": "ready", "text": "The warning is gone. Sovereign has a model, and it's ready for your first task." }
+      ],
+      "outro": [
+        "Setup is done. You connected a provider, filled every role, and opened a project.",
+        "Next, run your first task in Manual mode."
+      ],
+      "recap": ["Connected Anthropic through its signed-in CLI", "Gave every role a model", "Opened the project folder"]
+    },
+    {
+      "id": "02-manual",
+      "number": 2,
+      "title": "Manual mode",
+      "subtitle": "Approve the plan, then decide on every file",
+      "file": "02 - Manual mode - approve and apply",
+      "intro": [
+        "Episode two: Manual mode.",
+        "You approve the plan, then decide on every file yourself. It's the default, and the safest way to start."
+      ],
+      "steps": [
+        { "id": "ask", "label": "Ask for a change" },
+        { "id": "plan", "label": "Review the plan" },
+        { "id": "run", "label": "Approve and run" },
+        { "id": "review", "label": "Review the changes" },
+        { "id": "apply", "label": "Apply or undo" }
+      ],
+      "cues": [
+        { "id": "mode", "step": "ask", "text": "Under the chat, Approval says Ask every time. That's Manual mode." },
+        { "id": "plan", "step": "ask", "text": "Switch to Plan, so Sovereign proposes the work and waits for you." },
+        { "id": "type", "step": "ask", "text": "Describe the change in plain words." },
+        { "id": "send", "step": "ask", "text": "And send it." },
+        { "id": "card", "step": "plan", "text": "Sovereign replies with a plan: three tasks, and the agent for each one." },
+        { "id": "level", "step": "plan", "text": "Every task is rated simple, standard or complex, and runs on a model picked for that level." },
+        { "id": "reason", "step": "plan", "text": "For the helper, Sovereign chose GPT-5 Codex instead, and tells you why." },
+        { "id": "deps", "step": "plan", "text": "The documentation task waits for the other two to finish." },
+        { "id": "approve", "step": "run", "text": "Nothing runs until you click Approve and run." },
+        { "id": "board", "step": "run", "text": "Pulse and Titan work at the same time. Follow them on the Tasks board." },
+        { "id": "qa", "step": "run", "text": "When they're done, Sentinel, the QA agent, reviews all of the work." },
+        { "id": "back", "step": "run", "text": "Back in the Workspace, Sovereign reports that QA approved the run." },
+        { "id": "pending", "step": "review", "text": "In Manual mode, nothing is written yet. Open Changes: every file is a pending proposal." },
+        { "id": "diff", "step": "review", "text": "Click Diff to compare a proposal with the file on disk." },
+        { "id": "apply", "step": "apply", "text": "Looks good? Click Apply, and the file is written to your project." },
+        { "id": "applied", "step": "apply", "text": "It's marked applied, and git now lists the file as modified." },
+        { "id": "undo", "step": "apply", "text": "Changed your mind? Undo puts the original file back." },
+        { "id": "rest", "step": "apply", "text": "Apply the other files the same way, or discard the ones you don't want." }
+      ],
+      "outro": [
+        "In Manual mode, you approved the plan, and decided on every file.",
+        "Next, let the team write files on its own, with Auto mode."
+      ],
+      "recap": ["Planned with Sovereign before anything ran", "Approved the plan and watched the team", "Compared, applied, undid and discarded each file"]
+    },
+    {
+      "id": "03-auto",
+      "number": 3,
+      "title": "Auto-apply and Full access",
+      "subtitle": "Let the team write files, or start work on its own",
+      "file": "03 - Auto mode - auto-apply and full access",
+      "intro": [
+        "Episode three: Auto-apply and Full access.",
+        "When you trust the team, let it write files for you, or even start work without asking."
+      ],
+      "steps": [
+        { "id": "auto", "label": "Turn on auto-apply" },
+        { "id": "run", "label": "Run with auto-apply" },
+        { "id": "full", "label": "Full access" },
+        { "id": "check", "label": "Check and undo" }
+      ],
+      "cues": [
+        { "id": "picker", "step": "auto", "text": "Open the Approval menu under the chat. There are three modes." },
+        { "id": "choose", "step": "auto", "text": "Choose Auto-apply changes." },
+        { "id": "confirm", "step": "auto", "text": "Agent HQ explains exactly what changes, and asks once. Turn on auto-apply." },
+        { "id": "request", "step": "run", "text": "Now ask for a change in Plan mode, as before." },
+        { "id": "approve", "step": "run", "text": "You still approve the plan." },
+        { "id": "written", "step": "run", "text": "Once Sentinel approves, the files are written automatically. No Apply clicks." },
+        { "id": "marked", "step": "run", "text": "In Changes, each file is marked auto, and applied." },
+        { "id": "full", "step": "full", "text": "Full access goes one step further. Pick it from the same menu." },
+        { "id": "warn", "step": "full", "text": "It starts work as soon as Sovereign has a plan, so read the warning, then allow it." },
+        { "id": "build", "step": "full", "text": "Switch to Build, and describe the next change." },
+        { "id": "go", "step": "full", "text": "Send it. This time there is no approval step." },
+        { "id": "runs", "step": "full", "text": "Sovereign plans, the team builds, Sentinel reviews, and the files are written." },
+        { "id": "terminal", "step": "check", "text": "Check it in the terminal. The file really changed on disk." },
+        { "id": "undo", "step": "check", "text": "Every auto-applied file can still be undone, from Changes." },
+        { "id": "back", "step": "check", "text": "Switch back to Ask every time whenever you want to review again. Going back never asks." }
+      ],
+      "outro": [
+        "Auto-apply writes approved files for you. Full access also starts work without waiting.",
+        "Next: how Agent HQ picks a model for every task, and how you take control."
+      ],
+      "recap": ["Turned on Auto-apply: QA-approved files are written for you", "Allowed Full access: Build requests run without approval", "Checked the result on disk and undid a change"]
+    },
+    {
+      "id": "04-models",
+      "number": 4,
+      "title": "Models and routing",
+      "subtitle": "Automatic by default, yours to pin, lock or force",
+      "file": "04 - Models and routing",
+      "intro": [
+        "Episode four: which model does each agent use?",
+        "By default, it's automatic. Here's how Agent HQ decides, and every way to take control."
+      ],
+      "steps": [
+        { "id": "auto", "label": "Automatic by level" },
+        { "id": "pin", "label": "Pin a level" },
+        { "id": "force", "label": "Force and agent locks" },
+        { "id": "magpie", "label": "Magpie accounts" },
+        { "id": "learn", "label": "Ranking and decisions" }
+      ],
+      "cues": [
+        { "id": "where", "step": "auto", "text": "Open Settings, then Models and routing." },
+        { "id": "order", "step": "auto", "text": "This card shows who decides, from your strictest setting down to fully automatic." },
+        { "id": "levels", "step": "auto", "text": "Sovereign rates every task simple, standard or complex, and each level runs on its own model." },
+        { "id": "auto", "step": "auto", "text": "Auto picks the strongest model for each level, across every provider you've connected. Simple work doesn't spend your best model." },
+        { "id": "turns", "step": "auto", "text": "Take turns means two equally good models share the work, so both subscriptions last longer." },
+        { "id": "pin", "step": "pin", "text": "To choose yourself, pick a model for a level. Here, Claude Opus 5.5 for complex work." },
+        { "id": "locked", "step": "pin", "text": "Preferred is a starting point that Sovereign may change. Locked means always this model." },
+        { "id": "force", "step": "force", "text": "Force my setup makes every pin and locked agent apply exactly, with no exceptions." },
+        { "id": "forceoff", "step": "force", "text": "We'll leave it off, so the AI stays dynamic." },
+        { "id": "agent", "step": "force", "text": "You can also lock one agent. Open Agents, and configure Titan." },
+        { "id": "lock", "step": "force", "text": "Give Titan a model, and choose Always this model. Titan now ignores the levels." },
+        { "id": "magpie", "step": "magpie", "text": "With the Magpie gateway, Agent HQ can also let Magpie pick which subscription serves each call." },
+        { "id": "quota", "step": "magpie", "text": "Your levels become Magpie groups, routed by the quota you have left. Codex is down to seven percent this week, so it gets less work." },
+        { "id": "ranking", "step": "learn", "text": "The ranking explains every choice: the model's size, whether a newer version exists, and how it did on your real tasks." },
+        { "id": "decisions", "step": "learn", "text": "And the decisions log records which model ran each task, and why." }
+      ],
+      "outro": [
+        "Models are automatic by default, and every level, agent and account can be pinned, locked or forced.",
+        "Next: a team that grows and learns with your project."
+      ],
+      "recap": ["Each task runs on the best model for its level", "Pinned a level, and locked one agent", "Let Magpie spread work by quota, and read the ranking"]
+    },
+    {
+      "id": "05-team",
+      "number": 5,
+      "title": "A team that grows",
+      "subtitle": "New specialists, mentors for juniors, lasting memory",
+      "file": "05 - A team that grows",
+      "intro": [
+        "Episode five: a team that grows with your project.",
+        "Sovereign hires the specialists a task needs, juniors report to a senior, and every agent remembers what it learns."
+      ],
+      "steps": [
+        { "id": "hire", "label": "Sovereign hires" },
+        { "id": "mentor", "label": "Mentors review juniors" },
+        { "id": "onboard", "label": "Onboard a junior" },
+        { "id": "memory", "label": "Memory and growth" }
+      ],
+      "cues": [
+        { "id": "strategy", "step": "hire", "text": "With Team set to Sovereign designs the team, Sovereign decides how many agents each request needs." },
+        { "id": "ask", "step": "hire", "text": "Let's ask for work that no current agent specializes in." },
+        { "id": "hires", "step": "hire", "text": "Sovereign proposes two new agents: Vera, a testing lead, and Kit, a junior who reports to her." },
+        { "id": "why", "step": "hire", "text": "Each new agent comes with a role, a model, and a reason." },
+        { "id": "approve", "step": "mentor", "text": "Approve, and the new agents join the team and start working." },
+        { "id": "review", "step": "mentor", "text": "Kit is a junior, so Vera reviews Kit's work first. That's the N plus one review, before QA." },
+        { "id": "graph", "step": "mentor", "text": "In the Agents graph, every junior is linked to the senior who mentors it." },
+        { "id": "onboard", "step": "onboard", "text": "You can hire too. Click Onboard junior." },
+        { "id": "specialty", "step": "onboard", "text": "Pick a specialty, and a matching mentor is suggested. For QA, that's Sentinel." },
+        { "id": "name", "step": "onboard", "text": "Give the junior a name, and click Onboard." },
+        { "id": "growth", "step": "memory", "text": "Agents keep lessons from QA feedback, mentor reviews, and what you teach them. Open Growth to see them." },
+        { "id": "card", "step": "memory", "text": "Each card shows the agent's level, its focus areas, and the last thing it learned." },
+        { "id": "teach", "step": "memory", "text": "To teach the whole team, type slash remember in the chat." }
+      ],
+      "outro": [
+        "Your team grows with every project: new specialists, mentors for juniors, and memory that carries over.",
+        "Last episode: the workspace tools you'll use every day."
+      ],
+      "recap": ["Sovereign hired a lead and a junior for the task", "The junior's work was reviewed by its mentor", "Onboarded a junior and taught the team a lesson"]
+    },
+    {
+      "id": "06-workspace",
+      "number": 6,
+      "title": "The workspace",
+      "subtitle": "Files, search, Ask mode, terminal and reports",
+      "file": "06 - The workspace tools",
+      "intro": [
+        "Episode six: the workspace tools.",
+        "Files and search, Ask mode, a real terminal, and the reports that show what the team did."
+      ],
+      "steps": [
+        { "id": "files", "label": "Files and editor" },
+        { "id": "search", "label": "Search and Ask" },
+        { "id": "terminal", "label": "Terminal" },
+        { "id": "reports", "label": "Activity and reports" }
+      ],
+      "cues": [
+        { "id": "explorer", "step": "files", "text": "The explorer shows your project. Click a file, and it opens in a tab." },
+        { "id": "edit", "step": "files", "text": "Edit it like any code editor. Control S saves it to disk." },
+        { "id": "palette", "step": "search", "text": "Press Control K to jump to any file or command." },
+        { "id": "ask", "step": "search", "text": "Ask mode is for questions. Sovereign reads the project and answers, but never changes files." },
+        { "id": "terminal", "step": "terminal", "text": "The terminal is a real shell, opened in your project folder." },
+        { "id": "tabs", "step": "terminal", "text": "Click plus for another shell. Each one is a separate tab." },
+        { "id": "activity", "step": "reports", "text": "The Activity panel logs every step the team takes, so nothing happens out of sight." },
+        { "id": "reports", "step": "reports", "text": "And Reports shows runs, tokens and estimated cost, for every agent and model." }
+      ],
+      "outro": [
+        "That's the workspace: files, search, Ask mode, a real terminal, and reports.",
+        "You've seen the whole series. Open Agent HQ, and give your team its first task."
+      ],
+      "recap": ["Opened, edited and saved a file", "Searched with Control K and asked about the code", "Used the terminal, Activity and Reports"]
+    }
+  ]
+}

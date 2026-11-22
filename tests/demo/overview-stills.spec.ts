@@ -215,6 +215,12 @@ test('capture the demo video stills', async ({ page }) => {
 
   const terminal = page.getByTestId('integrated-terminal');
   await page.getByRole('tab', { name: 'Terminal', exact: true }).click();
+  const closeButtons = terminal.getByRole('button', { name: /^Close terminal / });
+  while ((await terminal.getByRole('tab').count()) > 1) {
+    const before = await terminal.getByRole('tab').count();
+    await closeButtons.last().click();
+    await expect(terminal.getByRole('tab')).toHaveCount(before - 1);
+  }
   await expect(terminal.getByRole('tab')).toHaveCount(1);
   await terminalInput.focus();
   await page.keyboard.type('ls src && wc -l src/*.ts');

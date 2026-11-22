@@ -193,7 +193,7 @@ export function extractFileBlocks(text: string): FileBlock[] {
     if (m[1].startsWith('/')) continue;
     const path = m[1].replace(/^(\.\/+)+/, '');
     if (!path || path.split('/').includes('..')) continue;
-    out.set(path, m[2].replace(/\n$/, ''));
+    out.set(path, m[2]);
   }
   return Array.from(out, ([path, content]) => ({ path, content }));
 }

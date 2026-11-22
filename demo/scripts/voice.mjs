@@ -4,9 +4,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Narrates every line of src/scenes.json with Edge's free neural voices (edge-tts) and records each clip's length. */
+/**
+ * Narrates the overview (src/scenes.json) and every tutorial episode (src/series/episodes.json) with Edge's free neural
+ * voices (edge-tts), and records each clip's length in public/voice/timing.json. Clips are cached by text and voice.
+ */
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const script = JSON.parse(fs.readFileSync(path.join(root, 'src/scenes.json'), 'utf8'));
+const series = JSON.parse(fs.readFileSync(path.join(root, 'src/series/episodes.json'), 'utf8'));
 const outDir = path.join(root, 'public/voice');
 const voice = process.env.DEMO_VOICE || script.voice;
 const rate = process.env.DEMO_RATE || script.rate || '+0%';
@@ -40,28 +44,41 @@ async function clip(text) {
         await speak(text, file);
         break;
       } catch (e) {
-        if (attempt === 8) throw new Error(`Could not narrate "${text}": ${e.message}`);
-        await new Promise((r) => setTimeout(r, attempt * 2000));
+        if (attempt === 10) throw new Error(`Could not narrate "${text}": ${e.message}`);
+        await new Promise((r) => setTimeout(r, attempt * 4000));
       }
     }
   }
   return { file: `voice/${name}`, duration: duration(file) };
 }
 
-const jobs = script.scenes.flatMap((scene) => scene.lines.map((text, i) => ({ scene: scene.id, i, text })));
+const jobs = [
+  ...script.scenes.flatMap((scene) => scene.lines.map((text, i) => ({ key: `${scene.id}:${i}`, text }))),
+  ...series.episodes.flatMap((ep) => [
+    ...ep.intro.map((text, i) => ({ key: `${ep.id}:intro-${i}`, text })),
+    ...ep.cues.map((cue) => ({ key: `${ep.id}:${cue.id}`, text: cue.text })),
+    ...ep.outro.map((text, i) => ({ key: `${ep.id}:outro-${i}`, text })),
+  ]),
+];
+if (new Set(jobs.map((j) => j.key)).size !== jobs.length) throw new Error('Two narration lines share an id');
 const results = new Map();
 let next = 0;
 let done = 0;
 async function worker() {
   while (next < jobs.length) {
     const job = jobs[next++];
-    results.set(`${job.scene}:${job.i}`, await clip(job.text));
+    results.set(job.key, await clip(job.text));
     process.stdout.write(`\rNarrated ${++done}/${jobs.length} lines`);
   }
 }
 await Promise.all(Array.from({ length: 2 }, worker));
 
-const timing = { voice, rate, scenes: Object.fromEntries(script.scenes.map((s) => [s.id, s.lines.map((_, i) => results.get(`${s.id}:${i}`))])) };
+const timing = {
+  voice,
+  rate,
+  scenes: Object.fromEntries(script.scenes.map((s) => [s.id, s.lines.map((_, i) => results.get(`${s.id}:${i}`))])),
+  lines: Object.fromEntries(jobs.filter((j) => !script.scenes.some((s) => j.key.startsWith(`${s.id}:`))).map((j) => [j.key, results.get(j.key)])),
+};
 fs.writeFileSync(path.join(outDir, 'timing.json'), JSON.stringify(timing, null, 2));
-const total = Object.values(timing.scenes).flat().reduce((sum, l) => sum + l.duration, 0);
+const total = [...results.values()].reduce((sum, l) => sum + l.duration, 0);
 console.log(`\nVoice ready: ${jobs.length} lines, ${Math.round(total)}s of narration (${voice}).`);

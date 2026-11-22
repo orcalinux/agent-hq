@@ -1,0 +1,3 @@
+#!/bin/sh
+# The shell the recordings use: real bash with a neutral prompt, no personal startup files and no saved history.
+exec /bin/bash --noprofile --rcfile "$(dirname "$0")/demo.bashrc" -i

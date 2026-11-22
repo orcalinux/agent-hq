@@ -21,12 +21,12 @@ export const OutroScene = ({ scene }: { scene: Scene }) => {
         <Logo size={110} />
         <span style={{ fontSize: 96, fontWeight: 700, color: C.fg, letterSpacing: -3 }}>Agent HQ</span>
       </div>
-      <div style={{ display: 'flex', gap: 30, marginTop: 70 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 30, marginTop: 70 }}>
         {STEPS.map((s, i) => {
           const p = useEnter(l1.from + Math.round((l1.frames * i) / 3.2));
           return (
-            <div key={s.title} style={rise(p, 40)}>
-              <Card style={{ width: 420, padding: 30, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div key={s.title} style={{ display: 'flex', ...rise(p, 40) }}>
+              <Card style={{ boxSizing: 'border-box', width: 420, minHeight: '100%', padding: 30, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <Tile color={s.color} size={60}>
                     <Icon name={s.icon} size={30} />

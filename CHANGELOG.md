@@ -11,6 +11,28 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.14.1] — 2026-11-22
+
+### Fixed
+- **Sharp videos.** The tutorials were captured at 1440×810 and upscaled, because Chromium's screencast ignores the page's device scale. Recordings now start Chromium at 2× and capture true 2880×1620 frames (the recorder refuses smaller ones), every video renders as a 4K master, and the 1080p file is supersampled from it at a higher bitrate. 4K versions (`*.4k.mp4`) are included.
+
+## [0.14.0] — 2026-11-22
+
+### Added
+- **Tutorial video series.** The single walkthrough is replaced by six recorded tutorials, one per scenario: setup, manual mode (approve, apply, undo, discard), auto-apply and Full access, models and routing, a growing team (interns, mentors, lessons), and the workspace tools (explorer, editor, palette, terminal). Each is a real recording of the built app with narration, captions, a step bar, a guided camera and a visible pointer. Model replies are scripted, so making the videos uses no credit; file writes, git and the terminal are real.
+- **`npm run demo -- <id>`** builds one video (`overview` or a tutorial id) instead of the whole series.
+
+### Changed
+- **Overview video.** The narrated explainer is now `00-overview.mp4`; the recorded chapter moved into the tutorials.
+
+### Fixed
+- **Files written by agents keep their final newline.** Proposed files no longer lose the last line break, so diffs stop showing "No newline at end of file" and applied files match what the agent wrote.
+- **Overview team cards.** Long role descriptions stay inside the card instead of overflowing it.
+- **Overview closing cards.** The three steps now have equal height.
+
+### Security
+- **No personal details in the videos.** Recordings run terminals through a neutral demo shell (no personal prompt, startup output or saved history), and each recording fails if the account's user name or host prompt is ever on screen.
+
 ## [0.13.2] — 2026-11-21
 
 ### Fixed

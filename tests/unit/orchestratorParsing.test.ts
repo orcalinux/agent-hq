@@ -19,7 +19,12 @@ describe('orchestrator parsing', () => {
 
   it('extracts file blocks and drops unsafe paths', () => {
     const text = '```ts path=src/a.ts\nexport const a = 1;\n```\n```ts path=../evil.ts\nx\n```\n```sh path=/etc/passwd\nx\n```';
-    expect(extractFileBlocks(text)).toEqual([{ path: 'src/a.ts', content: 'export const a = 1;' }]);
+    expect(extractFileBlocks(text)).toEqual([{ path: 'src/a.ts', content: 'export const a = 1;\n' }]);
+  });
+
+  it('keeps the final newline the file had before the closing fence', () => {
+    expect(extractFileBlocks('```ts path=a.ts\nline 1\nline 2\n```')[0].content).toBe('line 1\nline 2\n');
+    expect(extractFileBlocks('```md path=empty.md\n```')[0].content).toBe('');
   });
 
   it('normalizes QA verdicts and unknown task ids', () => {
