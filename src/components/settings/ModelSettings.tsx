@@ -3,7 +3,7 @@ import { RefreshCw, RotateCcw } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { useModelWatchStore } from '@/store/useModelWatchStore';
-import { BALANCES, LOW_QUOTA_PERCENT, activeMagpieGroups, useMagpieStore } from '@/store/useMagpieStore';
+import { BALANCES, LOW_QUOTA_PERCENT, QUOTA_POLL_MS, QUOTA_STALE_MS, activeMagpieGroups, useMagpieStore } from '@/store/useMagpieStore';
 import { useRouting } from '@/components/models/useRouting';
 import { Badge, Button, ProgressBar, Tabs, Truncate } from '@/components/ui/primitives';
 import { ModelSelect, fmtRelative, fmtUntil } from '@/components/ui/helpers';
@@ -69,8 +69,22 @@ function MagpieRouting() {
   const nameOf = (id: string) => providers.flatMap((p) => p.models).find((m) => m.ref === `magpie:${id}`)?.name.split(' · ')[0] ?? id;
   const active = activeMagpieGroups();
 
+  const quotasAt = useMagpieStore((st) => st.quotasAt);
+  const [refreshing, setRefreshing] = useState(false);
   useEffect(() => {
-    if (connected) void loadQuotas();
+    if (!connected) return;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void loadQuotas(true);
+    };
+    refresh();
+    const timer = window.setInterval(refresh, QUOTA_POLL_MS);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
   }, [connected, loadQuotas]);
   useEffect(() => {
     if (enabled && connected) void sync();
@@ -123,7 +137,23 @@ function MagpieRouting() {
       ) : null}
       {connected ? (
         <div className="space-y-1.5" aria-label="Subscription quota">
-          <p className={label}>Quota left</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className={label}>Quota left</p>
+            <span className="text-[11px] text-fg-subtle" data-testid="quota-updated">
+              {quotaError ? `Could not refresh · last reading ${fmtRelative(quotasAt ?? undefined)}` : `Live · updated ${fmtRelative(quotasAt ?? undefined)}`}
+            </span>
+            <Button
+              size="sm"
+              icon={RefreshCw}
+              disabled={refreshing}
+              onClick={() => {
+                setRefreshing(true);
+                void loadQuotas(true).finally(() => setRefreshing(false));
+              }}
+            >
+              Refresh
+            </Button>
+          </div>
           {quotas.length ? (
             <ul className="grid gap-2 sm:grid-cols-2">
               {quotas.map((q) => (
@@ -131,6 +161,7 @@ function MagpieRouting() {
                   <div className="flex min-w-0 items-center gap-2">
                     <Truncate className="text-[12.5px] font-medium">{q.name}</Truncate>
                     {q.plan ? <Badge className="shrink-0">{q.plan}</Badge> : null}
+                    {q.readAt && Date.now() - Date.parse(q.readAt) > QUOTA_STALE_MS ? <Badge tone="warning" className="shrink-0" title={`Magpie last read this subscription ${fmtRelative(Date.parse(q.readAt))}.`}>stale</Badge> : null}
                   </div>
                   {q.windows.map((w) => (
                     <div key={w.name} className="space-y-0.5">
@@ -147,6 +178,7 @@ function MagpieRouting() {
           ) : (
             <p className={hint}>{quotaError ?? 'Magpie reports no subscriptions with a quota.'}</p>
           )}
+          {quotaError && quotas.length ? <p className="text-[11.5px] text-warning" role="status">{quotaError} The bars above may be out of date.</p> : null}
           <p className={hint}>Below {LOW_QUOTA_PERCENT}% left, Agent HQ gives a level&apos;s tasks to an equally good model on another subscription, if there is one.</p>
         </div>
       ) : null}

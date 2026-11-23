@@ -444,7 +444,7 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
   const controller = new AbortController();
   chatController = controller;
 
-  if (mode !== 'ask' && useMagpieStore.getState().enabled) await useMagpieStore.getState().loadQuotas();
+  if (mode !== 'ask' && useMagpieStore.getState().enabled) await useMagpieStore.getState().loadQuotas(true);
   const content = `${text}${await attachmentContext(attachments)}`;
   const lessons = await memoryBrief(sovereign.id, text);
   const system = `${sovereign.systemPrompt}${lessons}\n\n${mode === 'ask' ? ASK_INSTRUCTIONS : planInstructions(store.teamStrategy, store.complexityRouting)}\n\nTeam roster (id | name | title):\n${rosterDescription()}\n\n${mode === 'ask' ? '' : modelCatalog() + '\n\n'}${projectContext()}`;

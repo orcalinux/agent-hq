@@ -31,6 +31,8 @@ export interface ProviderQuota {
   name: string;
   kind: string;
   plan?: string;
+  /** When Magpie last read this subscription's usage from the provider. */
+  readAt?: string;
   windows: QuotaWindow[];
 }
 
@@ -54,7 +56,7 @@ export function parseQuotas(data: unknown): ProviderQuota[] {
       if (typeof win.name !== 'string' || remaining === undefined || !Number.isFinite(remaining)) return [];
       return [{ name: win.name, remaining: Math.max(0, Math.min(100, Math.round(remaining))), ...(typeof win.resetsAt === 'string' ? { resetsAt: win.resetsAt } : {}) }];
     });
-    return [{ provider: r.provider, name: typeof r.name === 'string' ? r.name : r.provider, kind: typeof r.kind === 'string' ? r.kind : 'account', ...(typeof r.plan === 'string' ? { plan: r.plan } : {}), windows }];
+    return [{ provider: r.provider, name: typeof r.name === 'string' ? r.name : r.provider, kind: typeof r.kind === 'string' ? r.kind : 'account', ...(typeof r.plan === 'string' ? { plan: r.plan } : {}), ...(typeof r.readAt === 'string' ? { readAt: r.readAt } : {}), windows }];
   });
 }
 

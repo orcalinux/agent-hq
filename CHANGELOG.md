@@ -11,6 +11,16 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.18.2] — 2026-11-23
+
+### Fixed
+- **Quota left was stale.** It was read once when Settings opened and cached for 2 minutes, so Codex could show 7% left when Magpie already reported 0%. It now refreshes every 15 seconds while the panel is open and again when the window regains focus.
+- Before Sovereign makes a plan, quotas are read fresh, so routing never uses an old number. A forced refresh no longer reuses an answer that was already in flight.
+- When a refresh fails, the last reading stays visible but is labelled "Could not refresh · last reading …" with a warning, instead of looking current.
+
+### Added
+- The quota panel shows **Live · updated …** and a **Refresh** button. A subscription Magpie has not read for over 10 minutes gets a "stale" badge.
+
 ## [0.18.1] — 2026-11-23
 
 ### Fixed

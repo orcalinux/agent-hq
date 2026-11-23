@@ -96,6 +96,7 @@ export interface MagpieQuota {
   name: string;
   kind: string;
   plan?: string;
+  readAt?: string;
   windows: Array<{ name: string; remaining: number; resetsAt?: string }>;
 }
 

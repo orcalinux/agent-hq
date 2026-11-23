@@ -16,7 +16,13 @@ export const BALANCES: Array<{ id: MagpieBalance; label: string; hint: string }>
 
 /** Below this percent left in any window, a subscription is avoided while a peer has room. */
 export const LOW_QUOTA_PERCENT = 10;
-const QUOTA_TTL_MS = 2 * 60_000;
+/** A reading newer than this is reused; anything older is fetched again. */
+export const QUOTA_TTL_MS = 10_000;
+export const QUOTA_POLL_MS = 15_000;
+/** Magpie readings older than this are flagged as stale. */
+export const QUOTA_STALE_MS = 10 * 60_000;
+let quotaRequest: Promise<void> | null = null;
+let quotaQueued: Promise<void> | null = null;
 
 export interface SyncedGroup {
   ref: AIModelId;
@@ -113,15 +119,31 @@ export const useMagpieStore = create<MagpieState>()(
         }
       },
 
-      loadQuotas: async (force = false) => {
+      loadQuotas: (force = false) => {
         const at = get().quotasAt;
-        if (!force && at && Date.now() - at < QUOTA_TTL_MS) return;
-        try {
-          const r = await api.magpieQuotas();
-          set({ quotas: r.quotas, quotasAt: Date.now(), quotaError: r.ok ? null : r.error ?? 'Could not read quotas.' });
-        } catch (err) {
-          set({ quotasAt: Date.now(), quotaError: (err as Error).message });
-        }
+        if (!force && at && Date.now() - at < QUOTA_TTL_MS) return Promise.resolve();
+        const fetchQuotas = () => {
+          quotaRequest = (async () => {
+            try {
+              const r = await api.magpieQuotas();
+              if (r.ok) set({ quotas: r.quotas, quotasAt: Date.now(), quotaError: null });
+              else set({ quotaError: r.error ?? 'Could not read quotas.', ...(get().quotas.length ? {} : { quotasAt: Date.now() }) });
+            } catch (err) {
+              set({ quotaError: (err as Error).message });
+            } finally {
+              quotaRequest = null;
+            }
+          })();
+          return quotaRequest;
+        };
+        if (!quotaRequest) return fetchQuotas();
+        if (!force) return quotaRequest;
+        // A forced read must not reuse an answer that was already on its way before the call.
+        quotaQueued ??= quotaRequest.then(() => {
+          quotaQueued = null;
+          return fetchQuotas();
+        });
+        return quotaQueued;
       },
     }),
     {

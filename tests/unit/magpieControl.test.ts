@@ -17,6 +17,12 @@ describe('Magpie quotas', () => {
     expect(JSON.stringify(quotas)).not.toContain('@');
     expect(parseQuotas(null)).toEqual([]);
   });
+
+  it('keeps when Magpie last read a subscription, and a real 0% left', () => {
+    const [codex] = parseQuotas({ data: [{ provider: 'codex', readAt: '2026-11-23T06:06:55-05:00', windows: [{ name: '5 hours', used: 100, remaining: 0 }] }] });
+    expect(codex.readAt).toBe('2026-11-23T06:06:55-05:00');
+    expect(codex.windows).toEqual([{ name: '5 hours', remaining: 0 }]);
+  });
 });
 
 describe('Magpie group commands', () => {
