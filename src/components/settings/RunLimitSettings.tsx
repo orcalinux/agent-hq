@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
-import { Button, Field, Input } from '@/components/ui/primitives';
+import { Button, Field } from '@/components/ui/primitives';
+import { NumberInput } from '@/components/ui/NumberInput';
 import { DEFAULT_RUN_LIMITS, normalizeLimit, type RunLimits } from '@/engine/runLimits';
 
 const ROWS: Array<{ key: keyof RunLimits; label: string; unit: string; hint: string; step: string }> = [
@@ -15,22 +16,19 @@ function LimitField({ row }: { row: (typeof ROWS)[number] }) {
   const setRunLimits = useAgentStore((s) => s.setRunLimits);
   const [draft, setDraft] = useState(value === null ? '' : String(value));
   useEffect(() => setDraft(value === null ? '' : String(value)), [value]);
-  const commit = () => setRunLimits({ [row.key]: normalizeLimit(draft) });
+  const commit = (next: string) => setRunLimits({ [row.key]: normalizeLimit(next) });
   return (
-    <Field label={`${row.label} (${row.unit})`} hint={row.hint}>
-      <Input
-        type="number"
-        min="0"
-        step={row.step}
-        inputMode="decimal"
+    <Field label={row.label} hint={row.hint}>
+      <NumberInput
+        aria-label={`${row.label} (${row.unit})`}
+        min={0}
+        step={Number(row.step)}
+        unit={row.unit}
         placeholder="No limit"
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') commit();
-        }}
-        className="max-w-48"
+        onChange={setDraft}
+        onCommit={commit}
+        className="max-w-56"
       />
     </Field>
   );

@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.16.4] — 2026-11-23
+
+### Changed
+- Number fields in Settings → Run limits no longer use the browser's basic spinner. They now have a themed stepper with − and + buttons, press-and-hold to repeat, ↑ and ↓ keys, an inline unit label, and a floor at zero. Typing is limited to numbers, values commit as you step, and screen readers still hear a spin button with its current value.
+
 ## [0.16.3] — 2026-11-23
 
 ### Fixed
