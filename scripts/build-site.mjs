@@ -11,6 +11,9 @@ fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, 'assets'), { recursive: true });
 for (const name of ['style.css', 'app.js']) fs.copyFileSync(path.join(root, 'site', name), path.join(out, name));
 fs.writeFileSync(path.join(out, 'index.html'), fs.readFileSync(path.join(root, 'site', 'index.html'), 'utf8').replaceAll('{{VERSION}}', version));
-fs.copyFileSync(path.join(root, 'docs', 'screenshots', 'workspace.png'), path.join(out, 'assets', 'workspace.png'));
+for (const name of ['workspace', 'tasks', 'office', 'growth']) {
+  fs.copyFileSync(path.join(root, 'docs', 'screenshots', `${name}.png`), path.join(out, 'assets', `${name}.png`));
+}
+fs.copyFileSync(path.join(root, 'docs', 'social-preview.png'), path.join(out, 'assets', 'social-preview.png'));
 fs.copyFileSync(path.join(root, 'build', 'icons', '128x128.png'), path.join(out, 'assets', 'icon.png'));
 console.log(`site-dist built for v${version}`);

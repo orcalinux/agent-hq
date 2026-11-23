@@ -11,6 +11,16 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.20.0] — 2026-11-23
+
+### Changed
+- **A new product website.** Rebuilt the GitHub Pages site with a larger editorial introduction, an animated illustration of agent delegation, an interactive tour of real Workspace, Tasks, Office and Growth screens, a four-step workflow, and clear explanations of permissions and project memory.
+- **Downloads for your system.** Separate Linux packages, Apple silicon and Intel macOS installers, and Windows downloads resolve against the latest published GitHub release. Missing builds or failed lookups fall back to the release page. Checksums and setup instructions stay close to the downloads.
+
+### Added
+- Keyboard navigation for the product tour, an expandable screenshot viewer, a mobile navigation menu, accessible FAQ disclosures, and motion pause and reduced-motion support. The site uses no additional runtime dependencies, cookies or analytics.
+- A website regression suite covering eight viewport sizes, keyboard interactions, release asset resolution, unavailable release data, reduced motion and browsing without JavaScript. Run it with `npm run test:site`; see `docs/website.md`.
+
 ## [0.19.2] — 2026-11-23
 
 ### Changed

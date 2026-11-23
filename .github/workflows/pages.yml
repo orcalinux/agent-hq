@@ -4,7 +4,7 @@ name: Website
 on:
   push:
     branches: [main]
-    paths: ['site/**', 'scripts/build-site.mjs', 'docs/screenshots/workspace.png', 'package.json', '.github/workflows/pages.yml']
+    paths: ['site/**', 'scripts/build-site.mjs', 'docs/screenshots/**', 'docs/social-preview.png', 'package.json', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
