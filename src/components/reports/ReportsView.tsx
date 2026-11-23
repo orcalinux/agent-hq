@@ -101,13 +101,13 @@ export default function ReportsView() {
                 <tr key={r.id} className="border-b border-line last:border-0">
                   <FlexCell className="font-medium"><span className="min-w-0 truncate">{r.title}</span></FlexCell>
                   <td className="px-3 py-1.5">{r.source === 'live' ? <Badge tone="accent">Live</Badge> : <Badge tone="warning">Simulated</Badge>}</td>
-                  <td className="px-3 py-1.5"><Badge tone={r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : 'neutral'}>{r.status}</Badge></td>
+                  <td className="px-3 py-1.5"><Badge tone={r.qaConcerns ? 'warning' : r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : 'neutral'}>{r.qaConcerns ? 'Completed with concerns' : r.status}</Badge></td>
                   <td className="px-3 py-1.5 text-fg-muted">{fmtDateTime(r.startedAt)}</td>
                   <td className="px-3 py-1.5 tabular-nums">{r.completedAt ? fmtDuration(r.completedAt - r.startedAt) : '—'}</td>
                   <td className="px-3 py-1.5 tabular-nums">{r.tasksCompleted}/{r.tasksTotal}{r.tasksFailed ? ' (' + r.tasksFailed + ' failed)' : ''}</td>
                   <td className="px-3 py-1.5 tabular-nums">{r.source === 'live' ? fmtTokens(r.promptTokens + r.completionTokens) : '—'}</td>
                   <td className="px-3 py-1.5 tabular-nums">{r.source !== 'live' ? '—' : r.unpricedTokens > 0 && r.costUSD === 0 ? 'unpriced' : fmtCost(r.costUSD) + (r.unpricedTokens > 0 ? '+' : '')}</td>
-                  <td className="px-3 py-1.5">{r.qaVerdict ? <Badge tone={r.qaVerdict === 'approve' ? 'success' : 'danger'}>{r.qaVerdict}{r.qaRejectCount ? ' · ' + r.qaRejectCount + ' rework' : ''}</Badge> : '—'}</td>
+                  <td className="px-3 py-1.5">{r.qaConcerns ? <span className="text-warning">{r.qaConcerns}</span> : r.qaVerdict ? <Badge tone={r.qaVerdict === 'approve' ? 'success' : 'danger'}>{r.qaVerdict}{r.qaRejectCount ? ' · ' + r.qaRejectCount + ' rework' : ''}</Badge> : '—'}</td>
                   <td className="px-3 py-1.5 tabular-nums">{r.filesProposed} / {r.filesApplied}</td>
                 </tr>
               ))}
@@ -153,6 +153,7 @@ export default function ReportsView() {
         <Section title="Latest live run: verification and release">
           {!mission || mission.source !== 'live' ? <p className="text-[12px] text-fg-subtle">No live run in this session.</p> : (
             <div className="space-y-3 text-[12.5px]">
+              {mission.qaConcerns ? <p role="status" className="rounded-md border border-warning/30 bg-warning-soft p-2 text-warning">{mission.qaConcerns}</p> : null}
               <div>
                 <span className="text-fg-muted">Verification command: </span>
                 {verification ? (

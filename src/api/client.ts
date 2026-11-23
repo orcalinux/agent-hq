@@ -126,6 +126,11 @@ export interface RepoDetails {
 export const api = {
   connections: () => call<ConnectionsResponse>('GET', '/api/connections'),
   detect: () => call<DetectResponse>('GET', '/api/connections/detect'),
+  agentUpdates: () => call<import('@/types/agentUpdates').AgentCliUpdates>('GET', '/api/agents/updates'),
+  workerSettings: () => call<{ isolation: 'worktree' | 'proposals' }>('GET', '/api/workers/settings'),
+  setWorkerIsolation: (isolation: 'worktree' | 'proposals') => call<{ isolation: 'worktree' | 'proposals' }>('PUT', '/api/workers/settings', { isolation }),
+  stageWorker: (runId: string, taskId: string, attempt: number, files: Array<{ path: string; content: string }>) =>
+    call<{ kind: 'worktree' | 'proposals'; path?: string; reason?: string }>('POST', '/api/workers/stage', { runId, taskId, attempt, files }),
   testConnection: (p: ConnectPayload) => call<TestResult>('POST', '/api/connections/test', p),
   connect: (p: ConnectPayload) => call<TestResult>('POST', '/api/connections/connect', p),
   disconnect: (providerId: AIProviderId) => call<{ ok: boolean }>('POST', '/api/connections/disconnect', { providerId }),

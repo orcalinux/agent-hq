@@ -1,6 +1,6 @@
 # Competitive study
 
-A source-level look at seven open-source projects in the same space as Agent HQ, done on 2026-11-22. The goal is to learn what each does well and decide what to build next, **not** to rank products. There are no scores and no "best" claims here, because no head-to-head task benchmark was run.
+A study of seven open-source projects in the same space as Agent HQ, begun on 2026-11-22. The initial source inspection is followed below by real graded task runs. The goal is to learn what each does well and measure improvements to Agent HQ. Single runs cannot establish an overall product ranking.
 
 ## How strong the evidence is
 
@@ -211,3 +211,15 @@ These are historical approximate samples, **not equivalent process-tree measurem
 - A grader bug was found and fixed during this work: it dropped the `*.db` migration fixtures from its scratch copy, which made one run look like it failed 2 of its own tests. Earlier "existing tests" counts for Tier 2 should be disregarded; the hidden-test scores were not affected.
 
 The current method, including the actual Electron/UI driver and safeguards against treating model QA as test execution, is documented in [the desktop comparison protocol](desktop-comparison-protocol.md).
+
+### Reliability follow-up, November 23
+
+Re-read Maestro's `src/main/agent-run/recover-runs.ts` and Orchestrator's `backend/internal/adapters/workspace/gitworktree/workspace_preserve_test.go`. The useful design lessons are explicit recovery state and independently recoverable written work. No source was copied.
+
+Agent HQ 0.22.2 adds a persisted passing-candidate checkpoint, evidence requirements for QA rejection after passing verification, reverse-order rollback and unique proposal revision IDs. Unique IDs matter because rework previously reused an applied proposal's ID, so a revised write could be skipped. A retained candidate is reverified, carries unresolved QA concerns and does not receive an approval certificate.
+
+The first real 0.22.2 rerun reached verification with files written. Its verification command exceeded five minutes and was terminated, which triggered rework. The shell hosting the benchmark runner was then terminated before the run completed. This is an **interrupted observation with no final grade**, not a passing or failing benchmark result. The partial call logs, memory samples and run state are retained outside Git. Subsequent long runs must use a detached process.
+
+Agent HQ 0.23.0 also adds local project onboarding, CLI version checks and a detached worktree recovery snapshot for each coding task attempt. Worktree tests use real temporary Git repositories and confirm that parallel same-file edits produce separate recoverable copies while leaving the original alone. These snapshots preserve proposed files; agents still use the text proposal protocol, and collective verification still runs through the existing apply/undo flow. Git-ignored dependencies and submodule contents are not copied. Worktrees are not a security sandbox.
+
+Local onboarding verification opens the real built application, clones a public repository through its dialog, stages a real detached worktree, reopens a recent project and checks the layouts at 768, 1000 and 1440 pixels in both themes. It does not submit model calls. This validates those UI flows, not coding quality.

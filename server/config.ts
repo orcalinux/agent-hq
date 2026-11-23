@@ -19,6 +19,7 @@ export interface StoredConnection {
 }
 
 export interface StoredConfig {
+  workerIsolation?: 'worktree' | 'proposals';
   workspaceRoot?: string;
   recentWorkspaces?: string[];
   connections: Partial<Record<ProviderId, StoredConnection>>;

@@ -169,15 +169,15 @@ function FolderBrowser({ browser, selected, onSelect, onOpen }: { browser: Retur
   );
 }
 
-export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ProjectDialog({ open, onClose, initialTab = 'open' }: { open: boolean; onClose: () => void; initialTab?: 'open' | 'new' | 'clone' }) {
   const root = useWorkspaceStore((s) => s.root);
   const recent = useWorkspaceStore((s) => s.recent);
   const locked = useWorkspaceStore((s) => s.lockedByEnv);
   const setRoot = useWorkspaceStore((s) => s.setRoot);
   const createProject = useWorkspaceStore((s) => s.createProject);
   const cloneRepo = useWorkspaceStore((s) => s.cloneRepo);
-  const running = useAgentStore((s) => s.activeMission?.status === 'running');
-  const [tab, setTab] = useState<'open' | 'new' | 'clone'>('open');
+  const running = useAgentStore((s) => s.isLiveRunning);
+  const [tab, setTab] = useState<'open' | 'new' | 'clone'>(initialTab);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,6 +191,7 @@ export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () =>
   const blocked = locked ? 'The project folder is fixed by the AGENT_HQ_WORKSPACE environment variable.' : running ? 'Stop the current run before switching projects.' : null;
 
   const openFolder = async (path: string) => {
+    if (blocked || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -204,6 +205,7 @@ export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () =>
   };
 
   const create = async () => {
+    if (blocked || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -219,6 +221,7 @@ export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () =>
   };
 
   const clone = async () => {
+    if (blocked || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -342,10 +345,15 @@ export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () =>
 
 export function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
   const [open, setOpen] = useState(false);
+  const [initialTab, setInitialTab] = useState<'open' | 'new' | 'clone'>('open');
   const name = useWorkspaceStore((s) => s.name);
   const root = useWorkspaceStore((s) => s.root);
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: string }>).detail?.tab;
+      setInitialTab(tab === 'clone' || tab === 'new' ? tab : 'open');
+      setOpen(true);
+    };
     window.addEventListener('agent-hq:open-project', onOpen);
     return () => {
       window.removeEventListener('agent-hq:open-project', onOpen);
@@ -355,7 +363,7 @@ export function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => { setInitialTab('open'); setOpen(true); }}
         title={root ? 'Project: ' + root + ' (click to switch)' : 'Choose a project'}
         aria-label={collapsed ? 'Switch project' : undefined}
         className={cn(
@@ -370,7 +378,7 @@ export function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
         </SideLabel>
         <ChevronsUpDown className={cn('h-3.5 w-3.5 shrink-0 text-fg-subtle transition-opacity duration-200', collapsed && 'opacity-0')} />
       </button>
-      {open ? <ProjectDialog open onClose={() => setOpen(false)} /> : null}
+      {open ? <ProjectDialog open initialTab={initialTab} onClose={() => setOpen(false)} /> : null}
     </>
   );
 }

@@ -4,6 +4,7 @@ import { fmtSize, useUpdateStore } from '@/desktop/useUpdate';
 import type { UpdatePrefs, UpdateState } from '@/desktop/types';
 import { Button, StatusDot, Tabs } from '@/components/ui/primitives';
 import { cn } from '@/utils/cn';
+import { AgentUpdatesSettings } from './AgentUpdatesSettings';
 
 function Row({ label, hint, children, off, testId }: { label: string; hint?: ReactNode; children: ReactNode; off?: boolean; testId?: string }) {
   return (
@@ -107,6 +108,7 @@ export function UpdatesSettings() {
       <Row label="What's new" hint="The release notes for this version and the ones before it">
         <Button size="sm" onClick={() => openNotes('browse')} data-testid="whats-new-open">Open</Button>
       </Row>
+      <div className="py-3"><AgentUpdatesSettings /></div>
       {desktop ? (
         <>
           <Row label="Update button" hint={hidden ? 'Hidden for 3 days from the title bar' : 'Shows in the title bar when a newer version is ready'}>

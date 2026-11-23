@@ -708,7 +708,7 @@ async function runTask(task: KanbanTaskCard, signal: AbortSignal) {
     return;
   }
   const attempts = (task.attempts ?? 0) + 1;
-  store.updateTask(task.id, { status: 'in_progress', progress: 10, startedAt: started, error: undefined, attempts });
+  store.updateTask(task.id, { status: 'in_progress', progress: 10, startedAt: started, error: undefined, worktreePath: undefined, attempts });
   store.updateMission({ currentStage: task.stage, stageIndex: ['briefing', 'architecture', 'implementation'].indexOf(task.stage) });
   store.setAgentStatus(agent.id, agent.role === 'architect' || agent.role === 'manager' ? 'thinking' : 'coding', task.title, null);
   store.logActivity({ kind: 'step_started', level: 'info', runId: mission.id, agentId: agent.id, taskId: task.id, text: `${agent.name} started "${task.title}"` });
@@ -805,6 +805,16 @@ When you change an existing file, start from its current contents (provided belo
       agentId: agent.id,
       status: 'pending',
     }));
+    if (files.length) {
+      const base = new Map<string, { path: string; content: string }>();
+      for (const change of currentMission()?.proposedChanges ?? []) {
+        if (change.status === 'applied' || change.status === 'pending') base.set(change.path, { path: change.path, content: change.content });
+      }
+      for (const file of files) base.set(file.path, file);
+      const isolated = await api.stageWorker(mission.id, task.id, attempts, [...base.values()]);
+      store.updateTask(task.id, { worktreePath: isolated.path });
+      store.logActivity({ kind: 'info', level: 'info', runId: mission.id, taskId: task.id, text: isolated.kind === 'worktree' ? `Preserved ${task.title} in an isolated Git worktree: ${isolated.path}` : isolated.reason ?? 'Changes remain proposals.' });
+    }
     const existing = (currentMission()?.proposedChanges ?? []).filter((c) => c.taskId !== task.id || c.status === 'applied');
     const marked = markConflicts([...existing, ...changes], currentMission()?.tasks ?? []);
     agentsState().updateMission({ proposedChanges: marked });
@@ -1094,6 +1104,7 @@ function finalize(status: MissionState['status'], error?: string, autoApplied?: 
     qaRejectCount: m.qaRejectCount ?? 0,
     certificateHash: m.qaCertificate?.sha256Hash,
     verification: m.verification,
+    qaConcerns: m.qaConcerns,
   };
   store.finalizeRun(record);
   store.logActivity({

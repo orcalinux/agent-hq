@@ -653,7 +653,7 @@ async function chatViaCli(req: ChatRequest): Promise<ChatResult> {
   const prompt = flattenForCli(req.system, req.messages);
 
   if (connection.providerId === 'anthropic') {
-    const args = ['-p', '--output-format', 'json'];
+    const args = ['-p', '--output-format', 'json', '--tools', '', '--strict-mcp-config'];
     if (alias && alias !== 'default') args.push('--model', alias);
     const out = await runCliStreaming(binary, args, prompt, req.cwd, req.signal);
     let parsed: { result?: string; is_error?: boolean; modelUsage?: unknown; usage?: ClaudeCliUsage } | undefined;

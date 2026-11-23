@@ -11,6 +11,18 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.23.0] — 2026-11-23
+
+### Added
+- Workspace start screen with the current folder, recent projects, open-folder, new-project and clone-repository actions. Project actions open the corresponding dialog tab directly and respect active-run and fixed-folder restrictions.
+- Settings → Updates now checks the installed Claude Code, Codex and Gemini CLIs against their stable npm releases. Installation methods are detected before suggesting a command; application-managed binaries are left to their host installer. Prepare opens a fresh integrated terminal with the command ready for review and Enter. Nothing is updated automatically or while a run is active.
+- Each coding task attempt in a Git repository now keeps a detached worktree recovery snapshot, including the current uncommitted files and earlier proposals. Parallel tasks cannot overwrite each other's recovery copies. Find the saved path in task details, and choose Git worktrees or proposals only in Settings → Agent permissions. Snapshots remain local; Git-ignored files, dependencies and submodule contents are not copied, and the worktree is not a security sandbox. The existing verification and approval flow still controls writes to the project.
+
+### Fixed
+- Reports preserve unresolved QA concerns in run history instead of presenting a retained candidate as QA approved.
+- Double-clicking a folder cannot bypass the project switch restrictions while a run is active.
+- The Claude text transport now explicitly disables built-in tools and inherited MCP servers, matching the proposal-only execution contract instead of relying on a prompt to prevent direct tool calls.
+
 ## [0.22.2] — 2026-11-23
 
 ### Fixed

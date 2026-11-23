@@ -38,6 +38,8 @@ import { cloneRepository, repoDetails } from './gitInfo';
 import { addLessons, deleteLesson, indexLessons, LESSONS_FILE, lessonsFor, loadLessons, memoryContext, MemoryError, searchLessons, updateLesson, type LessonInput } from './memory';
 import { currentEmbedder, embeddingStatus, forgetEmbedder, pullModel } from './embeddings';
 import { clearJournal, loadJournal, saveJournal } from './runJournal';
+import { checkAgentUpdates } from './agentUpdates';
+import { stageTaskWorkspace } from './taskWorkspaces';
 
 const MAX_BODY = 8 * 1024 * 1024;
 
@@ -252,6 +254,31 @@ const routes: Record<string, Handler> = {
       Object.values(INSTALL_GUIDES).map((g) => [g.id, { name: g.name, command: installCommandFor(g.id, process.platform), url: g.url }])
     );
     send(res, 200, { ok: true, clis, ollama, magpie, installs });
+  },
+
+  'GET /api/agents/updates': async (_req, res) => {
+    send(res, 200, await checkAgentUpdates());
+  },
+
+  'GET /api/workers/settings': async (_req, res) => {
+    send(res, 200, { isolation: loadConfig().workerIsolation ?? 'worktree' });
+  },
+
+  'PUT /api/workers/settings': async (req, res) => {
+    const body = await readJson(req);
+    if (body.isolation !== 'worktree' && body.isolation !== 'proposals') throw new HttpError(400, 'Choose worktree or proposals.');
+    const isolation = body.isolation;
+    updateConfig((config) => { config.workerIsolation = isolation; });
+    send(res, 200, { isolation });
+  },
+
+  'POST /api/workers/stage': async (req, res) => {
+    const body = await readJson(req);
+    if (typeof body.runId !== 'string' || typeof body.taskId !== 'string' || typeof body.attempt !== 'number'
+      || !Array.isArray(body.files) || !body.files.every((file) => file && typeof file.path === 'string' && typeof file.content === 'string')) {
+      throw new HttpError(400, 'A run, task, attempt and file contents are required.');
+    }
+    send(res, 200, await stageTaskWorkspace(getWorkspaceRoot(), body.runId, body.taskId, body.attempt, body.files));
   },
 
   'GET /api/magpie/quotas': async (_req, res) => {

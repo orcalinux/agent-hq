@@ -43,6 +43,13 @@ export function TaskDetail({ selectedId, open }: { selectedId: string; open: boo
           </dl>
         </Section>
 
+        {task.worktreePath ? (
+          <Section title="Isolated worker snapshot">
+            <p className="break-all font-mono text-[11.5px] text-fg-muted">{task.worktreePath}</p>
+            <p className="text-[11.5px] text-fg-subtle">A detached Git worktree preserves this task's proposed files. Changes reach your project through the normal approval and verification flow. It is not a security sandbox.</p>
+          </Section>
+        ) : null}
+
         {task.n1ReviewerId ? (
           <Section title="Senior review (N+1)">
             <p className="text-[12.5px]">Reviewer: {task.n1ReviewerName ?? task.n1ReviewerId} · <Badge tone={task.n1ReviewStatus === 'approved' || task.n1ReviewStatus === 'bug_fixed' ? 'success' : 'warning'}>{task.n1ReviewStatus?.replace('_', ' ')}</Badge></p>

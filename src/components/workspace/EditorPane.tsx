@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react';
 import { Check, Code2, Columns2, RotateCcw, Save, X } from 'lucide-react';
 import { isDirty, useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { Badge, Button, EmptyState, IconButton, Spinner } from '@/components/ui/primitives';
-import { Kbd } from '@/components/ui/primitives';
+import { GetStarted } from './GetStarted';
 import { computeLineDiff, highlightLine, diffStats } from '@/utils/diffParser';
 import { cn } from '@/utils/cn';
 import { useState } from 'react';
@@ -204,9 +204,7 @@ export function EditorPane() {
           )}
         </>
       ) : (
-        <EmptyState icon={Code2} title="No file open">
-          Pick a file in the explorer, press <Kbd>Ctrl K</Kbd> to search by name, or ask Sovereign to start a task.
-        </EmptyState>
+        <GetStarted />
       )}
     </div>
   );

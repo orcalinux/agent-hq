@@ -96,6 +96,7 @@ export interface KanbanTaskCard {
   startedAt?: number;
   completedAt?: number;
   attempts?: number;
+  worktreePath?: string;
   progress: number;
   commitHash?: string;
   tags: string[];
@@ -452,6 +453,7 @@ export interface RunRecord {
   qaRejectCount: number;
   certificateHash?: string;
   verification?: VerificationResult;
+  qaConcerns?: string;
 }
 
 export interface ActivityEvent {
