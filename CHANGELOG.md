@@ -11,6 +11,19 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.22.0] — 2026-11-23
+
+### Fixed
+- **Verification now tests the team's work, not the old code.** The optional verification command (Settings) used to run before any proposed change was written, so a pass meant nothing and a failure couldn't be traced to the agents. In an auto-apply mode the changes are now written first, the command runs on them, and a failure is undone and sent back as rework. Found by running Agent HQ on a benchmark task: QA reviewed text only, and the run ended with no files changed.
+- In manual approval nothing is written until you approve, so the command can't run on the new code. Agent HQ now says so in the activity log instead of silently testing the old files.
+
+### Changed
+- **Real test output drives rework.** When verification fails, the end of its output goes to the tasks whose files it names (or to every task that proposed a change when it names none). QA also sees the result of a passing verification, and a QA rejection undoes the changes that were written for the test.
+- Rework rounds raised from 1 to 2, because a round now starts from a concrete failure instead of a model's opinion.
+
+### Tests
+- Unit tests for choosing which tasks a failing command points at.
+
 ## [0.21.0] — 2026-11-23
 
 ### Added

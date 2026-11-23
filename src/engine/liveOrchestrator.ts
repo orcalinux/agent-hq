@@ -27,7 +27,7 @@ import {
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
 import { parallelLimit, planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
-import { autoAppliesChanges, autoStartsRuns, markConflicts, selectAutoApply } from './approval';
+import { autoAppliesChanges, autoStartsRuns, markConflicts, selectAutoApply, blameTasks } from './approval';
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
@@ -41,7 +41,7 @@ import type { ViewMode } from '@/types';
 import { checkLimits, describeLimit, WARN_RATIO, type LimitKind, type LimitReading } from './runLimits';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
 
-const MAX_QA_LOOPS = 1;
+const MAX_QA_LOOPS = 2;
 const QA_TASK_ID = 'qa-review';
 const TASK_FILE_CONTEXT_CHARS = 60_000;
 
@@ -878,12 +878,64 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
   store.setAgentStatus(qa.id, 'reviewing', 'QA & security review');
   store.logActivity({ kind: 'qa', level: 'info', runId: mission.id, agentId: qa.id, text: 'Sentinel started QA review' });
 
+  const command = store.verificationCommand.trim();
+  let candidateApplied: string[] = [];
+  let verificationNote = '';
+  if (command && !autoAppliesChanges(store.approvalMode)) {
+    store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, text: `Verification "${command}" was not run: in manual approval nothing is written until you apply it, so it would test the old code. Run it after applying.` });
+  }
+  if (command && autoAppliesChanges(store.approvalMode)) {
+    const pendingBefore = new Set((currentMission()?.proposedChanges ?? []).filter((c) => c.status === 'pending').map((c) => c.id));
+    await autoApplyChanges();
+    candidateApplied = (currentMission()?.proposedChanges ?? []).filter((c) => c.status === 'applied' && pendingBefore.has(c.id)).map((c) => c.id);
+    store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, text: `Running verification on the proposed changes: ${command}` });
+    const res = await useWorkspaceStore.getState().runCommand(command);
+    const raw = `${res.stdout ?? ''}\n${res.stderr ?? ''}`.trim();
+    const verification = {
+      command,
+      exitCode: res.exitCode ?? null,
+      output: truncate(raw, 20_000),
+      durationMs: res.durationMs ?? 0,
+      ranAt: Date.now(),
+    };
+    store.updateMission({ verification });
+    const passed = res.exitCode === 0;
+    store.logActivity({
+      kind: 'verification',
+      level: passed ? 'success' : 'error',
+      runId: mission.id,
+      text: res.rejected ? `Verification command rejected: ${res.stderr}` : `Verification ${passed ? 'passed' : `failed (exit ${res.exitCode})`}`,
+    });
+    if (!passed) {
+      await withdrawCandidate(candidateApplied);
+      const tail = raw.slice(-4000);
+      noteFeedback(mission.id, { agentId: 'team', source: 'verification', text: `"${command}" failed (exit ${res.exitCode}): ${tail.slice(-500)}` });
+      const rejectCount = (currentMission()?.qaRejectCount ?? 0) + 1;
+      store.updateMission({ qaRejectCount: rejectCount, status: 'qa_loopback' });
+      store.setAgentStatus(qa.id, 'idle');
+      if (rejectCount > MAX_QA_LOOPS) {
+        store.updateTask(QA_TASK_ID, { status: 'rejected', progress: 100, qaFeedback: `Verification "${command}" still failed after ${MAX_QA_LOOPS} rework rounds.` });
+        return 'rejected';
+      }
+      const current = currentMission()!;
+      for (const task of blameTasks(tail, current.proposedChanges ?? [], workTasks)) {
+        recordModelResult(servedByTask.get(task.id) ?? task.model, false);
+        const feedback = `Verification "${command}" failed (exit ${res.exitCode}) on the changes the team proposed. Fix the cause. Output (end):\n${tail}`;
+        store.updateTask(task.id, { status: 'rejected', qaFeedback: feedback, stage: 'implementation' });
+        noteFeedback(mission.id, { agentId: task.assignedAgentId, source: 'verification', text: `${task.title}: ${tail.slice(-300)}`, taskId: task.id });
+      }
+      store.updateTask(QA_TASK_ID, { status: 'pending', progress: 0 });
+      return 'retry';
+    }
+    verificationNote = `\n\nVerification: "${command}" passed (exit 0) when run on the proposed changes. Output (end):\n${raw.slice(-1500)}`;
+  }
+
   const deliverables = workTasks
     .map((t) => `## [${t.id}] ${t.title} — ${store.agents[t.assignedAgentId]?.name}\n${truncate(stripThinking(t.output ?? ''), 10_000)}`)
     .join('\n\n');
   const result = await callAgent(qa, {
     system: `${qa.systemPrompt}${await memoryBrief(qa.id, mission.prompt)}\n\nRespond with ONLY a JSON object: {"verdict": "approve" | "reject", "summary": "...", "issues": [{"taskId": "<task id>", "problem": "..."}]}. Reject only for real defects, security problems or unmet requirements.`,
-    messages: [{ role: 'user', content: `Request:\n${mission.prompt}\n\nDeliverables:\n${deliverables}` }],
+    messages: [{ role: 'user', content: `Request:\n${mission.prompt}\n\nDeliverables:\n${deliverables}${verificationNote}` }],
     signal,
     note: 'QA review',
     countInRun: true,
@@ -907,6 +959,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
   store.setAgentStatus(qa.id, 'idle');
 
   if (verdict.verdict === 'reject') {
+    await withdrawCandidate(candidateApplied);
     const rejectCount = (currentMission()?.qaRejectCount ?? 0) + 1;
     store.updateMission({ qaRejectCount: rejectCount, status: 'qa_loopback' });
     const flagged = new Set(verdict.issues.map((i) => i.taskId).filter(Boolean));
@@ -926,37 +979,22 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     return 'retry';
   }
 
-  // Optional real verification command
-  const command = store.verificationCommand.trim();
-  if (command) {
-    store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, text: `Running verification: ${command}` });
-    const res = await useWorkspaceStore.getState().runCommand(command);
-    const verification = {
-      command,
-      exitCode: res.exitCode ?? null,
-      output: truncate(`${res.stdout ?? ''}\n${res.stderr ?? ''}`.trim(), 20_000),
-      durationMs: res.durationMs ?? 0,
-      ranAt: Date.now(),
-    };
-    store.updateMission({ verification });
-    const passed = res.exitCode === 0;
-    store.logActivity({
-      kind: 'verification',
-      level: passed ? 'success' : 'error',
-      runId: mission.id,
-      text: res.rejected ? `Verification command rejected: ${res.stderr}` : `Verification ${passed ? 'passed' : `failed (exit ${res.exitCode})`}`,
-    });
-    if (!passed) {
-      noteFeedback(mission.id, { agentId: 'team', source: 'verification', text: `"${command}" failed (exit ${res.exitCode}): ${truncate(verification.output, 500)}` });
-      store.updateTask(QA_TASK_ID, { status: 'rejected', progress: 100, qaFeedback: `Verification "${command}" failed (exit ${res.exitCode}).` });
-      return 'rejected';
-    }
-  }
-
   store.updateTask(QA_TASK_ID, { status: 'completed', progress: 100, completedAt: Date.now() });
   for (const t of workTasks) if (currentMission()?.tasks.find((x) => x.id === t.id)?.status === 'completed') recordModelResult(servedByTask.get(t.id) ?? currentMission()!.tasks.find((x) => x.id === t.id)!.model, true);
   store.logActivity({ kind: 'qa', level: 'success', runId: mission.id, agentId: qa.id, text: `Sentinel approved the run: ${verdict.summary}` });
   return 'approved';
+}
+
+/** Puts changes that were written for verification back, and makes them proposals again so a later round can use them. */
+async function withdrawCandidate(ids: string[]) {
+  for (const id of ids) {
+    try {
+      await revertProposedChange(id);
+    } catch (err) {
+      agentsState().logActivity({ kind: 'info', level: 'error', runId: currentMission()?.id, text: `Could not undo a verification write: ${(err as Error).message}` });
+    }
+    agentsState().updateProposedChange(id, { status: 'pending', appliedAt: undefined, autoApplied: undefined });
+  }
 }
 
 async function sha256(text: string): Promise<string> {

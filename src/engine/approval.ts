@@ -108,3 +108,19 @@ export function selectAutoApply(changes: ProposedFileChange[], tasks: TaskLink[]
 export function canRevert(change: ProposedFileChange): boolean {
   return change.status === 'applied' && change.previousContent !== undefined;
 }
+
+/** The tasks whose files a failing command names; when none are named, every task that proposed a change. */
+export function blameTasks<T extends { id: string }>(output: string, changes: Array<{ taskId: string; path: string; status: string }>, tasks: T[]): T[] {
+  const proposing = changes.filter((c) => c.status === 'pending');
+  const named = new Set(
+    proposing
+      .filter((c) => {
+        const base = c.path.slice(c.path.lastIndexOf('/') + 1);
+        return output.includes(c.path) || (base.length >= 4 && output.includes(base));
+      })
+      .map((c) => c.taskId),
+  );
+  const pool = named.size ? named : new Set(proposing.map((c) => c.taskId));
+  const blamed = tasks.filter((t) => pool.has(t.id));
+  return blamed.length ? blamed : tasks;
+}

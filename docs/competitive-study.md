@@ -114,7 +114,7 @@ Pick strengths by dimension instead of merging whole products: governance from P
 
 ## Reproducing the study
 
-The installs, sources, release metadata and the 282 MB REA evidence bundle are kept **outside Git**, in `~/.local/share/agent-hq-research` on the machine that ran the study. Each app was run with its own config and data directories, never with real credentials. REA records:
+The installs, sources, release metadata and the 282 MB REA evidence bundle are kept **outside Git**, in `~/.local/share/agent-hq-research` on the machine that ran the study. The initial startup inspection used isolated profiles. The subsequent measured runs below use the user's existing subscription login; profiles and authentication data are not published. REA records:
 
 - Agent Orchestrator `app.asar`, SHA-256 `2172ddf7…a3dc44`, evidence `ev_c60b2f3a0702938153a200974ee07a02cf74d65c95df846c5845f990d52c4e64`.
 - Maestro `app.asar`, SHA-256 `7ee7f5cf…add35de4`, evidence `ev_ad0a710208ca3a032febcdc7aa1297d3635ed66cf37f5cfda8b5e7a3ac937f0e`.
@@ -123,7 +123,7 @@ Both analyses covered only selected files (`package.json`, main and preload bund
 
 ## Limits of this study
 
-- The original study ran no real tasks. The follow-up below now includes one Maestro smoke test; it is insufficient to rank quality, speed or cost.
+- The original study ran no real tasks. The follow-ups below include a Maestro smoke test and graded Tier 2 runs in Maestro and Orchestrator. These are single observations, not enough for a general ranking.
 - Paradev's UI past sign-in, and all of Paperclip, OpenHands and MetaGPT at runtime, were not observed.
 - Stars measure attention, not fitness for your work.
 
@@ -164,24 +164,31 @@ Every tier has a reference solution that scores 100% and a starter that scores w
 
 ### Results (Claude Code, headless, subscription, real runs)
 
-| Model | Tier | Hidden tests | Wall time | Turns | API-rate cost |
-|---|---|---|---|---|---|
-| Sonnet 5.5 | 1 | 87/87 | 66 s | 8 | $0.30 |
-| Sonnet 5.5 | 2 | 141/141 | 152 s | 14 | $0.56 |
-| Haiku 5.5 | 2 | 141/141 | 264 s | 20 | $0.12 |
-| Haiku 5.5 | 3 | 240/241 | 176 s | 18 | $0.05 |
+| Model | Tier | Hidden tests | Provider duration | Runner wall time | Turns | API-rate cost |
+|---|---|---|---|---|---|---|
+| Sonnet 5.5 | 1 | 87/87 | 66.1 s | 68.9 s | 8 | $0.30 |
+| Sonnet 5.5 | 2 | 141/141 | 152.0 s | 154.5 s | 14 | $0.56 |
+| Haiku 5.5 | 2 | 141/141 | 263.7 s | 266.7 s | 20 | $0.12 |
+| Haiku 5.5 | 3 | 240/241 | 176.3 s | not retained | 18 | $0.05 |
 
-The only missed test is the vague issue's edge case: `settle` on an unknown group should exit with an error, and the run let the exception escape. Costs are API-rate valuations of subscription usage, not money billed.
+The only missed test is the vague issue's edge case: `settle` on an unknown group should exit with an error, and the run let the exception escape. Costs are API-rate valuations of subscription usage, not money billed. Earlier versions of this table labelled the provider durations as wall time; the retained runner metadata supplies the corrected wall times above.
 
 ### Apps on Tier 2, same task and model (Haiku 5.5, Claude Code engine, same subscription)
 
 | Setup | Hidden tests | Wall time | API-rate cost | Cached input tokens | Output tokens |
 |---|---|---|---|---|---|
-| Claude Code CLI alone | 141/141 | 264 s | $0.124 | 1.53 M | 62.5 k |
-| Agent Orchestrator 1.x, one worker session | 141/141 | 264 s | $0.169 (+36%) | 2.42 M | 56.1 k |
+| Claude Code CLI alone | 141/141 | 266.7 s runner wall | $0.124 | 1.53 M | 62.5 k |
+| Agent Orchestrator 0.15.3, one worker session | 141/141 | 256.0 s recorded turn; 264 s polled wall | $0.169 | 2.42 M | 56.1 k |
 | Maestro 1.0.4, one agent | 141/141 | 283 s | $0.222 (+79%) | 2.59 M | 61.7 k |
+| Agent HQ 0.21.0, adaptive team, all roles pinned to Haiku 5.5 | **86/141 (no project file changed)** | 997.8 s, run marked failed | $0.282 across 22 calls | 1.25 M total tokens | n/a |
 
-Each run is a single sample, so differences of a few percent in time are noise; the cost gap is larger than that but still rests on one run each. Orchestrator adds about 18 KB of system prompt to every session, which is consistent with its higher cached-token volume. Maestro made one extra call to other models to name the tab. Agent HQ has not been run on this task yet, so it is not in this table.
+**Agent HQ result, reported as measured.** The run produced 9 file proposals across 9 completed tasks, then Sentinel (QA) rejected the result twice and the run was marked failed. Every proposal stayed `pending`, so the project directory was unchanged. The 86/141 score is therefore the untouched starter's baseline (82/87 regression tests plus 4 existing), not evidence of Agent HQ's code. Existing tests were untouched. Three causes were observed in the retained call log and code, not guessed: (1) the optional verification command was off in this run, and when set it ran *before* proposals were written, so it could never test the team's work (fixed in 0.22.0); (2) QA is a model reading text and never runs the code, yet it rejected correctly: it found real gaps in the #14 work, including `Expense` missing the new fields; (3) task agents do receive files named in their task text and see upstream proposals, but a task that says "all `tabsplit/*.py`" names no path, so the architect saw only `storage.py`. Proposals were not discarded: they stayed pending in the Changes tab, but nothing reached disk, which is what the grader measures. This is a single sample on one task.
+
+Each run is a single sample, so the timing differences cannot establish a speed ranking. Orchestrator reported adding about 18 KB of system prompt for this session. That is one possible contributor to its usage, not proof of a causal cost difference. These task-level costs do not cover every auxiliary action; the audit below corrects the earlier description of Maestro's title call as small overhead.
+
+**Auxiliary-call audit.** Retained native Claude session logs in the Maestro task directory contain two sessions started together: the Haiku task and a Sonnet prompt beginning “Generate a 2-4 word tab name”. The title session's final `cost-state` reports 467,070 cache-creation input tokens, 16 output tokens, and **$1.868444** at provider rates. The task event reports $0.222286; its final session cost is $0.236935 after additional session activity. The two observed native sessions therefore total **$2.105379**. This is a single measurement in this machine's CLI configuration, not a claim about all Maestro installations or an additional bill.
+
+Orchestrator's conversation records report $0.168508 for the task, and its separate usage event reports $0.000637 for an auxiliary Haiku call: **$0.169145** in these observed records. The bare CLI's final native cost is **$0.123648**. Workflow-level accounting must include auxiliary calls and distinguish final native totals from an app's earlier task event. `scripts/claude-session-costs.mjs` extracts native final cost records without publishing prompts.
 
 **Memory.** Measured as proportional set size (PSS, which does not double-count pages shared between Electron processes) with `smaps_rollup`:
 
@@ -191,11 +198,13 @@ Each run is a single sample, so differences of a few percent in time are noise; 
 | Maestro 1.0.4 | 195 MB | about 416-452 MB |
 | Agent Orchestrator | 199 MB | about 600-630 MB (its own `session top` reports 864 MB RSS for the one session) |
 
-The run column is not strictly like for like: each app's agent processes are matched by install path, and the bare CLI's memory was not measured.
+These are historical approximate samples, **not equivalent process-tree measurements**: processes were matched by install path, which can miss CLI descendants. They must not be used to rank memory efficiency. A later complete-tree audit with completed sessions retained measured about 206 MiB PSS for Maestro, 805 MiB for Orchestrator and 188 MiB for the older installed Agent HQ. Orchestrator still held a Claude session process; that is not comparable to a fresh empty app. The new Agent HQ comparison uses the Linux process-tree sampler in `scripts/process-memory.mjs`, including children started by non-main threads. The bare CLI's memory during its earlier run was not measured.
 
 ### What this shows, and what it does not
 
-- **A single current agent saturates these tasks, even the cheapest model.** Wrapping an agent in an orchestration app cannot raise the score on tasks of this size; it can only add time and cost. Quality differences between apps will not show up here.
-- The differences worth measuring are therefore **overhead** (wall time, tokens and cost on top of the bare CLI), **parallel speed** on a backlog like Tier 3, **recovery** when a provider runs out of quota mid-run, **isolation** of parallel edits, and **human steps** needed.
-- Not yet measured: any competitor app or Agent HQ on Tier 2 or 3. Those runs need either sign-in through the app's GUI or a way to drive it headless, and they consume subscription quota (Claude Pro allows only a few runs per 5-hour window). Until they exist, no ranking is claimed.
+- **The recorded CLI, Maestro and Orchestrator runs saturate Tier 2.** This leaves no room to demonstrate a quality improvement in those samples. It does not prove that every app will pass, that orchestration is useless, or that larger tasks behave the same way.
+- The differences still worth measuring include **workflow overhead**, **parallel speed**, **recovery** when a provider runs out of quota mid-run, **isolation** of parallel edits, and **human steps** needed. Independent grading of Agent HQ is essential before claiming parity.
+- Maestro and Orchestrator were run through their real CLIs; sign-in was not needed for each task. Agent Teams AI, Paradev and the server-oriented competitors still have no graded result here. Subscription quota exhaustion is recorded rather than silently changing providers.
 - A grader bug was found and fixed during this work: it dropped the `*.db` migration fixtures from its scratch copy, which made one run look like it failed 2 of its own tests. Earlier "existing tests" counts for Tier 2 should be disregarded; the hidden-test scores were not affected.
+
+The current method, including the actual Electron/UI driver and safeguards against treating model QA as test execution, is documented in [the desktop comparison protocol](desktop-comparison-protocol.md).

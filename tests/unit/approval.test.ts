@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, markConflicts, selectAutoApply } from '../../src/engine/approval';
+import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, markConflicts, selectAutoApply, blameTasks } from '../../src/engine/approval';
 import type { ProposedFileChange } from '../../src/types';
 
 const change = (id: string, path: string, status: ProposedFileChange['status'] = 'pending', extra: Partial<ProposedFileChange> = {}): ProposedFileChange => ({
@@ -92,5 +92,27 @@ describe('markConflicts', () => {
   it('survives a dependency cycle', () => {
     const tasks = [{ id: 'a', dependsOn: ['b'] }, { id: 'b', dependsOn: ['a'] }];
     expect(markConflicts([change('a', 'x.ts'), change('b', 'x.ts')], tasks).every((c) => !c.conflictsWith)).toBe(true);
+  });
+});
+
+describe('blameTasks', () => {
+  const tasks = [{ id: 't1' }, { id: 't2' }, { id: 't3' }];
+  const changes = [
+    { taskId: 't1', path: 'pkg/money.py', status: 'pending' },
+    { taskId: 't2', path: 'pkg/storage.py', status: 'pending' },
+    { taskId: 't3', path: 'pkg/cli.py', status: 'discarded' },
+  ];
+
+  it('blames the tasks whose files the failure output names', () => {
+    expect(blameTasks('FAILED tests/test_x.py - storage.py:42 TypeError', changes, tasks)).toEqual([{ id: 't2' }]);
+    expect(blameTasks('pkg/money.py:3: error', changes, tasks)).toEqual([{ id: 't1' }]);
+  });
+
+  it('falls back to every task that still has a proposal when no file is named', () => {
+    expect(blameTasks('3 failed, 10 passed', changes, tasks)).toEqual([{ id: 't1' }, { id: 't2' }]);
+  });
+
+  it('falls back to all tasks when nothing is pending', () => {
+    expect(blameTasks('boom', [], tasks)).toEqual(tasks);
   });
 });
