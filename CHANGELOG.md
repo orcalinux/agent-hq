@@ -15,6 +15,7 @@ git push --follow-tags
 
 ### Added
 - **GitHub administration guide** ([docs/github-administration.md](docs/github-administration.md)): saved repository identity, branch rules, security settings, workflow permissions, Pages setup, read-only verification commands and maintenance/release checklists. Distinguishes API-verified settings from settings recorded in setup screenshots.
+- **Security review record** ([docs/security-review.md](docs/security-review.md)): alert-by-alert fixes, test results and documented false-positive reviews.
 
 ### Security
 - Upgrade Vitest and its mocker to 4.1.12, removing Tinypool, and override affected Minimatch versions used by desktop packaging with 11.0.9.

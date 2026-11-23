@@ -20,6 +20,30 @@ the registry advisory result at review time, not a guarantee that dependencies
 have no undiscovered flaws. Desktop packaging uses Minimatch, so a real `.deb`
 build was also checked after the override.
 
+## GitHub follow-up
+
+After pushing source commit `7372146`, GitHub closed all six Dependabot alerts.
+The three older Dependabot pull requests were closed because the tested update
+already includes their fixes and the newer mocker patch.
+
+CodeQL analysis `2228107874` completed successfully on that commit. Eleven
+original code alerts were automatically marked fixed. The analysis reported five
+findings, including the account-cache hash warning; these were reviewed and
+dismissed individually as false positives with explanations attached in GitHub:
+
+| Alert | Evidence for the dismissal |
+| --- | --- |
+| #1 | The reported data-flow path passes through `executionTimeoutMs`, which rejects nonfinite/nonnumeric input and clamps duration to 1000–600000 ms. CodeQL propagates taint through the clamp without recognizing its bounds. |
+| #12 | An account UUID is hashed solely to locate the CLI's existing cache file; no password authentication uses this hash. |
+| #14 | The reported URL passes through `checkedRequestUrl`. Exact origin checks, loopback handling, protocol checks and blocked redirects constrain the destination. Tests cover rejected metadata addresses, misleading hosts and redirects between real servers. |
+| #15, #16 | The SARIF traces carry the directory into separate `open`, `gnome-terminal`, `konsole` and `xfce4-terminal` argument entries. They do not inject it into executable shell text; `spawn` has `shell: false`. |
+
+At the end of this triage, GitHub reported **0 open Dependabot alerts, 0 open
+code-scanning alerts and 0 open secret-scanning alerts**. Dismissed findings
+remain visible under GitHub's dismissed-alert filter. No CodeQL queries were
+disabled. Re-review these dismissals if request validation, terminal construction
+or timeout handling changes.
+
 ## Code findings
 
 | CodeQL alerts | Area | Resolution / review |
@@ -65,9 +89,12 @@ OS remain trusted. This policy is not a sandbox for an already compromised host.
   initialization and delayed-terminal focus) and their two skipped follow-on
   tests all passed on the targeted rerun. These intermittent failures are
   recorded rather than treated as a clean first-pass run.
+- Production browser suite: all 46 applicable tests passed; two opt-in live-model
+  scenarios and two screenshot-generation scenarios were skipped. The separate
+  real-model smoke check above ran successfully.
 
-Browser and GitHub scan results should be checked for the final commit before
-publication. A local passing audit does not itself close a GitHub alert. Review
+GitHub CI should be checked for the final release commit before publication.
+A local passing audit does not itself close a GitHub alert. Review
 new scan output before dismissing any finding; record a concrete reason for
 false positives rather than disabling queries.
 
