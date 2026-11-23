@@ -6,6 +6,7 @@ import { DEFAULT_RUN_LIMITS, normalizeLimit, type RunLimits } from '@/engine/run
 
 const ROWS: Array<{ key: keyof RunLimits; label: string; unit: string; hint: string; step: string }> = [
   { key: 'maxCostUSD', label: 'Cost per run', unit: 'USD', step: '0.5', hint: 'Only models with a known price add to this. On a subscription CLI the cost is valued at API rates, not billed.' },
+  { key: 'maxCostPerAgentUSD', label: 'Cost per agent', unit: 'USD', step: '0.5', hint: 'The most one agent may spend in a run, so a single agent cannot use the whole budget. Leave empty for no per-agent limit.' },
   { key: 'maxTokens', label: 'Tokens per run', unit: 'tokens', step: '100000', hint: 'Counts every model, including ones with no known price, so nothing runs unchecked.' },
   { key: 'maxMinutes', label: 'Time per run', unit: 'minutes', step: '5', hint: 'Wall-clock time from the moment the run starts or resumes.' },
   { key: 'maxCallsPerAgent', label: 'Model calls per agent', unit: 'calls', step: '5', hint: 'Loop guard: an agent that keeps calling its model is probably stuck.' },

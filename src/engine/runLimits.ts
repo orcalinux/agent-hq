@@ -7,9 +7,11 @@ export interface RunLimits {
   maxTokens: number | null;
   maxMinutes: number | null;
   maxCallsPerAgent: number | null;
+  /** Most one agent may spend in a run. Off by default; the run cost limit still applies. */
+  maxCostPerAgentUSD: number | null;
 }
 
-export const DEFAULT_RUN_LIMITS: RunLimits = { maxCostUSD: 10, maxTokens: 5_000_000, maxMinutes: 90, maxCallsPerAgent: 60 };
+export const DEFAULT_RUN_LIMITS: RunLimits = { maxCostUSD: 10, maxTokens: 5_000_000, maxMinutes: 90, maxCallsPerAgent: 60, maxCostPerAgentUSD: null };
 
 export const WARN_RATIO = 0.8;
 
@@ -18,9 +20,10 @@ export interface RunUsage {
   tokens: number;
   elapsedMs: number;
   callsByAgent: Record<string, number>;
+  costByAgent?: Record<string, number>;
 }
 
-export type LimitKind = 'cost' | 'tokens' | 'time' | 'calls';
+export type LimitKind = 'cost' | 'tokens' | 'time' | 'calls' | 'agentCost';
 
 export interface LimitReading {
   kind: LimitKind;
@@ -47,6 +50,7 @@ export function normalizeLimits(value: Partial<RunLimits> | undefined): RunLimit
     maxTokens: 'maxTokens' in v ? normalizeLimit(v.maxTokens) : DEFAULT_RUN_LIMITS.maxTokens,
     maxMinutes: 'maxMinutes' in v ? normalizeLimit(v.maxMinutes) : DEFAULT_RUN_LIMITS.maxMinutes,
     maxCallsPerAgent: 'maxCallsPerAgent' in v ? normalizeLimit(v.maxCallsPerAgent) : DEFAULT_RUN_LIMITS.maxCallsPerAgent,
+    maxCostPerAgentUSD: 'maxCostPerAgentUSD' in v ? normalizeLimit(v.maxCostPerAgentUSD) : DEFAULT_RUN_LIMITS.maxCostPerAgentUSD,
   };
 }
 
@@ -62,6 +66,11 @@ export function readLimits(limits: RunLimits, usage: RunUsage): LimitReading[] {
     let busiest: [string, number] | null = null;
     for (const entry of Object.entries(usage.callsByAgent)) if (!busiest || entry[1] > busiest[1]) busiest = entry;
     if (busiest) push('calls', busiest[1], limits.maxCallsPerAgent, busiest[0]);
+  }
+  if (limits.maxCostPerAgentUSD !== null) {
+    let costliest: [string, number] | null = null;
+    for (const entry of Object.entries(usage.costByAgent ?? {})) if (!costliest || entry[1] > costliest[1]) costliest = entry;
+    if (costliest) push('agentCost', costliest[1], limits.maxCostPerAgentUSD, costliest[0]);
   }
   return out;
 }
@@ -81,6 +90,8 @@ export function describeLimit(r: LimitReading, agentName?: string): string {
       return `${Math.round(r.used).toLocaleString('en-US')} of the ${Math.round(r.limit).toLocaleString('en-US')} token limit`;
     case 'time':
       return `${Math.floor(r.used)} of the ${Math.round(r.limit)} minute limit`;
+    case 'agentCost':
+      return `${agentName ?? r.agentId ?? 'an agent'} spent $${r.used.toFixed(2)} of the $${r.limit.toFixed(2)} allowed per agent`;
     case 'calls':
       return `${agentName ?? r.agentId ?? 'an agent'} made ${r.used} of the ${r.limit} model calls allowed per agent (loop guard)`;
   }

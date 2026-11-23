@@ -16,16 +16,17 @@ vi.mock('@/api/client', () => ({
 const { useAgentStore } = await import('@/store/useAgentStore');
 const { executeRun } = await import('@/engine/liveOrchestrator');
 
-const usage = (over: Partial<{ costUSD: number; tokens: number; elapsedMs: number; callsByAgent: Record<string, number> }> = {}) => ({
+const usage = (over: Partial<{ costUSD: number; tokens: number; elapsedMs: number; callsByAgent: Record<string, number>; costByAgent: Record<string, number> }> = {}) => ({
   costUSD: 0,
   tokens: 0,
   elapsedMs: 0,
   callsByAgent: {},
+  costByAgent: {},
   ...over,
 });
 
 describe('run limit checks', () => {
-  const limits: RunLimits = { maxCostUSD: 10, maxTokens: 1000, maxMinutes: 30, maxCallsPerAgent: 5 };
+  const limits: RunLimits = { maxCostUSD: 10, maxTokens: 1000, maxMinutes: 30, maxCallsPerAgent: 5, maxCostPerAgentUSD: 2 };
 
   it('is quiet below 80%, warns from 80% and stops at 100%', () => {
     expect(checkLimits(limits, usage({ tokens: 799 }))).toEqual({ stop: null, warnings: [] });
@@ -40,9 +41,23 @@ describe('run limit checks', () => {
     expect(stop).toMatchObject({ kind: 'calls', agentId: 'b', used: 5 });
   });
 
+  it('stops when one agent spends its share, naming the agent, and warns from 80%', () => {
+    expect(checkLimits(limits, usage({ costByAgent: { a: 1.59, b: 0.5 } }))).toEqual({ stop: null, warnings: [] });
+    expect(checkLimits(limits, usage({ costByAgent: { a: 1.6 } })).warnings).toMatchObject([{ kind: 'agentCost', agentId: 'a' }]);
+    expect(checkLimits(limits, usage({ costByAgent: { a: 0.4, b: 2 } })).stop).toMatchObject({ kind: 'agentCost', agentId: 'b', used: 2, limit: 2 });
+    expect(checkLimits({ ...limits, maxCostPerAgentUSD: null }, usage({ costByAgent: { a: 999 } }))).toEqual({ stop: null, warnings: [] });
+    expect(checkLimits(limits, usage())).toEqual({ stop: null, warnings: [] });
+  });
+
+  it('leaves the per-agent cost limit off by default and keeps saved settings from before it existed', () => {
+    expect(DEFAULT_RUN_LIMITS.maxCostPerAgentUSD).toBeNull();
+    expect(normalizeLimits({ maxCostUSD: 3, maxTokens: 10, maxMinutes: 5, maxCallsPerAgent: 7 } as Partial<RunLimits>).maxCostPerAgentUSD).toBeNull();
+    expect(normalizeLimits({ maxCostPerAgentUSD: 4 }).maxCostPerAgentUSD).toBe(4);
+  });
+
   it('treats empty, zero and invalid values as no limit, and keeps defaults for missing ones', () => {
-    const off = normalizeLimits({ maxCostUSD: null, maxTokens: 0, maxMinutes: Number.NaN, maxCallsPerAgent: -3 });
-    expect(off).toEqual({ maxCostUSD: null, maxTokens: null, maxMinutes: null, maxCallsPerAgent: null });
+    const off = normalizeLimits({ maxCostUSD: null, maxTokens: 0, maxMinutes: Number.NaN, maxCallsPerAgent: -3, maxCostPerAgentUSD: 0 });
+    expect(off).toEqual({ maxCostUSD: null, maxTokens: null, maxMinutes: null, maxCallsPerAgent: null, maxCostPerAgentUSD: null });
     expect(checkLimits(off, usage({ tokens: 1e12, costUSD: 1e9 }))).toEqual({ stop: null, warnings: [] });
     expect(normalizeLimits(undefined)).toEqual(DEFAULT_RUN_LIMITS);
   });
@@ -58,7 +73,7 @@ describe('run limits in a live run', () => {
     useAgentStore.setState({
       roleDefaults,
       maxParallel: 1,
-      runLimits: { maxCostUSD: null, maxTokens: 2000, maxMinutes: null, maxCallsPerAgent: null },
+      runLimits: { maxCostUSD: null, maxTokens: 2000, maxMinutes: null, maxCallsPerAgent: null, maxCostPerAgentUSD: null },
       activity: [],
       activeMission: {
         id: 'run-limit-test', title: 'Limit test', source: 'live', status: 'running', startedAt: Date.now(), currentStage: 'implementation', stageIndex: 2,
@@ -77,6 +92,19 @@ describe('run limits in a live run', () => {
     const texts = useAgentStore.getState().activity.map((a) => a.text);
     expect(texts.some((t) => t.startsWith('Run limit at 55%'))).toBe(false);
     expect(texts.some((t) => t.startsWith('Run stopped: 2,200 of the 2,000 token limit'))).toBe(true);
+  });
+
+  it('stops the run when one agent reaches its cost limit, even though the whole-run cost is not reached', async () => {
+    const { useConnectionsStore } = await import('@/store/useConnectionsStore');
+    useConnectionsStore.setState({ userPricing: { 'test:model': { inputPerM: 1000, outputPerM: 1000 } } });
+    useAgentStore.getState().setRunLimits({ maxTokens: null, maxCostUSD: 100, maxCostPerAgentUSD: 2 });
+    await executeRun();
+    const mission = useAgentStore.getState().activeMission!;
+    expect(calls.length).toBe(3);
+    expect(mission.status).toBe('failed');
+    expect(mission.error).toMatch(/Stopped by run limit: Pulse spent \$2\.20 of the \$2\.00 allowed per agent/);
+    expect(mission.tasks.find((t) => t.id === 'qa-review')!.status).toBe('pending');
+    useConnectionsStore.setState({ userPricing: {} });
   });
 
   it('runs to the end when the limit is off', async () => {

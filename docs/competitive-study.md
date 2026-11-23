@@ -75,6 +75,25 @@ What Agent HQ took: commands that run real actions (new conversation, mode switc
 
 Not built yet, and seen in peers: `/model` to switch a model from chat, user-defined commands, `#task` mentions, `@agent` as a one-off consult, and a `/btw` side question.
 
+## What Agent HQ has taken so far (verified 2026-11-23)
+
+Checked against this repository's code and tests, not only the changelog.
+
+| Idea | From | Status | Evidence in this repo |
+| --- | --- | --- | --- |
+| Run limits with 80% warning and hard stop | Paperclip, MetaGPT | Built (0.15.0) | `src/engine/runLimits.ts`, called from `enforceLimits` in `liveOrchestrator.ts`; `tests/unit/runLimits.test.ts` runs a real run to the limit |
+| Cost cap per agent | Paperclip | Built (0.19.0), per run, off by default | same files; a real-run test stops the run on one agent's spend |
+| Monthly per-agent budgets that persist across runs | Paperclip | **Not built** | none |
+| Retry with backoff for temporary errors | Maestro, Agent Teams AI | Built (0.19.0) | `src/engine/retry.ts`; `tests/e2e/retry.spec.ts` drives the real call path |
+| Quota-reset scheduled retry | Agent Teams AI | **Not built**; quota errors reroute to another provider instead | `src/engine/failover.ts` |
+| Diff preview and conflict flags | Agent Teams AI, Agent Orchestrator | Built (0.15.0) | `BottomPanel.tsx`; `tests/unit/conflicts.test.ts`, `tests/e2e/safety.spec.ts` |
+| Pending approval and finished work survive a crash | Agent Orchestrator | Built (0.15.0) | desktop test that SIGKILLs the app mid-run |
+| Terminal that survives the UI | Paradev | **Not built** | none |
+| One worktree per task | Agent Orchestrator, Maestro | Not built; agents propose changes instead of writing files | none |
+| Chat commands, argument completion, `/` only at message start | OpenHands, Maestro, Agent Orchestrator | Built (0.17.0, 0.18.0) | `src/engine/chatCommands.ts` and its tests |
+
+No code from any studied project is in Agent HQ.
+
 ## Where Agent HQ stands today (own source)
 
 Gaps confirmed in this repository, listed so the roadmap is honest:

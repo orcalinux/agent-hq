@@ -100,3 +100,19 @@ test('an unfinished run saved on the server comes back after browser storage is 
   const cleared = await page.request.delete('/api/runs/journal');
   expect(cleared.ok()).toBe(true);
 });
+
+test('the per-agent cost limit is off by default, can be set, and survives a reload', async ({ page }) => {
+  await page.goto('/');
+  await nav(page, 'Settings');
+  const perAgent = page.getByRole('spinbutton', { name: /Cost per agent/ });
+  await expect(perAgent).toHaveValue('');
+  await expect(perAgent).toHaveAttribute('placeholder', 'No limit');
+  await perAgent.fill('1.5');
+  await perAgent.press('Enter');
+  await page.reload();
+  await nav(page, 'Settings');
+  await expect(page.getByRole('spinbutton', { name: /Cost per agent/ })).toHaveValue('1.5');
+  await expect(page.getByRole('spinbutton', { name: /Cost per run/ })).toHaveValue('10');
+  await page.getByRole('button', { name: 'Restore defaults' }).click();
+  await expect(page.getByRole('spinbutton', { name: /Cost per agent/ })).toHaveValue('');
+});

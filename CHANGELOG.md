@@ -11,6 +11,15 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.19.0] — 2026-11-23
+
+### Added
+- **Retry with backoff.** A model call that fails with a temporary error (HTTP 500, 502, 503 or 504, a dropped connection, a timeout) is retried up to twice, after about 1 s and 2 s with random jitter, before the task fails. Each retry is logged in Activity, and pressing Stop cancels the wait immediately. Quota, rate-limit, authentication and bad-request errors are never retried; quota errors still switch to another connected provider.
+- **Cost per agent limit** (Settings → Run limits). The most one agent may spend in a run. It warns at 80%, stops the run at 100% naming the agent, and leaves unfinished tasks pending for Resume. It is off by default, so existing runs behave as before, and settings saved by older versions load unchanged.
+
+### Notes
+- Both ideas come from the open-source projects in `docs/competitive-study.md` (Paperclip budgets; Maestro and Agent Teams AI retry policy). No code was copied.
+
 ## [0.18.2] — 2026-11-23
 
 ### Fixed

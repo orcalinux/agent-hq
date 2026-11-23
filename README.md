@@ -117,7 +117,7 @@ Turning on a more permissive mode asks for confirmation first. Auto mode never w
 
 ### Run limits and conflicts
 
-Each run is capped per run and per agent (defaults: $10, 5M tokens, 90 minutes, 60 model calls per agent). You are warned at 80% and the run stops at 100%, with the reason logged. Change them in **Settings → Run limits**. If two agents propose changes to the same file, both are marked **conflict** in the Changes tab, auto-apply skips them and nothing is overwritten silently. Every proposal shows a line diff before you apply it.
+Each run is capped per run and per agent (defaults: $10, 5M tokens, 90 minutes, 60 model calls per agent). An optional **cost per agent** limit, off by default, stops the run when one agent has spent its share, so a single agent cannot use the whole budget. Temporary provider errors (a 5xx or a dropped connection) are retried up to twice with growing delays and jitter before a task fails; quota and rate-limit errors are not retried, they switch to another connected provider. You are warned at 80% and the run stops at 100%, with the reason logged. Change them in **Settings → Run limits**. If two agents propose changes to the same file, both are marked **conflict** in the Changes tab, auto-apply skips them and nothing is overwritten silently. Every proposal shows a line diff before you apply it.
 
 ## Agent memory
 

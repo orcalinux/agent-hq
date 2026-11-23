@@ -36,6 +36,7 @@ import { BALANCES, activeMagpieGroups, isLowQuota, useMagpieStore } from '@/stor
 import { useModelWatchStore } from '@/store/useModelWatchStore';
 import { shouldAutoResume } from './runRecovery';
 import { interpretChatCommand, parseChatCommand } from './chatCommands';
+import { abortableSleep, isTransientError, MAX_TRANSIENT_RETRIES, retryDelayMs } from './retry';
 import type { ViewMode } from '@/types';
 import { checkLimits, describeLimit, WARN_RATIO, type LimitKind, type LimitReading } from './runLimits';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
@@ -59,6 +60,7 @@ let chatController: AbortController | null = null;
 interface RunGuard {
   startedAt: number;
   callsByAgent: Record<string, number>;
+  costByAgent: Record<string, number>;
   warned: Set<LimitKind>;
   stopReason: string | null;
   timers: Array<ReturnType<typeof setTimeout>>;
@@ -90,6 +92,7 @@ function enforceLimits(guard: RunGuard) {
     tokens: runTotals.promptTokens + runTotals.completionTokens + runTotals.otherTokens,
     elapsedMs: Date.now() - guard.startedAt,
     callsByAgent: guard.callsByAgent,
+    costByAgent: guard.costByAgent,
   });
   const runId = currentMission()?.id;
   for (const w of warnings) {
@@ -159,6 +162,7 @@ async function callAgent(
     }
   }
   let result: Awaited<ReturnType<typeof streamChat>>;
+  let transientRetries = 0;
   for (;;) {
     let full = '';
     try {
@@ -182,7 +186,21 @@ async function callAgent(
       break;
     } catch (err) {
       const message = (err as Error).message ?? '';
-      if (isAbort(err) || !isQuotaError(message)) throw err;
+      if (isAbort(err)) throw err;
+      if (!isQuotaError(message)) {
+        if (!isTransientError(message) || transientRetries >= MAX_TRANSIENT_RETRIES) throw err;
+        transientRetries += 1;
+        const delay = retryDelayMs(transientRetries);
+        agentsState().logActivity({
+          kind: 'info',
+          level: 'warn',
+          agentId: agent.id,
+          text: `${providerOfRef(model)} had a temporary error (${truncate(message, 100)}). Retrying in ${Math.round(delay / 100) / 10}s (${transientRetries} of ${MAX_TRANSIENT_RETRIES}).`,
+          model,
+        });
+        await abortableSleep(delay, args.signal);
+        continue;
+      }
       const failedProvider = providerOfRef(model);
       if (failedProvider) conns().markExhausted(failedProvider, Date.now() + EXHAUSTED_COOLDOWN_MS);
       if (!reroute(`${failedProvider} reported: ${truncate(message, 120)}`)) throw err;
@@ -203,6 +221,7 @@ async function callAgent(
     if (usage?.inputTokens === undefined && usage?.outputTokens === undefined) runTotals.otherTokens += usage?.totalTokens ?? 0;
     if (cost === null || !usage) runTotals.unpricedTokens += total;
     else runTotals.costUSD += cost;
+    if (guard && usage && cost !== null) guard.costByAgent[agent.id] = (guard.costByAgent[agent.id] ?? 0) + cost;
   }
   if (guard) enforceLimits(guard);
   return { ...result, model: served };
@@ -1011,7 +1030,7 @@ export async function executeRun() {
   runTotals.unpricedTokens = previous?.unpricedTokens ?? 0;
   store.setLiveRunning(true);
   store.updateMission({ status: 'running', error: undefined, interrupted: undefined });
-  const guard: RunGuard = { startedAt: Date.now(), callsByAgent: {}, warned: new Set(), stopReason: null, timers: [] };
+  const guard: RunGuard = { startedAt: Date.now(), callsByAgent: {}, costByAgent: {}, warned: new Set(), stopReason: null, timers: [] };
   runGuard = guard;
   const minutes = store.runLimits.maxMinutes;
   if (minutes !== null) {
