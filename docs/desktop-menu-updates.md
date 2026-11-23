@@ -80,3 +80,9 @@ Verified on Linux on 2026-11-23: 218 unit tests, 46 production browser tests
 successful real GitHub update check from the packaged 0.16.0 AppImage build.
 The desktop tests include reduced-motion and outside-click dismissal checks.
 Windows and macOS runtime behavior was not exercised locally.
+
+The first 0.16.0 release attempt exposed two Unix file-mode assertions on the
+Windows runner. In 0.16.1 only those assertions are platform-specific; encryption
+and journal behavior are still tested on every platform. Release builds now
+upload to a draft and publish it only after all three platforms, notes and
+checksums succeed.

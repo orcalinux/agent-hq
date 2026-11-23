@@ -28,7 +28,7 @@ describe('API key encryption at rest', () => {
     saveConfig({ connections: { openrouter: { providerId: 'openrouter', method: 'api_key', apiKey: 'sk-or-secret-value', connectedAt: 'now' } } });
     const onDisk = fs.readFileSync(path.join(dir, 'config.json'), 'utf8');
     expect(onDisk).not.toContain('sk-or-secret-value');
-    expect(fs.statSync(path.join(dir, 'secret.key')).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') expect(fs.statSync(path.join(dir, 'secret.key')).mode & 0o777).toBe(0o600);
     resetConfigCache();
     expect(loadConfig().connections.openrouter?.apiKey).toBe('sk-or-secret-value');
   });

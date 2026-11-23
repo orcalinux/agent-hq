@@ -23,7 +23,7 @@ publish:
   provider: github
   owner: orcalinux
   repo: agent-hq
-  releaseType: release
+  releaseType: draft
 linux:
   target: [AppImage, deb, rpm]
   category: Development

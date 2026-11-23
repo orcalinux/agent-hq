@@ -28,7 +28,7 @@ describe('server run journal', () => {
     saveJournal('/work/a', { id: 2 });
     expect(loadJournal('/work/a')?.mission).toEqual({ id: 2 });
     const file = path.join(dir, 'runs', fs.readdirSync(path.join(dir, 'runs'))[0]);
-    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') expect(fs.statSync(file).mode & 0o777).toBe(0o600);
     expect(fs.readdirSync(path.join(dir, 'runs')).some((name) => name.endsWith('.tmp'))).toBe(false);
     fs.writeFileSync(file, '{ broken');
     expect(loadJournal('/work/a')).toBeNull();

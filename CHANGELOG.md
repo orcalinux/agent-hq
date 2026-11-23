@@ -11,6 +11,12 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.16.1] — 2026-11-23
+
+### Fixed
+- Windows installer builds: limit Unix file-mode assertions to Unix platforms. The encryption, persistence and run-journal tests continue running on Windows.
+- Keep new releases in draft until Linux, Windows and macOS installers, updater metadata, release notes and checksums have all completed. A failed platform build no longer exposes an incomplete stable update.
+
 ## [0.16.0] — 2026-11-23
 
 ### Added
