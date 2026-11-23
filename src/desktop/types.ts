@@ -8,6 +8,7 @@ export type DesktopCommand =
   | { type: 'toggle-theme' }
   | { type: 'open-terminal' }
   | { type: 'show-agent'; agentId: string }
+  | { type: 'check-updates' }
   | { type: 'show-updates' };
 
 export type TrayAction =
@@ -100,6 +101,16 @@ export interface UpdatePrefs {
 
 export const DEFAULT_UPDATE_PREFS: UpdatePrefs = { auto: true, everyHours: 6, autoDownload: true, autoRestart: false, showButton: true };
 
+export interface DesktopMenuItem {
+  id: string;
+  label: string;
+  enabled: boolean;
+  separator?: boolean;
+  checked?: boolean;
+  shortcut?: string;
+  children?: DesktopMenuItem[];
+}
+
 export interface DesktopApi {
   platform: string;
   version: string;
@@ -111,6 +122,8 @@ export interface DesktopApi {
   setTheme: (mode: 'dark' | 'light') => void;
   /** Opens the application menu at a point in the window (Windows and Linux, where the title bar is custom). */
   showMenu: (x: number, y: number) => void;
+  getMenu: () => Promise<DesktopMenuItem[]>;
+  runMenuItem: (id: string) => void;
   /** Minimize, maximize/restore or close the window (Linux, where the app draws its own window buttons). */
   windowControl: (action: 'minimize' | 'toggle-maximize' | 'close') => void;
   isMaximized: () => Promise<boolean>;

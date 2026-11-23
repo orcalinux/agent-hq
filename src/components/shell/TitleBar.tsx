@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
-import { Copy, Menu, Minus, Square, X } from 'lucide-react';
+import { Copy, Minus, Square, X } from 'lucide-react';
 import { desktopApi, statusFrom } from '@/desktop/bridge';
 import { TITLE_BAR_HEIGHT } from '@/desktop/types';
 import { useAgentStore } from '@/store/useAgentStore';
@@ -8,6 +8,8 @@ import { StatusDot } from '@/components/ui/primitives';
 import { cn } from '@/utils/cn';
 import { ApprovalModeBadge } from './ApprovalMode';
 import { UpdateButton } from './UpdateButton';
+import { ApplicationMenu } from './ApplicationMenu';
+import { CheckForUpdatesButton } from './UpdateCenter';
 
 interface Insets {
   left: number;
@@ -106,27 +108,13 @@ export function TitleBar() {
       onDoubleClick={(e) => e.preventDefault()}
       data-testid="desktop-title-bar"
     >
-      {platform !== 'darwin' ? (
-        <button
-          type="button"
-          aria-label="Application menu"
-          title="Menu"
-          style={noDrag}
-          className="flex h-7 w-8 items-center justify-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            api.showMenu(rect.left, rect.bottom);
-          }}
-        >
-          <Menu className="h-4 w-4" />
-        </button>
-      ) : null}
+      {platform !== 'darwin' ? <ApplicationMenu /> : null}
       <div className="ml-1.5 flex min-w-0 max-w-[32%] items-center gap-1.5 whitespace-nowrap">
         {project ? <span className="min-w-0 truncate font-medium text-fg">{project}</span> : null}
         {project ? <span className="shrink-0 text-fg-subtle">—</span> : null}
         <span className="shrink-0">Agent HQ</span>
       </div>
-      <div className="absolute left-1/2 top-1/2 flex max-w-[30%] -translate-x-1/2 -translate-y-1/2 items-center gap-1.5" aria-live="polite">
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2" aria-live="polite">
         <span className={cn('flex min-w-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5', running ? 'bg-accent-soft text-fg' : 'text-fg-subtle')}>
           <StatusDot tone={running ? 'success' : 'neutral'} />
           <span className="min-w-0 truncate">{status}</span>
@@ -134,6 +122,7 @@ export function TitleBar() {
       </div>
       <div className="ml-auto flex shrink-0 items-center" style={noDrag}>
         <UpdateButton />
+        <CheckForUpdatesButton />
         <ApprovalModeBadge />
       </div>
       {platform === 'linux' ? <LinuxWindowControls /> : null}

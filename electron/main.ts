@@ -23,6 +23,7 @@ import { deepLinkFromArgv, parseDeepLink, PROTOCOL } from './deepLink';
 import { fitToDisplays, loadWindowState, MIN_SIZE, saveWindowState } from './windowState';
 import { createUpdater } from './updater';
 import { createTrayPanel } from './trayPanel';
+import { menuSnapshot, runMenuItem } from './applicationMenu';
 
 const PRODUCT = 'Agent HQ';
 const REPO_URL = 'https://github.com/orcalinux/agent-hq';
@@ -151,13 +152,9 @@ async function pickProject(): Promise<void> {
   if (!result.canceled && result.filePaths[0]) send({ type: 'open-project', path: result.filePaths[0] });
 }
 
-/** The menu command: the title bar and Settings show progress, so only outcomes with nothing to show get a dialog. */
-async function checkForUpdatesFromMenu(): Promise<void> {
-  const state = await updater.check();
-  if (!mainWindow) return;
-  if (state.status === 'unsupported') await dialog.showMessageBox(mainWindow, { message: 'Updates are only checked in installed builds.' });
-  else if (state.status === 'up-to-date') await dialog.showMessageBox(mainWindow, { message: `${PRODUCT} ${app.getVersion()} is up to date.` });
-  else if (state.status === 'error') await dialog.showMessageBox(mainWindow, { type: 'warning', message: 'Could not check for updates.', detail: state.error });
+function checkForUpdatesFromMenu(): void {
+  showWindow();
+  send({ type: 'check-updates' });
 }
 
 function buildMenu(): void {
@@ -439,6 +436,10 @@ function registerIpc(): void {
     Menu.getApplicationMenu()?.popup({ window: mainWindow, x: Number(at?.x) || 0, y: Number(at?.y) || TITLE_BAR_HEIGHT });
   });
   const fromAppInvoke = (event: Electron.IpcMainInvokeEvent) => event.sender === mainWindow?.webContents && isAppOrigin(event.senderFrame?.url ?? '');
+  ipcMain.handle('desktop:menu-items', (event) => fromAppInvoke(event) ? menuSnapshot() : []);
+  ipcMain.on('desktop:menu-action', (event, id: unknown) => {
+    if (fromApp(event) && mainWindow) runMenuItem(id, mainWindow);
+  });
   ipcMain.handle('desktop:update-state', (event) => (fromAppInvoke(event) ? updater.state() : null));
   ipcMain.handle('desktop:update-prefs', (event) => (fromAppInvoke(event) ? updater.prefs() : null));
   ipcMain.handle('desktop:update-prefs-set', (event, next: unknown) =>

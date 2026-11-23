@@ -44,6 +44,7 @@
   transition: opacity var(--motion-feedback) var(--ease-ui), transform var(--motion-enter) var(--ease-settle);
 }
 .ahq-menu-surface { --menu-offset: -4px; }
+.ahq-menu-item { transition: background-color var(--motion-feedback) var(--ease-ui), color var(--motion-feedback) var(--ease-ui); }
 .ahq-menu-surface[data-direction="up"] { --menu-offset: 4px; }
 .ahq-dialog-overlay[data-open="false"] .ahq-dialog-scrim { opacity: 0; }
 .ahq-dialog-overlay[data-open="false"] .ahq-dialog-surface {

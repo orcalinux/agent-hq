@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Bell, Brain, CircleArrowUp, Cpu, Database, FolderOpen, Gauge, Keyboard, Palette, ShieldCheck, TestTube2, Users, type LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
@@ -105,6 +105,13 @@ function TeamSettings() {
 }
 
 export default function SettingsView() {
+  const updatesRequested = useUpdateStore((store) => store.settingsRequested);
+  useEffect(() => {
+    if (!updatesRequested) return;
+    setActive('updates');
+    document.getElementById('settings-updates')?.scrollIntoView({ block: 'start' });
+    useUpdateStore.setState({ settingsRequested: false });
+  }, [updatesRequested]);
   const [active, setActive] = useState('project');
   const openNotes = useUpdateStore((s) => s.openNotes);
   const themePreference = useAgentStore((s) => s.themePreference);

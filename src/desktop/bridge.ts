@@ -63,6 +63,9 @@ function handleCommand(command: DesktopCommand): void {
       store.setActiveView('settings');
       useUpdateStore.getState().openNotes(useUpdateStore.getState().state?.status === 'ready' ? 'confirm' : 'browse');
       break;
+    case 'check-updates':
+      useUpdateStore.getState().check();
+      break;
   }
 }
 

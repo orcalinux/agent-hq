@@ -10,6 +10,8 @@ const api: DesktopApi = {
   notify: (title: string, body: string) => ipcRenderer.send('desktop:notify', { title: String(title), body: String(body) }),
   setTheme: (mode) => ipcRenderer.send('desktop:theme', mode === 'light' ? 'light' : 'dark'),
   showMenu: (x: number, y: number) => ipcRenderer.send('desktop:menu', { x: Math.round(Number(x) || 0), y: Math.round(Number(y) || 0) }),
+  getMenu: () => ipcRenderer.invoke('desktop:menu-items'),
+  runMenuItem: (id) => ipcRenderer.send('desktop:menu-action', id),
   windowControl: (action) => ipcRenderer.send('desktop:window', action),
   isMaximized: () => ipcRenderer.invoke('desktop:is-maximized') as Promise<boolean>,
   onMaximized: (listener) => {

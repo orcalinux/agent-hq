@@ -503,9 +503,167 @@ test('built desktop opens an integrated terminal in the project and stops its sh
     .toBe('stopped');
 });
 
+test('the themed application menu fits narrow windows and supports keyboard, native actions and both themes', async ({}, testInfo) => {
+  test.skip(process.platform === 'darwin', 'macOS keeps its native application menu.');
+  const { app, page, errors } = await launch();
+  try {
+    const trigger = page.getByRole('button', { name: 'Application menu', exact: true });
+    for (const [width, height] of [[640, 360], [1000, 700], [1440, 900]]) {
+      await app.evaluate(({ BrowserWindow }, bounds) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        window.unmaximize();
+        window.setBounds(bounds);
+      }, { x: 0, y: 0, width, height });
+      for (const theme of ['light', 'dark']) {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          if (await page.evaluate((mode) => document.documentElement.dataset.theme === mode, theme)) break;
+          await page.getByRole('button', { name: /theme/ }).first().click();
+        }
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await trigger.click();
+        const menu = page.getByTestId('application-menu');
+        await expect(menu).toBeVisible();
+        await expect(menu.getByRole('menuitem', { name: 'File', exact: true })).toBeFocused();
+        const box = await menu.boundingBox();
+        const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+        expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+        await page.keyboard.press('v');
+        await expect(menu.getByRole('menuitem', { name: 'View', exact: true })).toBeFocused();
+        await page.keyboard.press('ArrowRight');
+        await expect(menu.getByRole('menu', { name: 'View', exact: true })).toBeVisible();
+        await menu.evaluate(async (element) => { await Promise.all(element.getAnimations().map((animation) => animation.finished.catch(() => undefined))); });
+        await page.screenshot({ path: testInfo.outputPath(`menu-${width}-${theme}.png`) });
+        await page.keyboard.press('ArrowLeft');
+        await expect(menu.getByRole('menu', { name: 'Application', exact: true })).toBeVisible();
+        await page.keyboard.press('End');
+        await expect(menu.getByRole('menuitem', { name: 'Check for updates', exact: true })).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(menu).toBeHidden();
+        await expect(trigger).toBeFocused();
+      }
+    }
+    await trigger.click();
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    const zoomBefore = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.getZoomLevel());
+    await page.getByRole('menuitem', { name: /Zoom In/i }).click();
+    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.getZoomLevel())).toBe(zoomBefore + 0.5);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomLevel(0));
+    await trigger.click();
+    await page.getByRole('menuitem', { name: 'File', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^Settings/ }).click();
+    await expect(page.getByRole('main', { name: 'settings', exact: true })).toBeVisible();
+    await page.evaluate(() => {
+      const input = document.createElement('input');
+      input.setAttribute('aria-label', 'Menu editing check');
+      input.value = 'Native editing still works';
+      input.style.cssText = 'position:fixed;top:80px;left:300px;z-index:40';
+      document.body.append(input);
+      input.focus();
+      input.select();
+    });
+    await trigger.click();
+    await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^Copy/ }).click();
+    await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('Native editing still works');
+    await page.evaluate(() => document.querySelector('[aria-label="Menu editing check"]')?.remove());
+    await page.evaluate(() => { window.agentHqDesktop?.runMenuItem('__proto__'); window.agentHqDesktop?.runMenuItem('999.999'); });
+    await expect(page.getByTestId('desktop-title-bar')).toBeVisible();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await trigger.click();
+    const menu = page.getByTestId('application-menu');
+    expect(await menu.evaluate((element) => getComputedStyle(element).transform)).toBe('none');
+    await page.keyboard.press('Tab');
+    await expect(menu).toBeHidden();
+    await trigger.click();
+    await page.getByRole('main', { name: 'settings', exact: true }).click({ position: { x: 500, y: 40 } });
+    await expect(menu).toBeHidden();
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
 const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version as string;
 const prefsFile = () => path.join(dirs.userData, 'update-prefs.json');
 const lastFile = () => path.join(dirs.userData, 'last-version');
+
+test('manual update checks work with automatic checks off, show progress and keep the app usable after release notes', async ({}, testInfo) => {
+  fs.mkdirSync(dirs.userData, { recursive: true });
+  fs.writeFileSync(prefsFile(), JSON.stringify({ auto: false, autoDownload: false, showButton: false }));
+  const { app, page, errors } = await launch({ AGENT_HQ_SIMULATE_UPDATE: '99.0.0' });
+  try {
+    await expect.poll(() => page.evaluate(async () => (await window.agentHqDesktop!.getUpdateState()).status)).toBe('idle');
+    await page.getByRole('button', { name: 'Check for updates', exact: true }).click();
+    const center = page.getByRole('dialog', { name: 'Agent HQ updates', exact: true });
+    await expect(center).toContainText('Looking for updates');
+    await expect(center).toContainText('A new version is available');
+    for (const [width, height] of [[640, 360], [1440, 900]]) {
+      await app.evaluate(({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds), { x: 0, y: 0, width, height });
+      await center.evaluate(async (element) => { await Promise.all(element.getAnimations().map((animation) => animation.finished.catch(() => undefined))); });
+      await page.screenshot({ path: testInfo.outputPath(`update-center-${width}.png`) });
+      await expect(center.getByRole('button', { name: 'Download update', exact: true })).toBeInViewport();
+    }
+    await expect(center).toContainText('Automatic checks are off');
+    expect(await page.evaluate(async () => (await window.agentHqDesktop!.getUpdatePrefs()).auto)).toBe(false);
+    await center.getByRole('button', { name: 'Download update', exact: true }).click();
+    await expect(center.getByRole('progressbar', { name: 'Update download' })).toBeVisible();
+    await expect(center).toContainText('Your update is ready');
+    await center.getByRole('button', { name: 'Review and restart', exact: true }).click();
+    const notes = page.getByRole('dialog', { name: 'Update to v99.0.0', exact: true });
+    await expect(notes).toBeVisible();
+    await notes.getByRole('button', { name: 'Later', exact: true }).click();
+    await expect(notes).toBeHidden();
+    await expect.poll(() => page.evaluate(() => document.getElementById('root')!.inert)).toBe(false);
+    await expect(page.getByRole('button', { name: 'Check for updates', exact: true })).toBeFocused();
+    await page.getByRole('button', { name: 'Check for updates', exact: true }).click();
+    await expect(center).toContainText('Your update is ready');
+    await center.getByRole('button', { name: 'Update settings', exact: true }).click();
+    await expect(center).toBeHidden();
+    await expect(page.getByTestId('update-version-row')).toBeInViewport();
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+    fs.rmSync(prefsFile(), { force: true });
+  }
+});
+
+test('manual checks from the native Help menu and themed menu report up-to-date and unsupported builds', async () => {
+  fs.mkdirSync(dirs.userData, { recursive: true });
+  fs.writeFileSync(prefsFile(), JSON.stringify({ auto: false }));
+  const { app, page, errors } = await launch({ AGENT_HQ_SIMULATE_UPDATE: version });
+  try {
+    await app.evaluate(({ Menu, BrowserWindow }) => {
+      const item = Menu.getApplicationMenu()?.items.find((entry) => entry.role === 'help')?.submenu?.items.find((entry) => entry.label === 'Check for Updates…');
+      item?.click(item, BrowserWindow.getAllWindows()[0], {});
+    });
+    const center = page.getByRole('dialog', { name: 'Agent HQ updates', exact: true });
+    await expect(center).toContainText('You’re up to date');
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('desktop:update', { status: 'error', current: '0.16.0', error: 'Connection timed out' }));
+    await expect(center).toContainText('Connection timed out');
+    await center.getByRole('button', { name: 'Try again', exact: true }).click();
+    await expect(center).toContainText('You’re up to date');
+    await center.getByRole('button', { name: 'Close', exact: true }).click();
+    if (process.platform !== 'darwin') {
+      await page.getByRole('button', { name: 'Application menu', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Check for updates', exact: true }).click();
+      await expect(center).toContainText('You’re up to date');
+    }
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+    fs.rmSync(prefsFile(), { force: true });
+  }
+  const unsupported = await launch();
+  try {
+    await unsupported.page.getByRole('button', { name: 'Check for updates', exact: true }).click();
+    await expect(unsupported.page.getByRole('dialog', { name: 'Agent HQ updates', exact: true })).toContainText('You’re running a development build');
+    await expect(unsupported.page.getByRole('link', { name: 'View releases' })).toBeVisible();
+  } finally {
+    await unsupported.app.close();
+  }
+});
 
 test('a downloaded update shows the Update pill, its notes, and restarts from there', async () => {
   fs.rmSync(prefsFile(), { force: true });

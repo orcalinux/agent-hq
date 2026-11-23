@@ -11,6 +11,19 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.16.0] — 2026-11-23
+
+### Added
+- **Check for updates whenever you want.** A permanent title-bar action and a pinned application-menu action check immediately, independently of the automatic schedule. An in-app update window shows checking, current version, errors with retry, download progress and the option to review release notes before restarting.
+
+### Changed
+- **Themed desktop menu.** File, Edit, View, Window and Help now open in a compact, scrollable panel with consistent icons, shortcut hints, focus states and the app's shared opening/closing motion. Nested menus stay within the panel instead of spilling outside narrow windows. Arrow keys, Home/End, typing to select, Escape and focus restoration are supported. Native menus and shortcuts remain available, including the macOS menu bar.
+- Manual update checks from the native Help menu use the same in-app update window instead of operating-system message boxes.
+
+### Fixed
+- Load the real updater through the package's CommonJS default export. Installed builds could otherwise fail a real update check with an undefined updater even though simulated checks worked.
+- Preserve focus and background modality when moving between update status and release notes. Title-bar status yields space to update and window controls at narrow widths.
+
 ## [0.15.2] — 2026-11-23
 
 ### Fixed

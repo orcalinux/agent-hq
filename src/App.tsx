@@ -6,6 +6,7 @@ import { CommandPalette } from '@/components/shell/CommandPalette';
 import { ErrorBoundary } from '@/components/shell/ErrorBoundary';
 import { TitleBar } from '@/components/shell/TitleBar';
 import { WhatsNewDialog } from '@/components/shell/WhatsNewDialog';
+import { UpdateCenter } from '@/components/shell/UpdateCenter';
 import { useShortcuts } from '@/components/shell/useShortcuts';
 import { OverflowTooltipHost } from '@/components/ui/OverflowTooltip';
 import { Spinner } from '@/components/ui/primitives';
@@ -75,6 +76,7 @@ export default function App() {
       <StatusBar />
       <CommandPalette />
       <WhatsNewDialog />
+      <UpdateCenter />
       <OverflowTooltipHost />
     </div>
   );

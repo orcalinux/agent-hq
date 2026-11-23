@@ -14,6 +14,9 @@ interface UpdateStore {
   state: UpdateState | null;
   prefs: UpdatePrefs;
   notes: NotesMode | null;
+  centerOpen: boolean;
+  settingsRequested: boolean;
+  closeCenter: () => void;
   /** The title bar button asked for the download, so it shows progress and asks to restart when done. */
   pulling: boolean;
   openNotes: (mode: NotesMode) => void;
@@ -30,8 +33,11 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
   state: null,
   prefs: DEFAULT_UPDATE_PREFS,
   notes: null,
+  centerOpen: false,
+  settingsRequested: false,
+  closeCenter: () => set({ centerOpen: false }),
   pulling: false,
-  openNotes: (mode) => set({ notes: mode }),
+  openNotes: (mode) => set({ notes: mode, centerOpen: false }),
   closeNotes: () => {
     if (get().notes === 'after') desktopApi()?.ackUpdated();
     set({ notes: null });
@@ -41,7 +47,11 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
     set((s) => ({ prefs: { ...s.prefs, ...next } }));
     if (api) set({ prefs: await api.setUpdatePrefs(next) });
   },
-  check: () => desktopApi()?.checkForUpdates(),
+  check: () => {
+    if (get().notes) get().closeNotes();
+    set({ centerOpen: true });
+    desktopApi()?.checkForUpdates();
+  },
   download: (fromButton = false) => {
     if (fromButton) set({ pulling: true });
     desktopApi()?.downloadUpdate();
@@ -65,7 +75,10 @@ export function installUpdateBridge(): () => void {
     const patch: Partial<UpdateStore> = { state };
     if (store.pulling && state.status === 'ready') {
       patch.pulling = false;
-      if (!store.notes) patch.notes = 'confirm';
+      if (!store.notes) {
+        patch.notes = 'confirm';
+        patch.centerOpen = false;
+      }
     } else if (store.pulling && (state.status === 'error' || state.status === 'up-to-date')) patch.pulling = false;
     useUpdateStore.setState(patch);
   };

@@ -138,7 +138,8 @@ export function createUpdater({ onState, onReady, busy, beforeInstall }: Updater
   let wired: AutoUpdater | null = null;
   const updater = async (): Promise<AutoUpdater> => {
     if (wired) return wired;
-    const { autoUpdater } = await import('electron-updater');
+    const { default: updaterModule } = await import('electron-updater');
+    const { autoUpdater } = updaterModule;
     autoUpdater.autoDownload = prefs.autoDownload;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.on('checking-for-update', () => set({ status: 'checking' }));

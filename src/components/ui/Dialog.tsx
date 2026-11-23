@@ -22,13 +22,18 @@ function useEscape(open: boolean, onClose: () => void) {
   }, [open, onClose]);
 }
 
+const modalLayers: Array<{ node: HTMLElement | null; previous: HTMLElement | null }> = [];
+let rootWasInert = false;
+
 function useRestoreFocus(open: boolean, containerRef: React.RefObject<HTMLElement | null>) {
   const previous = document.activeElement as HTMLElement | null;
   useLayoutEffect(() => {
     if (!open) return;
     const node = containerRef.current;
     const root = document.getElementById('root');
-    const wasInert = root?.inert ?? false;
+    if (!modalLayers.length) rootWasInert = root?.inert ?? false;
+    const layer = { node, previous };
+    modalLayers.push(layer);
     if (root) root.inert = true;
     const wanted = node?.querySelector<HTMLElement>('[data-autofocus]');
     const alreadyInside = node && document.activeElement && document.activeElement !== node && node.contains(document.activeElement);
@@ -38,6 +43,7 @@ function useRestoreFocus(open: boolean, containerRef: React.RefObject<HTMLElemen
       (focusable ?? node)?.focus();
     }
     const trapFocus = (event: KeyboardEvent) => {
+      if (modalLayers.at(-1) !== layer) return;
       if (event.key !== 'Tab' || (event.target as HTMLElement)?.closest('[data-ahq-popover]')) return;
       const elements = Array.from(node?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') ?? [])
         .filter((element) => element.getClientRects().length > 0);
@@ -57,8 +63,16 @@ function useRestoreFocus(open: boolean, containerRef: React.RefObject<HTMLElemen
     window.addEventListener('keydown', trapFocus);
     return () => {
       window.removeEventListener('keydown', trapFocus);
-      if (root) root.inert = wasInert;
-      previous?.focus?.();
+      const wasTop = modalLayers.at(-1) === layer;
+      modalLayers.splice(modalLayers.indexOf(layer), 1);
+      for (const remaining of modalLayers) {
+        if (layer.node?.contains(remaining.previous)) remaining.previous = layer.previous;
+      }
+      if (root && !modalLayers.length) root.inert = rootWasInert;
+      if (wasTop) {
+        const target = modalLayers.at(-1)?.node;
+        if (!target || !target.contains(document.activeElement)) (target ?? layer.previous)?.focus?.();
+      }
     };
   }, [open, containerRef]);
 }
