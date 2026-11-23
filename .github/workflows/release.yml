@@ -11,18 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    # One job creates the release first; otherwise the three desktop jobs race and each creates its own.
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create the GitHub release for this tag
-        if: startsWith(github.ref, 'refs/tags/')
-        run: gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --verify-tag --draft --title "Agent HQ ${GITHUB_REF_NAME}" --notes "Installers are being built."
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   desktop:
-    needs: release
     strategy:
       fail-fast: false
       matrix:
@@ -48,10 +37,9 @@ jobs:
       - name: Install rpm tooling
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm
-      - name: Build and publish installers
-        run: npx electron-builder ${{ matrix.target }} --publish ${{ startsWith(github.ref, 'refs/tags/') && 'always' || 'never' }}
+      - name: Build installers
+        run: npx electron-builder ${{ matrix.target }} --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
         with:
@@ -63,45 +51,51 @@ jobs:
             release/*.exe
             release/*.dmg
             release/*.zip
+            release/*.blockmap
             release/latest*.yml
-          if-no-files-found: ignore
+          if-no-files-found: error
 
-  notes:
-    # The release page shows this version's CHANGELOG.md section, as the app's What's new does.
+  publish:
     needs: desktop
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installers-*
+          path: release-assets
+          merge-multiple: true
       - name: Check the tag matches package.json
         run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
-      - run: node scripts/release-notes.mjs "${GITHUB_REF_NAME}" > notes.md
-      - run: gh release edit "${GITHUB_REF_NAME}" --notes-file notes.md --title "Agent HQ ${GITHUB_REF_NAME}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  checksums:
-    # Publishes SHA256SUMS.txt so a download can be verified: sha256sum -c SHA256SUMS.txt
-    needs: desktop
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Hash every installer on the release and upload the list
+      - name: Verify all platforms and update files are present
         run: |
-          mkdir assets && cd assets
-          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --pattern '*.AppImage' --pattern '*.deb' --pattern '*.rpm' --pattern '*.exe' --pattern '*.dmg' --pattern '*.zip'
-          sha256sum * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-          gh release upload "${GITHUB_REF_NAME}" SHA256SUMS.txt --repo "${GITHUB_REPOSITORY}" --clobber
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish:
-    needs: [notes, checksums]
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Publish only after every installer, updater file and checksum is ready
-        run: gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --draft=false --latest
+          VERSION="$(node -p "require('./package.json').version")"
+          for FILE in \
+            "Agent-HQ-${VERSION}-linux-amd64.deb" \
+            "Agent-HQ-${VERSION}-linux-x86_64.AppImage" \
+            "Agent-HQ-${VERSION}-linux-x86_64.rpm" \
+            "Agent-HQ-${VERSION}-win-x64.exe" \
+            "Agent-HQ-${VERSION}-win-x64.exe.blockmap" \
+            "Agent-HQ-${VERSION}-mac-arm64.dmg" \
+            "Agent-HQ-${VERSION}-mac-arm64.zip" \
+            "Agent-HQ-${VERSION}-mac-arm64.zip.blockmap" \
+            "Agent-HQ-${VERSION}-mac-x64.dmg" \
+            "Agent-HQ-${VERSION}-mac-x64.zip" \
+            "Agent-HQ-${VERSION}-mac-x64.zip.blockmap" \
+            latest-linux.yml latest-mac.yml latest.yml; do
+            test -s "release-assets/${FILE}" || { echo "Missing release asset: ${FILE}"; exit 1; }
+          done
+      - name: Generate release notes and installer checksums
+        run: |
+          node scripts/release-notes.mjs "${GITHUB_REF_NAME}" > notes.md
+          cd release-assets
+          sha256sum *.AppImage *.deb *.rpm *.exe *.dmg *.zip > SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
+      - name: Upload the complete set and publish once
+        run: |
+          gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --verify-tag --draft --title "Agent HQ ${GITHUB_REF_NAME}" --notes-file notes.md
+          gh release upload "${GITHUB_REF_NAME}" release-assets/* --repo "${GITHUB_REPOSITORY}" --clobber
+          gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --notes-file notes.md --title "Agent HQ ${GITHUB_REF_NAME}" --draft=false --latest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

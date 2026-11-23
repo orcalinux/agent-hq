@@ -86,3 +86,9 @@ Windows runner. In 0.16.1 only those assertions are platform-specific; encryptio
 and journal behavior are still tested on every platform. Release builds now
 upload to a draft and publish it only after all three platforms, notes and
 checksums succeed.
+
+The 0.16.1 attempt then exposed a race in parallel publisher release discovery:
+successful platform jobs selected different draft records for the same tag.
+Starting in 0.16.2 the builders do not publish. One job downloads all platform
+artifacts, verifies every expected installer and updater metadata file, creates
+and verifies installer checksums, uploads the complete set and publishes once.

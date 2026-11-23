@@ -11,6 +11,13 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.16.2] — 2026-11-23
+
+Includes the themed desktop menus, immediate update checks and updater repair introduced in 0.16.0.
+
+### Fixed
+- Collect all platform installers in one publishing job instead of letting parallel builders select or create separate draft releases. Verify the full installer and updater metadata set, generate checksums for every installer and publish once after upload completes.
+
 ## [0.16.1] — 2026-11-23
 
 ### Fixed
