@@ -47,3 +47,23 @@ test('/plan switches mode from the keyboard, with option menus and no model need
   await expect(notes).toHaveCount(0);
   expect(modelRequests).toEqual([]);
 });
+
+test('the attach-file popover closes on outside click, Escape and when focus leaves', async ({ page }) => {
+  await page.goto('/');
+  const attach = page.getByRole('button', { name: 'Attach a project file' });
+  const search = page.getByRole('textbox', { name: 'Search files to attach' });
+  await attach.click();
+  await expect(search).toBeVisible();
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await expect(search).toBeHidden();
+  await attach.click();
+  await expect(search).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(search).toBeHidden();
+  await attach.click();
+  await attach.click();
+  await expect(search).toBeHidden();
+  await attach.click();
+  await page.getByRole('tab', { name: 'Plan' }).click();
+  await expect(search).toBeHidden();
+});

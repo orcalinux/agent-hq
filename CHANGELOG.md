@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.18.1] — 2026-11-23
+
+### Fixed
+- The attach-file popover in the chat (paperclip) stayed open until you clicked the paperclip again. It now closes on a click anywhere outside it, on **Escape** from anywhere, and when focus leaves it.
+
 ## [0.18.0] — 2026-11-23
 
 ### Added

@@ -254,12 +254,34 @@ function AttachPicker({ onPick }: { onPick: (path: string) => void }) {
   const activePath = useWorkspaceStore((s) => s.activePath);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tree.filter((f) => f.type === 'file' && (!q || f.path.toLowerCase().includes(q))).slice(0, 8);
   }, [tree, query]);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside, true);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
   return (
-    <div className="relative">
+    <div
+      ref={rootRef}
+      className="relative"
+      onBlur={(event) => {
+        if (open && !event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
       <IconButton icon={Paperclip} label="Attach a project file" active={open} onClick={() => setOpen((o) => !o)} />
       {open ? (
         <div className="absolute bottom-9 left-0 z-20 w-72 rounded-xl border border-line-strong bg-surface p-1.5 shadow-pop">
