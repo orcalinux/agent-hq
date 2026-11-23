@@ -10,7 +10,8 @@ describe('provider endpoint policy', () => {
     vi.stubEnv('AGENT_HQ_ALLOWED_ENDPOINTS', '');
     expect(validateEndpoint('http://localhost:3425/')).toBe('http://localhost:3425');
     expect(validateEndpoint('http://[::1]:11434/api/')).toBe('http://[::1]:11434/api');
-    expect(checkedRequestUrl('http://localhost:3425/v1/models').hostname).toBe('127.0.0.1');
+    expect(checkedRequestUrl('http://localhost:3425/v1/models').hostname).toBe('localhost');
+    expect(checkedRequestUrl('https://localhost:3425/v1/models').hostname).toBe('localhost');
     expect(checkedRequestUrl('https://api.anthropic.com/v1/models').origin).toBe('https://api.anthropic.com');
     expect(endpointFromHost('localhost:11434', 'http://127.0.0.1:11434')).toBe('http://localhost:11434');
     expect(endpointFromHost('https://localhost:11434', 'http://127.0.0.1:11434')).toBe('https://localhost:11434');

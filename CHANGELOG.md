@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.15.2] — 2026-11-23
+
+### Fixed
+- Preserve the configured `localhost` hostname during provider requests so HTTPS certificate verification and IPv6-only local services keep working. The destination allowlist and redirect protection remain enforced.
+
 ## [0.15.1] — 2026-11-23
 
 ### Added

@@ -1,4 +1,4 @@
-# Security alert review — 0.15.1
+# Security alert review — 0.15.1–0.15.2
 
 Review date: **2026-11-23**. Initial GitHub findings: **6 open Dependabot alerts,
 13 open CodeQL alerts, 0 open secret-scanning alerts**.
@@ -6,6 +6,10 @@ Review date: **2026-11-23**. Initial GitHub findings: **6 open Dependabot alerts
 Alert numbers below identify findings in `orcalinux/agent-hq`; they are not a
 general severity ranking of application features. GitHub's counts change after
 the default branch and its analysis are updated.
+
+Version 0.15.2 preserves `localhost` in outgoing URLs for TLS hostname verification
+and IPv6 compatibility. The local OS resolver is trusted, as are its executable
+search paths; the request policy does not replace OS security.
 
 ## Dependencies
 

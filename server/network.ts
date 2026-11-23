@@ -44,7 +44,6 @@ export function checkedRequestUrl(value: string): URL {
   if (!CLOUD_ORIGINS.has(url.origin) && !isLoopbackHost(url.hostname) && !trustedOrigins().has(url.origin)) {
     throw new Error('The request destination is not an approved provider endpoint.');
   }
-  if (url.hostname === 'localhost') url.hostname = '127.0.0.1';
   return url;
 }
 
