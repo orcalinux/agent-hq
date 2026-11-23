@@ -57,7 +57,7 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
     desktopApi()?.downloadUpdate();
   },
   install: (when) => {
-    set({ notes: null });
+    if (when === 'idle') set({ notes: null });
     desktopApi()?.installUpdate(when);
   },
   hideButton: () => {
@@ -80,6 +80,7 @@ export function installUpdateBridge(): () => void {
         patch.centerOpen = false;
       }
     } else if (store.pulling && (state.status === 'error' || state.status === 'up-to-date')) patch.pulling = false;
+    if (store.notes === 'confirm' && state.status !== 'ready') patch.notes = null;
     useUpdateStore.setState(patch);
   };
   const off = api.onUpdate(apply);

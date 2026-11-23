@@ -11,6 +11,13 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.19.1] — 2026-11-23
+
+### Fixed
+- **Restart to update did nothing on Linux.** Installing a downloaded `.deb` ran the administrator step in a way that froze the whole app while it waited for a prompt that might never appear, so the button seemed dead and opening Agent HQ again found the frozen copy. The install now runs in the background and never blocks the app, and it no longer installs silently when you quit.
+- When an install does not happen (prompt cancelled, no polkit agent running, missing `pkexec`), the update dialog stays open, says why, offers **Try again**, and shows the command to run by hand with a Copy button. Agent HQ keeps running its current version.
+- Opening Agent HQ again always brings up a window, even if the first one was closed.
+
 ## [0.19.0] — 2026-11-23
 
 ### Added

@@ -80,6 +80,10 @@ export interface UpdateState {
   waiting?: boolean;
   /** The version this one replaced, on the first launch after an update. */
   updatedFrom?: string;
+  /** The package is being installed (an administrator prompt may be showing). */
+  installing?: boolean;
+  /** Why the last install did not happen, and the command to run by hand. */
+  installFailure?: { message: string; command: string; file: string };
   /** Plays the flow without a release (AGENT_HQ_SIMULATE_UPDATE). */
   simulated?: boolean;
 }

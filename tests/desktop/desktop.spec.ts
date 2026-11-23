@@ -784,6 +784,26 @@ test('a downloaded update shows the Update pill, its notes, and restarts from th
   }
 });
 
+test('a failed install keeps the dialog open with the reason and a command to run by hand', async () => {
+  fs.rmSync(prefsFile(), { force: true });
+  const { app, page, errors } = await launch({ AGENT_HQ_SIMULATE_UPDATE: '99.0.0', AGENT_HQ_SIMULATE_INSTALL_FAILURE: '1' });
+  try {
+    const pill = page.getByTestId('update-button');
+    await expect(pill).toHaveAttribute('data-kind', 'ready', { timeout: 15_000 });
+    await pill.click();
+    const dialog = page.getByRole('dialog', { name: 'Update to v99.0.0' });
+    await dialog.getByTestId('update-restart').click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId('update-install-failed')).toContainText('nothing was installed');
+    await expect(dialog.getByTestId('update-install-failed')).toContainText('sudo dpkg -i');
+    await expect(dialog.getByTestId('update-restart')).toHaveText('Try again');
+    await expect(dialog.getByRole('button', { name: 'Later' })).toBeEnabled();
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
 test('with automatic download off, the pill offers the update and downloads it on a click', async () => {
   fs.writeFileSync(prefsFile(), JSON.stringify({ autoDownload: false }));
   const { app, page, errors } = await launch({ AGENT_HQ_SIMULATE_UPDATE: '99.0.0' });

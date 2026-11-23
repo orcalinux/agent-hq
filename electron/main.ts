@@ -110,7 +110,12 @@ function send(command: DesktopCommand): void {
 }
 
 function showWindow(): void {
-  if (!mainWindow) return;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    if (!appUrl) return;
+    mainWindow = createWindow();
+    void mainWindow.loadURL(appUrl);
+    return;
+  }
   quickPanel?.hide();
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();

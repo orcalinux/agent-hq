@@ -3,6 +3,7 @@ import path from 'path';
 import { app, net } from 'electron';
 import { DEFAULT_UPDATE_PREFS, type UpdatePrefs, type UpdateState } from '../src/desktop/types';
 import { compareVersions } from '../src/desktop/changelog';
+import { packageKind, runPackageInstall } from './packageInstall';
 
 const REPO_RAW = 'https://raw.githubusercontent.com/orcalinux/agent-hq';
 const FIRST_CHECK_MS = 10_000;
@@ -92,6 +93,7 @@ export function createUpdater({ onState, onReady, busy, beforeInstall }: Updater
   let timers: NodeJS.Timeout[] = [];
   let running: Promise<UpdateState> | null = null;
   let simDownload: Promise<void> | null = null;
+  let downloadedFile: string | undefined;
 
   const set = (next: Partial<UpdateState> & { status: UpdateState['status'] }, keep = false) => {
     current = { ...(keep ? current : {}), ...next, current: app.getVersion(), updatedFrom, simulated: Boolean(simulated) || undefined };
@@ -141,7 +143,7 @@ export function createUpdater({ onState, onReady, busy, beforeInstall }: Updater
     const { default: updaterModule } = await import('electron-updater');
     const { autoUpdater } = updaterModule;
     autoUpdater.autoDownload = prefs.autoDownload;
-    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.autoInstallOnAppQuit = !ownsInstall();
     autoUpdater.on('checking-for-update', () => set({ status: 'checking' }));
     autoUpdater.on('update-not-available', () => set({ status: 'up-to-date', checkedAt: Date.now() }));
     autoUpdater.on('update-available', (info) => {
@@ -149,7 +151,10 @@ export function createUpdater({ onState, onReady, busy, beforeInstall }: Updater
       set({ status: autoUpdater.autoDownload ? 'downloading' : 'available', version: info.version, percent: 0, size, checkedAt: Date.now() });
     });
     autoUpdater.on('download-progress', (p) => set({ status: 'downloading', percent: Math.floor(p.percent), size: p.total || current.size }, true));
-    autoUpdater.on('update-downloaded', (info) => set({ status: 'ready', version: info.version, size: current.size, checkedAt: Date.now() }));
+    autoUpdater.on('update-downloaded', (info) => {
+      downloadedFile = info.downloadedFile;
+      set({ status: 'ready', version: info.version, size: current.size, checkedAt: Date.now() });
+    });
     autoUpdater.on('error', (err) => {
       if (current.status === 'ready') return;
       set({ status: 'error', version: current.version, error: err?.message ?? String(err), checkedAt: Date.now() });
@@ -172,10 +177,36 @@ export function createUpdater({ onState, onReady, busy, beforeInstall }: Updater
     return running;
   };
 
+  const ownsInstall = () => process.platform === 'linux' && !process.env.APPIMAGE && !simulated;
+
+  let installing = false;
+  const installPackage = async (file: string) => {
+    if (installing) return;
+    installing = true;
+    set({ ...current, installing: true, installFailure: undefined });
+    const result = await runPackageInstall(file);
+    installing = false;
+    if (result.ok) {
+      beforeInstall();
+      app.relaunch();
+      app.quit();
+      return;
+    }
+    set({ ...current, installing: false, installFailure: { message: result.message, command: result.command, file: result.file } });
+  };
+
   const quitAndInstall = () => {
     if (current.status !== 'ready') return;
     if (simulated) {
+      if (process.env.AGENT_HQ_SIMULATE_INSTALL_FAILURE) {
+        set({ ...current, installFailure: { message: 'The administrator prompt was cancelled, so nothing was installed.', command: "sudo dpkg -i '/tmp/agent-hq.deb'", file: '/tmp/agent-hq.deb' } });
+        return;
+      }
       set({ status: 'up-to-date', checkedAt: Date.now() });
+      return;
+    }
+    if (ownsInstall() && downloadedFile && packageKind(downloadedFile)) {
+      void installPackage(downloadedFile);
       return;
     }
     beforeInstall();

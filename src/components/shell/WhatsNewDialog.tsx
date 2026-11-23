@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle, ExternalLink } from 'lucide-react';
+import { AlertTriangle, Check, Copy, ExternalLink } from 'lucide-react';
 import { desktopApi, statusFrom } from '@/desktop/bridge';
 import { parseChangelog, releasesBetween, type Release } from '@/desktop/changelog';
 import { RELEASES_URL, fmtSize, useUpdateStore, type NotesMode } from '@/desktop/useUpdate';
@@ -92,6 +92,15 @@ export function WhatsNewDialog() {
   const running = useAgentStore((s) => statusFrom(s).running);
   const { releases, failed, target, stand } = useReleases(mode);
   const confirm = mode === 'confirm' && state?.status === 'ready';
+  const installing = Boolean(state?.installing);
+  const failure = state?.installFailure;
+  const [copied, setCopied] = useState(false);
+  const copyCommand = async () => {
+    if (!failure) return;
+    await navigator.clipboard.writeText(failure.command);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
 
   const title = confirm ? `Update to v${target}` : `What's new in v${target ?? ''}`;
   const description = confirm
@@ -114,10 +123,10 @@ export function WhatsNewDialog() {
           </a>
           {confirm ? (
             <>
-              <Button variant="ghost" onClick={close}>Later</Button>
-              {running && !autoRestart ? <Button onClick={() => install('idle')}>When agents finish</Button> : null}
-              <Button variant="primary" data-autofocus data-testid="update-restart" onClick={() => install('now')}>
-                {running ? 'Restart now' : 'Restart to update'}
+              <Button variant="ghost" onClick={close} disabled={installing}>Later</Button>
+              {running && !autoRestart && !installing ? <Button onClick={() => install('idle')}>When agents finish</Button> : null}
+              <Button variant="primary" data-autofocus data-testid="update-restart" disabled={installing} onClick={() => install('now')}>
+                {installing ? 'Installing…' : failure ? 'Try again' : running ? 'Restart now' : 'Restart to update'}
               </Button>
             </>
           ) : (
@@ -127,6 +136,25 @@ export function WhatsNewDialog() {
       }
     >
       <div className="space-y-5 py-1" data-testid="whats-new">
+        {confirm && installing ? (
+          <div className="flex items-start gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-[12px] text-fg" role="status" data-testid="update-installing">
+            <Spinner className="mt-px h-3.5 w-3.5 shrink-0" />
+            <span>Installing the update. Approve the administrator prompt if your system shows one. Agent HQ restarts when it finishes.</span>
+          </div>
+        ) : null}
+        {confirm && failure && !installing ? (
+          <div className="space-y-2 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-[12px] text-fg" role="alert" data-testid="update-install-failed">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-danger" />
+              <span>The update was not installed. {failure.message} Agent HQ is still running v{state?.current}.</span>
+            </div>
+            <p className="text-fg-muted">To install it yourself, run this in a terminal, then start Agent HQ again:</p>
+            <div className="flex items-center gap-2 rounded-md border border-line bg-surface px-2 py-1.5">
+              <code className="min-w-0 flex-1 truncate font-mono text-[11.5px]" title={failure.command}>{failure.command}</code>
+              <Button size="sm" icon={copied ? Check : Copy} onClick={() => void copyCommand()}>{copied ? 'Copied' : 'Copy'}</Button>
+            </div>
+          </div>
+        ) : null}
         {confirm && running ? (
           <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-[12px] text-fg" role="alert">
             <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
