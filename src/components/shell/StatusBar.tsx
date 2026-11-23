@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { describeRepo } from '@/utils/repoSummary';
 import { Activity, GitBranch, Search } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { selectAllModels, useConnectionsStore } from '@/store/useConnectionsStore';
@@ -10,6 +12,8 @@ import { ApprovalModeBadge } from './ApprovalMode';
 export function StatusBar() {
   const workspaceName = useWorkspaceStore((s) => s.name);
   const branch = useWorkspaceStore((s) => s.git?.branch);
+  const details = useWorkspaceStore((s) => s.git?.details);
+  const repo = useMemo(() => describeRepo(details), [details]);
   const connectedCount = useConnectionsStore((s) => s.providers.filter((p) => p.connection).length);
   const modelCount = useConnectionsStore((s) => selectAllModels(s.providers).length);
   const mission = useAgentStore((s) => s.activeMission);
@@ -26,7 +30,7 @@ export function StatusBar() {
     <footer className="flex h-6 shrink-0 items-center gap-3 whitespace-nowrap border-t border-line bg-surface px-2.5 text-[11.5px] text-fg-muted">
       <span className="min-w-0 shrink-[2] truncate">{workspaceName || 'No workspace'}</span>
       {branch ? (
-        <span className="flex min-w-0 shrink-[3] items-center gap-1"><GitBranch className="h-3 w-3 shrink-0" /><span className="min-w-0 truncate">{branch}</span></span>
+        <span className="flex min-w-0 shrink-[3] items-center gap-1"><GitBranch className="h-3 w-3 shrink-0" /><span className="min-w-0 truncate" title={repo?.remote ? `${branch} · ${repo.remote}` : branch}>{branch}</span>{repo?.sync && repo.sync !== 'up to date' ? <span className="shrink-0 text-warning">{repo.sync}</span> : null}</span>
       ) : null}
       <button type="button" onClick={() => setView('connections')} className="flex min-w-0 items-center gap-1.5 hover:text-fg" title="Open Connections & Models">
         <StatusDot tone={connectedCount ? 'success' : 'warning'} />

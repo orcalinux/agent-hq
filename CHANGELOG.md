@@ -11,6 +11,13 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.21.0] — 2026-11-23
+
+### Added
+- **Clone a repository from the project dialog.** A new "Clone repo" tab takes an https or ssh address, or `owner/repo` for GitHub, and a destination folder, then clones and opens the project. Local paths, `file://`, `ext::`, `git://` and plain `http://` addresses are refused, as is anything that looks like a git option. An existing folder is never overwritten and a failed clone leaves nothing behind.
+- **Git and GitHub detection.** The Changes tab now shows the branch, whether it is ahead of or behind its upstream, the GitHub repository (linked), and the last commit. It warns when there is no remote, the branch is not pushed, the repository has no commits, or the GitHub CLI is missing or not signed in. The status bar shows ahead/behind counts.
+- Unit tests for remote parsing, clone address validation, repository details (including detached HEAD and empty repositories) and the summary text.
+
 ## [0.20.0] — 2026-11-23
 
 ### Changed

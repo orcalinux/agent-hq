@@ -109,6 +109,20 @@ export interface MagpieGroupSync {
   weights?: Record<string, number>;
 }
 
+export interface RepoDetails {
+  hasCommits: boolean;
+  head?: string;
+  branch?: string;
+  detached: boolean;
+  upstream?: string;
+  ahead: number;
+  behind: number;
+  remote: { url: string; host: string; owner?: string; repo?: string; webUrl?: string; isGitHub: boolean } | null;
+  defaultBranch?: string;
+  lastCommit?: { hash: string; subject: string; when: string };
+  ghCli: 'authenticated' | 'unauthenticated' | 'missing';
+}
+
 export const api = {
   connections: () => call<ConnectionsResponse>('GET', '/api/connections'),
   detect: () => call<DetectResponse>('GET', '/api/connections/detect'),
@@ -168,7 +182,10 @@ export const api = {
       isRepo: boolean;
       branch?: string;
       files: Array<{ path: string; status: string; additions?: number; deletions?: number }>;
+      details?: RepoDetails | null;
     }>('GET', '/api/workspace/git'),
+  cloneRepo: (p: { url: string; parent: string; name?: string }) =>
+    call<{ root: string; name: string }>('POST', '/api/workspace/clone', p),
   allowedCommands: () =>
     call<{ commands: Array<{ program: string; subcommands?: string[]; description: string }> }>('GET', '/api/workspace/allowed-commands'),
   execute: (command: string, signal?: AbortSignal, timeoutMs?: number) =>

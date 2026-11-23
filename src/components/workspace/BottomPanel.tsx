@@ -8,6 +8,7 @@ import { canRevert } from '@/engine/approval';
 import { api } from '@/api/client';
 import { Badge, Button, EmptyState, IconButton, Spinner, Tabs } from '@/components/ui/primitives';
 import { fmtDuration } from '@/components/ui/helpers';
+import { describeRepo } from '@/utils/repoSummary';
 const TerminalPane = lazy(() => import('./TerminalPane').then((m) => ({ default: m.TerminalPane })));
 import type { KanbanTaskCard, ProposedFileChange } from '@/types';
 import { cn } from '@/utils/cn';
@@ -189,6 +190,7 @@ const NO_TASKS: KanbanTaskCard[] = [];
 
 function ChangesTab() {
   const git = useWorkspaceStore((s) => s.git);
+  const repo = useMemo(() => describeRepo(git?.details), [git?.details]);
   const tree = useWorkspaceStore((s) => s.tree);
   const openFile = useWorkspaceStore((s) => s.openFile);
   const showDiff = useWorkspaceStore((s) => s.showDiff);
@@ -258,6 +260,19 @@ function ChangesTab() {
         <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">Working tree {git?.branch ? `· ${git.branch}` : ''}</span>
         <Button size="sm" variant="ghost" onClick={() => void reload()}>Refresh</Button>
       </div>
+      {repo ? (
+        <div className="mx-3 mb-2 rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-[12px]">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="min-w-0 truncate font-mono">{repo.branch}</span>
+            {repo.sync ? <Badge tone={repo.sync === 'up to date' ? 'success' : 'warning'}>{repo.sync}</Badge> : null}
+            {repo.remote ? (
+              repo.remoteUrl ? <a href={repo.remoteUrl} target="_blank" rel="noreferrer" className="min-w-0 truncate text-accent hover:underline" title={repo.remoteUrl}>{repo.remote}</a> : <span className="min-w-0 truncate text-fg-muted">{repo.remote}</span>
+            ) : null}
+          </div>
+          {git?.details?.lastCommit ? <p className="mt-0.5 truncate text-fg-subtle" title={git.details.lastCommit.subject}>{git.details.lastCommit.hash} · {git.details.lastCommit.subject} · {git.details.lastCommit.when}</p> : null}
+          {repo.hint ? <p className="mt-0.5 text-warning">{repo.hint}</p> : null}
+        </div>
+      ) : null}
       {!git ? <p className="px-3 pb-2 text-[12px] text-fg-subtle">Git status unavailable.</p> : null}
       {git && !git.isRepo ? <p className="px-3 pb-2 text-[12px] text-fg-subtle">This folder is not a git repository.</p> : null}
       {git?.isRepo && git.files.length === 0 ? <p className="px-3 pb-2 text-[12px] text-fg-subtle">No uncommitted changes.</p> : null}

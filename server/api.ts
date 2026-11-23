@@ -34,6 +34,7 @@ import { GROUP_ROUTINGS, MANAGED_GROUPS, magpieQuotas, removeGroups, syncGroups,
 import { buildTerminalLaunch } from './terminal';
 import { observeCliModels } from './cliModelIdentity';
 import { deleteFile, gitStatus, readFile, scanTree, writeFile } from './workspace';
+import { cloneRepository, repoDetails } from './gitInfo';
 import { addLessons, deleteLesson, indexLessons, LESSONS_FILE, lessonsFor, loadLessons, memoryContext, MemoryError, searchLessons, updateLesson, type LessonInput } from './memory';
 import { currentEmbedder, embeddingStatus, forgetEmbedder, pullModel } from './embeddings';
 import { clearJournal, loadJournal, saveJournal } from './runJournal';
@@ -685,6 +686,16 @@ const routes: Record<string, Handler> = {
     send(res, 200, { ok: true, root: target, name, git });
   },
 
+  'POST /api/workspace/clone': async (req, res) => {
+    if (process.env.AGENT_HQ_WORKSPACE) throw new HttpError(409, 'The workspace is fixed by the AGENT_HQ_WORKSPACE environment variable.');
+    const body = await readJson(req);
+    const parent = path.resolve(expandHome(String(body.parent || os.homedir())));
+    const result = await cloneRepository(parent, String(body.url || ''), typeof body.name === 'string' ? body.name : undefined);
+    if (!result.ok) throw new HttpError(result.status, result.error);
+    rememberWorkspace(result.root);
+    send(res, 200, { ok: true, root: result.root, name: result.name });
+  },
+
   'GET /api/workspace/files': async (_req, res) => {
     const root = getWorkspaceRoot();
     const { entries, truncated } = scanTree(root);
@@ -747,7 +758,9 @@ const routes: Record<string, Handler> = {
   },
 
   'GET /api/workspace/git': async (_req, res) => {
-    send(res, 200, { ok: true, ...(await gitStatus(getWorkspaceRoot())) });
+    const root = getWorkspaceRoot();
+    const [status, details] = await Promise.all([gitStatus(root), repoDetails(root)]);
+    send(res, 200, { ok: true, ...status, details });
   },
 
   'GET /api/workspace/allowed-commands': async (_req, res) => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, ChevronsUpDown, Folder, FolderGit2, FolderOpen, FolderPlus, Home, RefreshCw, Search } from 'lucide-react';
+import { ArrowUp, ChevronsUpDown, GitFork, Folder, FolderGit2, FolderOpen, FolderPlus, Home, RefreshCw, Search } from 'lucide-react';
 import { api } from '@/api/client';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useAgentStore } from '@/store/useAgentStore';
@@ -7,6 +7,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { Badge, Button, Field, IconButton, Input, Spinner, Tabs, Textarea } from '@/components/ui/primitives';
 import { cn } from '@/utils/cn';
 import { SideLabel } from './SideLabel';
+import { cloneFolderName } from '@/utils/cloneInput';
 
 type Listing = Awaited<ReturnType<typeof api.browse>>;
 
@@ -174,14 +175,16 @@ export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () =>
   const locked = useWorkspaceStore((s) => s.lockedByEnv);
   const setRoot = useWorkspaceStore((s) => s.setRoot);
   const createProject = useWorkspaceStore((s) => s.createProject);
+  const cloneRepo = useWorkspaceStore((s) => s.cloneRepo);
   const running = useAgentStore((s) => s.activeMission?.status === 'running');
-  const [tab, setTab] = useState<'open' | 'new'>('open');
+  const [tab, setTab] = useState<'open' | 'new' | 'clone'>('open');
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [gitInit, setGitInit] = useState(true);
+  const [cloneUrl, setCloneUrl] = useState('');
   const parentDir = root ? root.replace(/\/[^/]+\/?$/, '') || '/' : '';
   const browser = useBrowser(parentDir);
 
@@ -215,7 +218,22 @@ export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () =>
     }
   };
 
+  const clone = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await cloneRepo({ url: cloneUrl.trim(), parent: browser.listing?.path ?? '' });
+      setCloneUrl('');
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const target = selected ?? browser.listing?.path ?? '';
+  const cloneName = cloneFolderName(cloneUrl);
 
   return (
     <Dialog
@@ -232,6 +250,10 @@ export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () =>
             <Button variant="primary" icon={FolderOpen} loading={busy} className="min-w-0 max-w-[60%] shrink" disabled={!target || Boolean(blocked) || target === root} onClick={() => void openFolder(target)}>
               {target ? `Open “${target.split('/').filter(Boolean).pop()}”` : 'Open'}
             </Button>
+          ) : tab === 'clone' ? (
+            <Button variant="primary" icon={GitFork} loading={busy} disabled={!cloneName || !browser.listing || Boolean(blocked)} onClick={() => void clone()}>
+              {busy ? 'Cloning…' : 'Clone and open'}
+            </Button>
           ) : (
             <Button variant="primary" icon={FolderPlus} loading={busy} disabled={!name.trim() || !browser.listing || Boolean(blocked)} onClick={() => void create()}>
               Create project
@@ -242,7 +264,7 @@ export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () =>
     >
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <Tabs<'open' | 'new'> label="Project action" value={tab} onChange={setTab} items={[{ id: 'open', label: 'Open folder' }, { id: 'new', label: 'New project' }]} />
+          <Tabs<'open' | 'new' | 'clone'> label="Project action" value={tab} onChange={setTab} items={[{ id: 'open', label: 'Open folder' }, { id: 'clone', label: 'Clone repo' }, { id: 'new', label: 'New project' }]} />
           <span className="min-w-0 truncate font-mono text-[11.5px] text-fg-subtle" title={root}>Current: {root || 'none'}</span>
         </div>
 
@@ -277,6 +299,19 @@ export function ProjectDialog({ open, onClose }: { open: boolean; onClose: () =>
               <h3 className="mb-1 text-[11.5px] font-medium uppercase tracking-wide text-fg-subtle">Browse</h3>
               <FolderBrowser browser={browser} selected={selected} onSelect={setSelected} onOpen={(p) => void openFolder(p)} />
               <p className="mt-1 text-[11.5px] text-fg-subtle">Click to select, double-click to open. “Enter ›” goes into a folder. With nothing selected, the folder you are in is opened.</p>
+            </section>
+          </>
+        ) : tab === 'clone' ? (
+          <>
+            <Field label="Repository" hint="Paste an https or ssh address, or type owner/repo for GitHub. Private repositories use your existing git or ssh credentials.">
+              <Input value={cloneUrl} onChange={(e) => setCloneUrl(e.target.value)} placeholder="orcalinux/agent-hq" autoFocus disabled={busy} onKeyDown={(e) => { if (e.key === 'Enter' && cloneName && !busy && !blocked) void clone(); }} />
+            </Field>
+            <section>
+              <h3 className="mb-1 text-[11.5px] font-medium uppercase tracking-wide text-fg-subtle">Clone into</h3>
+              <FolderBrowser browser={browser} selected={null} onSelect={(p) => void browser.go(p)} />
+              <p className="mt-1 truncate font-mono text-[11.5px] text-fg-muted" title={(browser.listing?.path ?? '…') + '/' + (cloneName || '<repository>')}>
+                Will create: {(browser.listing?.path ?? '…') + '/' + (cloneName || '<repository>')}
+              </p>
             </section>
           </>
         ) : (

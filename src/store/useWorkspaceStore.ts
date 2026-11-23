@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { api, type ExecuteResult } from '@/api/client';
+import { api, type ExecuteResult, type RepoDetails } from '@/api/client';
 import type { EditorBuffer, EditorProblemEntry, WorkspaceTreeEntry } from '@/types';
 import { languageFromPath } from '@/utils/diffParser';
 import { safeStorage } from './storage';
@@ -16,6 +16,7 @@ export interface GitInfo {
   isRepo: boolean;
   branch?: string;
   files: Array<{ path: string; status: string; additions?: number; deletions?: number }>;
+  details?: RepoDetails | null;
 }
 
 interface WorkspaceState {
@@ -43,6 +44,7 @@ interface WorkspaceState {
   refreshTree: () => Promise<void>;
   setRoot: (path: string) => Promise<void>;
   createProject: (p: { parent: string; name: string; gitInit: boolean; description?: string }) => Promise<string>;
+  cloneRepo: (p: { url: string; parent: string; name?: string }) => Promise<void>;
   openFile: (path: string) => Promise<void>;
   closeTab: (path: string) => void;
   setActive: (path: string) => void;
@@ -149,6 +151,12 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         set({ openTabs: [], activePath: null, buffers: {}, problems: [], terminal: [], git: null });
         await get().load();
         return res.git;
+      },
+
+      cloneRepo: async (p) => {
+        await api.cloneRepo(p);
+        set({ openTabs: [], activePath: null, buffers: {}, problems: [], terminal: [], git: null });
+        await get().load();
       },
 
       openFile: async (path) => {
