@@ -11,6 +11,16 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.22.1] — 2026-11-23
+
+### Fixed
+- **Verification could not run Python projects.** The terminal allowlist refused `python`, and the run then told the agents their code had failed when the command had never started. A command that is refused, or whose test runner is missing (exit 127, `No module named pytest`, `command not found`, a missing npm script), now counts as "could not run": it is logged as a warning, QA is told nothing was tested, and nobody is sent back to rework for it. An import error in the project's own code is still a real failure.
+
+- **Tasks no longer overwrite each other's edits to the same file.** Agents propose whole files, so when three tasks changed `money.py` the last proposal silently dropped the other two tasks' additions, and the project failed to import. Tasks that name the same file now run one after another, and a later task is shown the latest *proposed* version of the file instead of the stale one on disk. Reference files (the attachments, Markdown and text) don't count, so they don't slow tasks down. Found by the benchmark: the verification output pointed at `cannot import name 'convert_cents'`.
+
+### Added
+- Test runners on the terminal allowlist: `python -m pytest`, `python -m unittest` (and `python3`), `pytest`, `cargo test|check` and `go test|vet|build`. `python` is allowed only with `-m pytest` or `-m unittest`, so it is not a general interpreter. Arguments must still stay inside the project.
+
 ## [0.22.0] — 2026-11-23
 
 ### Fixed
@@ -22,7 +32,7 @@ git push --follow-tags
 - Rework rounds raised from 1 to 2, because a round now starts from a concrete failure instead of a model's opinion.
 
 ### Tests
-- Unit tests for choosing which tasks a failing command points at.
+- Unit tests for choosing which tasks a failing command points at, for recognising a missing test runner, and for the same-file scheduling rule.
 
 ## [0.21.0] — 2026-11-23
 

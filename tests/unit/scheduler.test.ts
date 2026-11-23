@@ -50,3 +50,24 @@ describe('planNextWave', () => {
     expect(ids(planNextWave([task('a', 'x', [], 'rejected')], new Set()).start)).toEqual(['a']);
   });
 });
+
+describe('planNextWave with shared files', () => {
+  const task = (id: string, agent: string, status = 'pending') => ({ id, title: id, status, assignedAgentId: agent });
+  const files: Record<string, string[]> = { a: ['money.py'], b: ['money.py', 'cli.py'], c: ['api.py'] };
+  const filesOf = (t: { id: string }) => files[t.id];
+
+  it('does not start two tasks that touch the same file', () => {
+    const { start } = planNextWave([task('a', 'x'), task('b', 'y'), task('c', 'z')], new Set(), 3, filesOf);
+    expect(start.map((t) => t.id)).toEqual(['a', 'c']);
+  });
+
+  it('holds a task while a running one owns its file, then lets it go', () => {
+    const tasks = [task('a', 'x', 'in_progress'), task('b', 'y')];
+    expect(planNextWave(tasks, new Set(['a']), 3, filesOf).start).toEqual([]);
+    expect(planNextWave([task('a', 'x', 'completed'), task('b', 'y')], new Set(), 3, filesOf).start.map((t) => t.id)).toEqual(['b']);
+  });
+
+  it('behaves as before without a file function', () => {
+    expect(planNextWave([task('a', 'x'), task('b', 'y')], new Set(), 3).start.map((t) => t.id)).toEqual(['a', 'b']);
+  });
+});

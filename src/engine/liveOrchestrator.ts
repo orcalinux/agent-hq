@@ -27,7 +27,7 @@ import {
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
 import { parallelLimit, planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
-import { autoAppliesChanges, autoStartsRuns, markConflicts, selectAutoApply, blameTasks } from './approval';
+import { autoAppliesChanges, autoStartsRuns, blameTasks, markConflicts, selectAutoApply, verificationCouldNotRun } from './approval';
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
@@ -266,7 +266,7 @@ async function attachmentContext(paths: string[] | undefined): Promise<string> {
 }
 
 /** Reads files from open editor buffers or the workspace, stopping once the character budget is used. */
-async function fileContents(paths: string[], budget: number): Promise<string[]> {
+async function fileContents(paths: string[], budget: number, overrides?: Map<string, string>): Promise<string[]> {
   const ws = useWorkspaceStore.getState();
   const parts: string[] = [];
   let used = 0;
@@ -275,7 +275,7 @@ async function fileContents(paths: string[], budget: number): Promise<string[]> 
       parts.push(`--- ${p} ---\n[omitted: context budget reached]`);
       continue;
     }
-    let content = ws.buffers[p]?.content;
+    let content = overrides?.get(p) ?? ws.buffers[p]?.content;
     if (content === undefined) {
       try {
         content = (await api.readFile(p)).content;
@@ -296,8 +296,13 @@ async function taskFileContext(task: KanbanTaskCard, mission: MissionState): Pro
   const mentioned = selectRelevantFiles(`${task.title}\n${task.description}\n${task.qaFeedback ?? ''}\n${mission.prompt}`, [...files]);
   const paths = [...new Set([...(mission.contextFiles ?? []).filter((p) => files.has(p)), ...mentioned])];
   if (!paths.length) return '';
-  const parts = await fileContents(paths, TASK_FILE_CONTEXT_CHARS);
-  return `\n\nCurrent contents of relevant files (edit these rather than rewriting from scratch; keep everything you do not intend to change):\n${parts.join('\n\n')}`;
+  const proposed = new Map<string, string>();
+  for (const change of currentMission()?.proposedChanges ?? []) {
+    if (change.taskId !== task.id && (change.status === 'pending' || change.status === 'applied') && paths.includes(change.path)) proposed.set(change.path, change.content);
+  }
+  const parts = await fileContents(paths, TASK_FILE_CONTEXT_CHARS, proposed);
+  const earlier = proposed.size ? `\n\nThese files already include edits proposed by earlier tasks, so keep those edits: ${[...proposed.keys()].join(', ')}.` : '';
+  return `\n\nCurrent contents of relevant files (edit these rather than rewriting from scratch; keep everything you do not intend to change):\n${parts.join('\n\n')}${earlier}`;
 }
 
 function rosterDescription(): string {
@@ -900,13 +905,15 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     };
     store.updateMission({ verification });
     const passed = res.exitCode === 0;
+    const unrunnable = !passed && (!!res.rejected || verificationCouldNotRun(res.exitCode ?? null, raw));
+    const why = res.rejected ? String(res.stderr) : raw.split('\n').find((line) => line.trim()) ?? `exit ${res.exitCode}`;
     store.logActivity({
       kind: 'verification',
-      level: passed ? 'success' : 'error',
+      level: unrunnable ? 'warn' : passed ? 'success' : 'error',
       runId: mission.id,
-      text: res.rejected ? `Verification command rejected: ${res.stderr}` : `Verification ${passed ? 'passed' : `failed (exit ${res.exitCode})`}`,
+      text: unrunnable ? `Verification could not run, so it says nothing about the code: ${why}` : `Verification ${passed ? 'passed' : `failed (exit ${res.exitCode})`}`,
     });
-    if (!passed) {
+    if (!passed && !unrunnable) {
       await withdrawCandidate(candidateApplied);
       const tail = raw.slice(-4000);
       noteFeedback(mission.id, { agentId: 'team', source: 'verification', text: `"${command}" failed (exit ${res.exitCode}): ${tail.slice(-500)}` });
@@ -927,7 +934,9 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
       store.updateTask(QA_TASK_ID, { status: 'pending', progress: 0 });
       return 'retry';
     }
-    verificationNote = `\n\nVerification: "${command}" passed (exit 0) when run on the proposed changes. Output (end):\n${raw.slice(-1500)}`;
+    verificationNote = unrunnable
+      ? `\n\nVerification "${command}" could not be run (${why}). Nothing was tested, so review the code carefully.`
+      : `\n\nVerification: "${command}" passed (exit 0) when run on the proposed changes. Output (end):\n${raw.slice(-1500)}`;
   }
 
   const deliverables = workTasks
@@ -1192,7 +1201,10 @@ async function runWorkTasks(signal: AbortSignal) {
     if (signal.aborted && !fatal) fatal = Object.assign(new Error('Aborted'), { name: 'AbortError' });
     if (!fatal) {
       const work = topoOrder(currentMission()!.tasks.filter((t) => t.id !== QA_TASK_ID));
-      const { start, blocked } = planNextWave(work, new Set(running.keys()), parallelLimit(agentsState().maxParallel));
+      const reference = new Set(currentMission()?.contextFiles ?? []);
+      const workspaceFiles = useWorkspaceStore.getState().tree.filter((e) => e.type === 'file' && !reference.has(e.path) && !/\.(md|txt)$/i.test(e.path)).map((e) => e.path);
+      const filesOf = (t: { title: string; description?: string }) => selectRelevantFiles(`${t.title}\n${t.description ?? ''}`, workspaceFiles, 12);
+      const { start, blocked } = planNextWave(work, new Set(running.keys()), parallelLimit(agentsState().maxParallel), filesOf);
       for (const { task, dependency } of blocked) {
         agentsState().updateTask(task.id, { status: 'failed', error: `Blocked: dependency "${dependency.title}" did not complete.` });
       }

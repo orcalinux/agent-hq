@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, markConflicts, selectAutoApply, blameTasks } from '../../src/engine/approval';
+import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, markConflicts, selectAutoApply, blameTasks, verificationCouldNotRun } from '../../src/engine/approval';
 import type { ProposedFileChange } from '../../src/types';
 
 const change = (id: string, path: string, status: ProposedFileChange['status'] = 'pending', extra: Partial<ProposedFileChange> = {}): ProposedFileChange => ({
@@ -114,5 +114,21 @@ describe('blameTasks', () => {
 
   it('falls back to all tasks when nothing is pending', () => {
     expect(blameTasks('boom', [], tasks)).toEqual(tasks);
+  });
+});
+
+describe('verificationCouldNotRun', () => {
+  it('recognises a missing runner', () => {
+    expect(verificationCouldNotRun(1, '/usr/bin/python: No module named pytest')).toBe(true);
+    expect(verificationCouldNotRun(127, '')).toBe(true);
+    expect(verificationCouldNotRun(1, 'sh: 1: vitest: not found')).toBe(true);
+    expect(verificationCouldNotRun(1, 'npm error Missing script: "test"')).toBe(true);
+    expect(verificationCouldNotRun(1, 'Error: spawn cargo ENOENT')).toBe(true);
+  });
+
+  it('treats the project\'s own failures as real failures', () => {
+    expect(verificationCouldNotRun(1, '3 failed, 10 passed')).toBe(false);
+    expect(verificationCouldNotRun(1, "ModuleNotFoundError: No module named 'tabsplit.migrations'")).toBe(false);
+    expect(verificationCouldNotRun(2, 'SyntaxError: invalid syntax')).toBe(false);
   });
 });

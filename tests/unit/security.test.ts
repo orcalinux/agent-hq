@@ -78,3 +78,25 @@ describe('resolveInside', () => {
     expect(fs.existsSync(path.join(outside, 'secret.txt'))).toBe(true);
   });
 });
+
+describe('test-runner commands', () => {
+  it('allows the common test runners', () => {
+    expect(parseAllowedCommand('python -m pytest -q')).toMatchObject({ ok: true, program: 'python', args: ['-m', 'pytest', '-q'] });
+    expect(parseAllowedCommand('python3 -m unittest')).toMatchObject({ ok: true });
+    expect(parseAllowedCommand('pytest tests/unit -x')).toMatchObject({ ok: true });
+    expect(parseAllowedCommand('cargo test')).toMatchObject({ ok: true });
+    expect(parseAllowedCommand('go test')).toMatchObject({ ok: true });
+  });
+
+  it('does not turn python or cargo into a general shell', () => {
+    for (const line of ['python -c print(1)', 'python script.py', 'python -m http.server', 'python -m pip install x', 'python', 'cargo run', 'cargo install x', 'go run main.go', 'go install x']) {
+      expect(parseAllowedCommand(line).ok, line).toBe(false);
+    }
+  });
+
+  it('still keeps arguments inside the workspace', () => {
+    expect(parseAllowedCommand('python -m pytest /etc').ok).toBe(false);
+    expect(parseAllowedCommand('pytest ../other').ok).toBe(false);
+    expect(parseAllowedCommand('python -m pytest -q; rm -rf .').ok).toBe(false);
+  });
+});

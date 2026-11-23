@@ -24,10 +24,12 @@ const TERMINAL_FAILURE = new Set(['failed', 'cancelled']);
 export function planNextWave<T extends SchedulableTask>(
   tasks: T[],
   running: ReadonlySet<string>,
-  limit = MAX_PARALLEL_TASKS
+  limit = MAX_PARALLEL_TASKS,
+  filesOf?: (task: T) => string[]
 ): { start: T[]; blocked: Array<{ task: T; dependency: T }> } {
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const busyAgents = new Set(tasks.filter((t) => running.has(t.id)).map((t) => t.assignedAgentId));
+  const busyFiles = new Set(tasks.filter((t) => running.has(t.id)).flatMap((t) => filesOf?.(t) ?? []));
   const blockedIds = new Set<string>();
   const start: T[] = [];
   const blocked: Array<{ task: T; dependency: T }> = [];
@@ -42,7 +44,10 @@ export function planNextWave<T extends SchedulableTask>(
     }
     if (!deps.every((d) => d.status === 'completed')) continue;
     if (busyAgents.has(task.assignedAgentId) || running.size + start.length >= limit) continue;
+    const files = filesOf?.(task) ?? [];
+    if (files.some((f) => busyFiles.has(f))) continue;
     busyAgents.add(task.assignedAgentId);
+    for (const f of files) busyFiles.add(f);
     start.push(task);
   }
   return { start, blocked };

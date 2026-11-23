@@ -124,3 +124,19 @@ export function blameTasks<T extends { id: string }>(output: string, changes: Ar
   const blamed = tasks.filter((t) => pool.has(t.id));
   return blamed.length ? blamed : tasks;
 }
+
+/**
+ * A verification command that failed because the tool itself is missing says nothing about the code.
+ * A module the project's own code cannot import is a real failure, so only the runners are matched.
+ */
+export function verificationCouldNotRun(exitCode: number | null, output: string): boolean {
+  if (exitCode === 127) return true;
+  return [
+    /No module named '?(pytest|unittest)\b/,
+    /\bcommand not found\b/,
+    /\bspawn \S+ ENOENT\b/,
+    /is not recognized as an internal or external command/,
+    /\b(npm|yarn|pnpm)( ERR!| error)? Missing script\b/i,
+    /sh: \d+: \S+: not found/,
+  ].some((pattern) => pattern.test(output));
+}

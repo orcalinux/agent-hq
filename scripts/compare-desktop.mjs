@@ -18,6 +18,7 @@ Usage: node scripts/compare-desktop.mjs --workspace FRESH_CLONE --output NEW_EVI
   --attach SPEC.md,ISSUES.md
   --strategy adaptive|fixed
   --timeout-minutes 30
+  --verify "python -m pytest -q"   Verification command Agent HQ runs on the proposed changes (default: none).
   --wait-quota          Wait for the local Magpie Claude quota to show headroom.
   --run                Actually submit the task; otherwise only prepare the UI.
 Uses TASK.md from the clone, a separate desktop profile, and your existing CLI login.
@@ -28,6 +29,7 @@ Evidence includes local paths and prompts; review before sharing.`);
 const workspace = fs.realpathSync(String(args.workspace));
 const output = path.resolve(String(args.output));
 const model = String(args.model || 'anthropic:cli:claude-haiku-5-5');
+const verify = typeof args.verify === 'string' ? args.verify : '';
 const attachments = String(args.attach || 'SPEC.md,ISSUES.md').split(',').filter(Boolean);
 const strategy = String(args.strategy || 'adaptive');
 const timeoutMinutes = Number(args['timeout-minutes'] || 30);
@@ -61,7 +63,7 @@ const metadata = {
   workspace, initialTaskCommit, model, strategy, attachments, task,
   startedAt: null, endedAt: null, wallMs: null, outcome: 'preparing',
   approval: 'auto', maxParallel: 3, modelPinned: true,
-  verificationCommand: '', learning: 'every-run', errors: [],
+  verificationCommand: verify, learning: 'every-run', errors: [],
 };
 write('metadata.json', metadata);
 
@@ -130,7 +132,7 @@ try {
   });
   await page.waitForLoadState('domcontentloaded');
   await page.waitForFunction(() => localStorage.getItem('agent-hq.state'));
-  await page.evaluate(({ model, strategy }) => {
+  await page.evaluate(({ model, strategy, verify }) => {
     const saved = JSON.parse(localStorage.getItem('agent-hq.state'));
     const state = saved.state;
     state.agents = Object.fromEntries(Object.entries(state.agents).map(([id, agent]) =>
@@ -142,10 +144,10 @@ try {
       tierModels: { simple: model, standard: model, complex: model },
       tierModes: { simple: 'locked', standard: 'locked', complex: 'locked' },
       modelScope: 'sovereign', modelScopeChosen: true, managerChatMessages: [],
-      verificationCommand: '', learningMode: 'every-run', activeMission: null, runHistory: [],
+      verificationCommand: verify, learningMode: 'every-run', activeMission: null, runHistory: [],
     });
     localStorage.setItem('agent-hq.state', JSON.stringify(saved));
-  }, { model, strategy });
+  }, { model, strategy, verify });
   await page.reload();
   const connection = await page.evaluate(async () => (await fetch('/api/connections')).json());
   const offered = connection.providers.find((entry) => entry.id === 'anthropic')?.models ?? [];

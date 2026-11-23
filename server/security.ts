@@ -60,7 +60,7 @@ function realPathStaysInside(root: string, target: string): boolean {
   }
 }
 
-export const ALLOWED_COMMANDS: Array<{ program: string; subcommands?: string[]; description: string }> = [
+export const ALLOWED_COMMANDS: Array<{ program: string; subcommands?: string[]; modules?: string[]; description: string }> = [
   { program: 'git', subcommands: ['status', 'log', 'diff', 'branch', 'show', 'rev-parse'], description: 'Read-only git inspection' },
   { program: 'ls', description: 'List files' },
   { program: 'pwd', description: 'Print working directory' },
@@ -68,6 +68,11 @@ export const ALLOWED_COMMANDS: Array<{ program: string; subcommands?: string[]; 
   { program: 'node', subcommands: ['-v', '--version'], description: 'Node version' },
   { program: 'npm', subcommands: ['-v', '--version', 'test', 'run', 'ls'], description: 'npm scripts and info' },
   { program: 'npx', subcommands: ['tsc', 'vitest', 'eslint', 'prettier'], description: 'Project tooling (installed packages only)' },
+  { program: 'python', subcommands: ['-m'], modules: ['pytest', 'unittest'], description: 'Python test runners (python -m pytest, python -m unittest)' },
+  { program: 'python3', subcommands: ['-m'], modules: ['pytest', 'unittest'], description: 'Python test runners (python3 -m pytest, python3 -m unittest)' },
+  { program: 'pytest', description: 'Python tests' },
+  { program: 'cargo', subcommands: ['test', 'check'], description: 'Rust tests and checks' },
+  { program: 'go', subcommands: ['test', 'vet', 'build'], description: 'Go tests and checks' },
 ];
 
 const SHELL_META = /[;&|`$<>(){}\\\n\r*?!~]/;
@@ -112,6 +117,9 @@ export function parseAllowedCommand(commandLine: string): ParsedCommand {
       ok: false,
       error: `Only these "${program}" subcommands are allowed: ${rule.subcommands.join(', ')}.`,
     };
+  }
+  if (rule.modules && !rule.modules.includes(args[1] ?? '')) {
+    return { ok: false, error: `Only these "${program} ${args[0]}" modules are allowed: ${rule.modules.join(', ')}.` };
   }
   const blocked = BLOCKED_OPTIONS[program];
   const badOption = blocked && args.find((a) => blocked.test(a));
