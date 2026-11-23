@@ -173,6 +173,26 @@ Every tier has a reference solution that scores 100% and a starter that scores w
 
 The only missed test is the vague issue's edge case: `settle` on an unknown group should exit with an error, and the run let the exception escape. Costs are API-rate valuations of subscription usage, not money billed.
 
+### Apps on Tier 2, same task and model (Haiku 5.5, Claude Code engine, same subscription)
+
+| Setup | Hidden tests | Wall time | API-rate cost | Cached input tokens | Output tokens |
+|---|---|---|---|---|---|
+| Claude Code CLI alone | 141/141 | 264 s | $0.124 | 1.53 M | 62.5 k |
+| Agent Orchestrator 1.x, one worker session | 141/141 | 264 s | $0.169 (+36%) | 2.42 M | 56.1 k |
+| Maestro 1.0.4, one agent | 141/141 | 283 s | $0.222 (+79%) | 2.59 M | 61.7 k |
+
+Each run is a single sample, so differences of a few percent in time are noise; the cost gap is larger than that but still rests on one run each. Orchestrator adds about 18 KB of system prompt to every session, which is consistent with its higher cached-token volume. Maestro made one extra call to other models to name the tab. Agent HQ has not been run on this task yet, so it is not in this table.
+
+**Memory.** Measured as proportional set size (PSS, which does not double-count pages shared between Electron processes) with `smaps_rollup`:
+
+| App | Idle, nothing open | During the Tier 2 run (app plus its agent processes) |
+|---|---|---|
+| Agent HQ 0.17 (installed) | 124 MB | not measured |
+| Maestro 1.0.4 | 195 MB | about 416-452 MB |
+| Agent Orchestrator | 199 MB | about 600-630 MB (its own `session top` reports 864 MB RSS for the one session) |
+
+The run column is not strictly like for like: each app's agent processes are matched by install path, and the bare CLI's memory was not measured.
+
 ### What this shows, and what it does not
 
 - **A single current agent saturates these tasks, even the cheapest model.** Wrapping an agent in an orchestration app cannot raise the score on tasks of this size; it can only add time and cost. Quality differences between apps will not show up here.
