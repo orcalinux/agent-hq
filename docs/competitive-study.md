@@ -123,14 +123,14 @@ Both analyses covered only selected files (`package.json`, main and preload bund
 
 ## Limits of this study
 
-- No real task was run on any competitor, so nothing here compares quality, speed or cost.
+- The original study ran no real tasks. The follow-up below now includes one Maestro smoke test; it is insufficient to rank quality, speed or cost.
 - Paradev's UI past sign-in, and all of Paperclip, OpenHands and MetaGPT at runtime, were not observed.
 - Stars measure attention, not fitness for your work.
 
 
 ## Measured results (retained installs)
 
-Added 2026-11-23. Every number here comes from a run on this machine; nothing is estimated.
+Added 2026-11-23. Measurements below are observations from this machine, with accounting limitations stated explicitly.
 
 **Setup.** The four desktop competitors stay installed under `~/.local/share/agent-hq-research` with their own profiles. Launch them from the application menu ("... (comparison)") or `launchers/<name>`. Remove them only on request. Paperclip, OpenHands and MetaGPT remain source-only (they need a Node 24 or server stack).
 
@@ -138,9 +138,14 @@ Added 2026-11-23. Every number here comes from a run on this machine; nothing is
 
 | Tool | Engine / auth | Wall time | Tokens | Tests | Notes |
 |---|---|---|---|---|---|
-| Codex CLI 0.167 (baseline) | ChatGPT subscription | 37.2 s | 36,290 | 5/5 pass | Headless `codex exec --sandbox workspace-write` |
-| Agent HQ, Maestro, Agent Orchestrator, Agent Teams AI, Paradev | not run | n/a | n/a | n/a | Need an interactive sign-in or provider pick in the GUI |
+| Codex CLI 0.167 (preliminary baseline) | Provider/model not verified for that run | 37.2 s | 36,290 reported by CLI | 5/5 pass | Headless `codex exec --sandbox workspace-write`; not a controlled comparison |
+| Maestro 1.0.4, build 508ef120 | Codex 0.171.0 → local Magpie → `group/daily-coding` | 40.238 s (Maestro event duration) | 322,920 final Codex session total | 5/5 pass | Dispatched through the running desktop app; tests independently checked with pytest |
+| Agent HQ, Agent Orchestrator, Agent Teams AI, Paradev | not run | n/a | n/a | n/a | Pending setup/testing |
 
-The baseline is the engine most of these apps wrap, so it is a floor for latency and tokens, not a comparison of the apps. Subscription runs are not billed per token; the token count is real, a dollar figure would be an API-rate estimate.
+These two runs are smoke tests, not a controlled performance comparison: CLI versions, context, and underlying routed models were not matched. A routing-group identifier does not establish the actual upstream model or subscription used. Logged-in CLI status alone also does not establish that a run used subscription authentication.
 
-**Not yet measured.** No app comparison exists. Each GUI needs a manual sign-in on your side, then the same task and the same acceptance test (`bench/run-codex-baseline.sh` shows the harness). The `claude` CLI was not found on this shell's PATH, so Claude-engine runs are also pending.
+**Maestro evidence.** Desktop agent `Maestro benchmark — Codex`, tab `ceb0f5f7-0fc8-4ffd-b865-e785ff45a690`, provider session `01a20979-3fb3-71e1-8893-1de132c0869d`. The user prompt was recorded at 17:34:30.307 UTC; the final assistant message at 17:35:08.278 UTC. The isolated task copy is `bench/maestro-codex-01`. Only `slugify.py` changed among the tracked task files; the test file stayed unchanged. Independent verification: `uv run --quiet --with pytest python -m pytest -q test_slugify.py` → 5 passed.
+
+**Accounting limitations.** Maestro's event reports 275,299 input tokens, 683 output tokens, 232,064 cached input tokens, and `cost_usd: 0`. The final Codex session counters instead report 322,172 input tokens (236,032 cached) and 748 output tokens, including 59 reasoning tokens. Cached tokens are included in input, not added again. The discrepancy remains unresolved; zero reported cost does not prove free usage or a measured bill. Actual upstream model, billed cost and subscription quota consumed remain unverified.
+
+**Not yet measured.** No multi-agent, recovery, larger-project or controlled cross-app comparison exists. Maestro's packaged CLI can dispatch to the open desktop app using `MAESTRO_USER_DATA` set to its isolated profile, so manual UI control is not required for each task. Other apps may also expose automation; manual sign-in requirements must be checked individually. Maestro detects Claude Code as available even though the earlier shell PATH check did not locate it.
