@@ -50,6 +50,8 @@ Keep `package.json` and the root entry of `package-lock.json` in sync. Record us
 
 Generated videos, voice recordings, installers, build outputs and dependency directories stay outside Git.
 
+Repository maintainers can find the saved GitHub configuration, verification commands and publication checklist in [docs/github-administration.md](docs/github-administration.md).
+
 ## Licensing and attribution
 
 Submit only work you have the right to contribute under MIT. Keep existing third-party notices and check dependency licenses before adding a package. Studying another product does not make its code, images, name or branding part of Agent HQ's MIT license. Clearly identify any reused material and its original license in the pull request.

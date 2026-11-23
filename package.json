@@ -4,7 +4,7 @@
   "desktopName": "agent-hq.desktop",
   "private": true,
   "license": "MIT",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "A local command center for teams of AI coding agents.",
   "author": "orcalinux",
   "homepage": "https://github.com/orcalinux/agent-hq",
@@ -65,9 +65,10 @@
     "tsx": "4.23.15",
     "typescript": "5.8.3",
     "vite": "^6.1.0",
-    "vitest": "3.2.7"
+    "vitest": "4.1.12"
   },
   "overrides": {
-    "@types/estree": "1.0.6"
+    "@types/estree": "1.0.6",
+    "minimatch@>=7 <11.0.1": "11.0.9"
   }
 }

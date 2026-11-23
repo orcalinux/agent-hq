@@ -17,6 +17,7 @@ export const INSTALL_GUIDES: Record<string, InstallGuide> = {
 
 /** The install command for a tool on this OS, or null when the user should use the download page. */
 export function installCommandFor(id: string, platform: NodeJS.Platform): string | null {
+  if (!Object.hasOwn(INSTALL_GUIDES, id)) return null;
   const guide = INSTALL_GUIDES[id];
   if (!guide) return null;
   if (platform === 'win32') return guide.windowsCommand ?? null;

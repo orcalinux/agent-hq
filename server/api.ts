@@ -12,7 +12,8 @@ import {
   StoredConnection,
   updateConfig,
 } from './config';
-import { ALLOWED_COMMANDS, isLoopbackRequest, parseAllowedCommand, resolveInside } from './security';
+import { ALLOWED_COMMANDS, executionTimeoutMs, isLoopbackRequest, parseAllowedCommand, resolveInside } from './security';
+import { endpointFromHost, providerFetch, validateEndpoint } from './network';
 import { TerminalError, closeTerminal, createTerminal, listTerminals, resizeTerminal, streamTerminal, writeTerminal } from './pty';
 import {
   chat,
@@ -137,12 +138,10 @@ function buildConnection(id: ProviderId, body: Record<string, unknown>): StoredC
   } else if (method === 'local_endpoint') {
     const url = String(body.endpointUrl || (id === 'magpie' ? magpieEndpoint() : desc.defaultEndpoint) || '').trim();
     try {
-      const parsed = new URL(url);
-      if (!/^https?:$/.test(parsed.protocol)) throw new Error();
-    } catch {
-      throw new HttpError(400, 'Enter a valid http(s) endpoint URL.');
+      conn.endpointUrl = validateEndpoint(url);
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
     }
-    conn.endpointUrl = url;
   } else if (method === 'cli') {
     conn.cliBinary = desc.cliBinary;
   }
@@ -228,9 +227,9 @@ const routes: Record<string, Handler> = {
   'GET /api/connections/detect': async (_req, res) => {
     const clis = await Promise.all(DETECTED_CLIS.map((b) => detectCli(b)));
     let ollama: { reachable: boolean; endpoint: string; models?: number; error?: string };
-    const endpoint = process.env.OLLAMA_HOST ? `http://${process.env.OLLAMA_HOST.replace(/^https?:\/\//, '')}` : 'http://127.0.0.1:11434';
+    const endpoint = endpointFromHost(process.env.OLLAMA_HOST, 'http://127.0.0.1:11434');
     try {
-      const r = await fetch(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(2500) });
+      const r = await providerFetch(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(2500) });
       const data = (await r.json()) as { models?: unknown[] };
       ollama = { reachable: r.ok, endpoint, models: data.models?.length ?? 0 };
     } catch {
@@ -239,7 +238,7 @@ const routes: Record<string, Handler> = {
     const magpieBase = magpieEndpoint();
     let magpie: { reachable: boolean; endpoint: string; models?: number; error?: string };
     try {
-      const r = await fetch(`${magpieBase}/v1/models`, {
+      const r = await providerFetch(`${magpieBase}/v1/models`, {
         signal: AbortSignal.timeout(2500),
         headers: process.env.MAGPIE_API_KEY ? { authorization: `Bearer ${process.env.MAGPIE_API_KEY}` } : undefined,
       });
@@ -360,7 +359,7 @@ const routes: Record<string, Handler> = {
       isAvailable: (bin) => Boolean(findOnPath(bin)),
     });
     if (!launch) throw new HttpError(501, 'No terminal emulator was found. Set the TERMINAL environment variable to yours.');
-    const child = spawn(launch.command, launch.args, { cwd: launch.cwd, detached: true, stdio: 'ignore' });
+    const child = spawn(launch.command, launch.args, { cwd: launch.cwd, detached: true, stdio: 'ignore', shell: false });
     child.on('error', () => undefined);
     child.unref();
     send(res, 200, { ok: true, terminal: launch.command, cwd: root, command: command ?? null });
@@ -764,13 +763,13 @@ const routes: Record<string, Handler> = {
       return;
     }
     const start = Date.now();
-    const child = spawn(parsed.program!, parsed.args!, { cwd: getWorkspaceRoot(), env: { ...process.env, FORCE_COLOR: '0', CI: '1' } });
+    const child = spawn(parsed.program!, parsed.args!, { cwd: getWorkspaceRoot(), env: { ...process.env, FORCE_COLOR: '0', CI: '1' }, shell: false });
     let stdout = '';
     let stderr = '';
     const limit = 512 * 1024;
     child.stdout.on('data', (d) => (stdout = (stdout + d).slice(-limit)));
     child.stderr.on('data', (d) => (stderr = (stderr + d).slice(-limit)));
-    const timeoutMs = Math.min(Number(body.timeoutMs) || 120_000, 600_000);
+    const timeoutMs = executionTimeoutMs(body.timeoutMs);
     const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
     res.on('close', () => {
       if (!res.writableEnded) child.kill('SIGTERM');

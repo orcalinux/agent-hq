@@ -4,7 +4,10 @@ import fs from 'fs';
 
 const version = (process.argv[2] || JSON.parse(fs.readFileSync('package.json', 'utf8')).version).replace(/^v/, '');
 const lines = fs.readFileSync('CHANGELOG.md', 'utf8').split(/\r?\n/);
-const start = lines.findIndex((l) => new RegExp(`^##\\s+\\[?v?${version.replace(/\./g, '\\.')}\\]?(\\s|$)`).test(l));
+const start = lines.findIndex((line) => {
+  const heading = /^##\s+(?:\[([^\]]+)\]|(\S+))(?:\s|$)/.exec(line);
+  return (heading?.[1] ?? heading?.[2])?.replace(/^v/, '') === version;
+});
 if (start < 0) {
   console.error(`CHANGELOG.md has no section for ${version}.`);
   process.exit(1);

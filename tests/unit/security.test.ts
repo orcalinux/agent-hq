@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { parseAllowedCommand, resolveInside } from '../../server/security';
+import { executionTimeoutMs, parseAllowedCommand, resolveInside } from '../../server/security';
 import { deleteFile } from '../../server/workspace';
 
 describe('terminal allowlist', () => {
@@ -30,6 +30,18 @@ describe('terminal allowlist', () => {
 
   it('never lets npx download packages', () => {
     expect(parseAllowedCommand('npx tsc --noEmit')).toMatchObject({ ok: true, program: 'npx', args: ['--no', '--', 'tsc', '--noEmit'] });
+  });
+});
+
+describe('command execution timeout', () => {
+  it('bounds numeric durations and replaces nonnumeric or nonfinite input', () => {
+    for (const input of [undefined, null, '3000', NaN, Infinity, -Infinity, {}, []]) {
+      expect(executionTimeoutMs(input)).toBe(120_000);
+    }
+    expect(executionTimeoutMs(-50)).toBe(1000);
+    expect(executionTimeoutMs(0)).toBe(1000);
+    expect(executionTimeoutMs(1800.9)).toBe(1800);
+    expect(executionTimeoutMs(900_000)).toBe(600_000);
   });
 });
 

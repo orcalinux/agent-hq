@@ -1,5 +1,6 @@
 import { execFile } from 'child_process';
 import { findOnPath, magpieEndpoint } from './providers';
+import { providerFetch } from './network';
 
 /**
  * Agent HQ's bridge to Magpie's own routing. Agent HQ decides which models suit a level; Magpie decides
@@ -58,7 +59,7 @@ export function parseQuotas(data: unknown): ProviderQuota[] {
 }
 
 export async function magpieQuotas(): Promise<ProviderQuota[]> {
-  const res = await fetch(`${magpieEndpoint().replace(/\/+$/, '')}/v1/magpie/quotas`, { headers: headers(), signal: AbortSignal.timeout(4000) });
+  const res = await providerFetch(`${magpieEndpoint().replace(/\/+$/, '')}/v1/magpie/quotas`, { headers: headers(), signal: AbortSignal.timeout(4000) });
   if (!res.ok) throw new Error(`Magpie answered ${res.status} for quotas.`);
   return parseQuotas(await res.json());
 }

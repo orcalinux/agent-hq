@@ -192,6 +192,8 @@ Agent HQ only uses supported mechanisms. It never reads or reuses another tool's
 
 **Magpie.** If you use [Magpie](https://usemagpie.ai) to manage models and accounts, connect **Magpie gateway** and every model and routing group it offers (for example `group/smart-coding`) becomes available to each agent, without Agent HQ holding any keys. The address is read from Magpie's own `gateway.json` (default `http://127.0.0.1:3425`); set `MAGPIE_GATEWAY` to point elsewhere and `MAGPIE_API_KEY` if your gateway requires a caller key.
 
+**Remote services.** Ollama and Magpie accept loopback endpoints by default. To use a service on another machine, set `AGENT_HQ_ALLOWED_ENDPOINTS` in the app/server launch environment to its exact origin, for example `http://192.168.1.20:11434`. Separate multiple origins with commas, include any nonstandard port, and restart the app after changing it. Then enter the endpoint in Connections. Existing remote connections also require this setting after upgrading. Provider requests do not follow redirects; enter the final service address.
+
 <p align="center"><img src="docs/screenshots/desktop-magpie.png" alt="Agent HQ desktop app listing 30 models and routing groups from a Magpie gateway" width="900" /><br /><sub>The desktop app connected to a real Magpie gateway: its routing groups and every model from the Claude Code and Codex accounts set up in Magpie.</sub></p>
 
 Agent HQ talks to models as plain text and tells every model that it has no tools, because gateways that wrap an agent account (Magpie with Claude Code or Codex) may otherwise let a model try a tool call and leak it into the answer.
@@ -296,6 +298,8 @@ To regenerate the README screenshots: `AGENT_HQ_SCREENSHOTS=1 npm run test:e2e -
 
 ## Project
 
+- [docs/github-administration.md](docs/github-administration.md): saved GitHub settings, branch protection, security, Pages and release checklist.
+- [docs/security-review.md](docs/security-review.md): dependency and code-scanning alert review, fixes and verification boundaries.
 - [ROADMAP.md](ROADMAP.md): what is planned and the criteria for each item.
 - [docs/competitive-study.md](docs/competitive-study.md): how Agent HQ compares with seven open-source projects, and what that study does and does not show.
 - [CONTRIBUTING.md](CONTRIBUTING.md): how to set up, test and send a pull request.

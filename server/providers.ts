@@ -5,6 +5,7 @@ import path from 'path';
 import type { ConnectionMethod, ProviderId, StoredConnection } from './config';
 import { claudeCliUsage, claudeModelChoices, observeCliModels, reportedClaudeModels, type ClaudeCliUsage } from './cliModelIdentity';
 import type { ClaudePricing } from './claudeCatalog';
+import { endpointFromHost, providerFetch, validateEndpoint } from './network';
 
 export interface ModelInfo {
   ref: string;
@@ -142,11 +143,11 @@ export function envKeyFor(id: ProviderId): string | undefined {
 /** The Magpie gateway address: MAGPIE_GATEWAY, then the address Magpie itself recorded, then its default. */
 export function magpieEndpoint(): string {
   const fromEnv = process.env.MAGPIE_GATEWAY?.trim();
-  if (fromEnv) return /^https?:\/\//.test(fromEnv) ? fromEnv : `http://${fromEnv}`;
+  if (fromEnv) return endpointFromHost(fromEnv, 'http://127.0.0.1:3425');
   try {
     const file = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'magpie', 'gateway.json');
     const addr = (JSON.parse(fs.readFileSync(file, 'utf8')) as { addr?: unknown }).addr;
-    if (typeof addr === 'string' && /^[\w.\-[\]:]+:\d+$/.test(addr)) return `http://${addr}`;
+    if (typeof addr === 'string' && /^[\w.\-[\]:]+:\d+$/.test(addr)) return validateEndpoint(`http://${addr}`);
   } catch {
     // Magpie is not installed or has not started its gateway yet
   }
@@ -217,7 +218,7 @@ function run(
     const child = execFile(
       file,
       args,
-      { timeout: opts.timeoutMs ?? 4000, cwd: opts.cwd, maxBuffer: 4 * 1024 * 1024, env: envFor(file) },
+      { timeout: opts.timeoutMs ?? 4000, cwd: opts.cwd, maxBuffer: 4 * 1024 * 1024, env: envFor(file), shell: false },
       (error, stdout, stderr) => {
         const code = error ? (typeof error.code === 'number' ? error.code : 1) : 0;
         resolve({ code, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') || (error && !stdout ? error.message : '') });
@@ -323,13 +324,22 @@ export async function detectCli(binary: string): Promise<CliInfo> {
 
 export const DETECTED_CLIS = ['claude', 'codex', 'gemini', 'ollama', 'gh', 'agy'];
 
+function providerCliPath(id: ProviderId): string | undefined {
+  switch (id) {
+    case 'anthropic': return findOnPath('claude');
+    case 'openai': return findOnPath('codex');
+    case 'google': return findOnPath('gemini');
+    default: return undefined;
+  }
+}
+
 // ------------------------------------------------------------------ HTTP helpers
 
 async function httpJson(url: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), init.timeoutMs ?? 10_000);
   try {
-    const res = await fetch(url, { ...init, signal: init.signal ?? controller.signal });
+    const res = await providerFetch(url, { ...init, signal: init.signal ?? controller.signal });
     const text = await res.text();
     let body: unknown = undefined;
     try {
@@ -391,7 +401,7 @@ async function* readSseData(body: ReadableStream<Uint8Array>): AsyncGenerator<st
 async function streamingPost(url: string, headers: Record<string, string>, payload: unknown, signal: AbortSignal, onResponse?: (res: Response) => void) {
   let res: Response;
   try {
-    res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(payload), signal });
+    res = await providerFetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(payload), signal });
   } catch (err) {
     if ((err as Error).name === 'AbortError') throw err;
     throw new Error(`Could not reach ${new URL(url).host}.`);
@@ -606,7 +616,7 @@ function runCliStreaming(
   timeoutMs = 10 * 60_000
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(binary, args, { cwd, env: envFor(binary), stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(binary, args, { cwd, env: envFor(binary), stdio: ['pipe', 'pipe', 'pipe'], shell: false });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
@@ -637,8 +647,8 @@ function runCliStreaming(
 async function chatViaCli(req: ChatRequest): Promise<ChatResult> {
   const start = Date.now();
   const { connection, model } = req;
-  const binary = findOnPath(connection.cliBinary || providerDescriptor(connection.providerId)?.cliBinary || '');
-  if (!binary) throw new Error(`The ${connection.cliBinary || 'provider'} CLI is not installed or not on PATH.`);
+  const binary = providerCliPath(connection.providerId);
+  if (!binary) throw new Error('The provider CLI is not installed or not on PATH.');
   const alias = model.replace(/^cli:/, '');
   const prompt = flattenForCli(req.system, req.messages);
 
@@ -843,7 +853,7 @@ export async function chat(req: ChatRequest): Promise<ChatResult> {
 export async function verifyConnection(conn: StoredConnection, cwd: string): Promise<{ models: ModelInfo[]; detail: string }> {
   if (conn.method === 'cli') {
     const desc = providerDescriptor(conn.providerId);
-    const binary = conn.cliBinary || desc?.cliBinary;
+    const binary = desc?.cliBinary;
     if (!binary) throw new Error('This provider has no supported CLI.');
     const info = await detectCli(binary);
     if (!info.detected) throw new Error(`"${binary}" was not found on PATH.`);

@@ -19,7 +19,7 @@ export interface TerminalOptions {
 const LINUX_TERMINALS = ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xfce4-terminal', 'kitty', 'alacritty', 'wezterm', 'foot', 'xterm'];
 
 function innerShell(shell: string, command?: string): string[] {
-  return command ? [shell, '-lc', `${command}; exec "${shell}"`] : [shell];
+  return command ? [shell, '-lc', `${command}; exec ${shellQuote(shell)}`] : [shell];
 }
 
 function linuxArgs(binary: string, dir: string, inner: string[]): string[] {
@@ -48,7 +48,7 @@ function shellQuote(value: string): string {
 }
 
 function appleScriptString(value: string): string {
-  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`;
 }
 
 /** Works out which terminal to open for this OS and how to start it in `dir`. Returns null when none is installed. */

@@ -11,6 +11,18 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.15.1] — 2026-11-23
+
+### Added
+- **GitHub administration guide** ([docs/github-administration.md](docs/github-administration.md)): saved repository identity, branch rules, security settings, workflow permissions, Pages setup, read-only verification commands and maintenance/release checklists. Distinguishes API-verified settings from settings recorded in setup screenshots.
+
+### Security
+- Upgrade Vitest and its mocker to 4.1.12, removing Tinypool, and override affected Minimatch versions used by desktop packaging with 11.0.9.
+- Validate all provider and embedding HTTP destinations centrally and refuse redirects. Local services work by default; remote Ollama and Magpie origins require explicit trust through `AGENT_HQ_ALLOWED_ENDPOINTS`. Embedded URL credentials and fragments are rejected.
+- Resolve provider CLI executables from the supported provider list rather than stored executable overrides. Command execution uses the allowlisted program, explicit shell-free spawning and finite timeouts bounded to 1–600 seconds.
+- Quote configured shell paths literally when reopening a terminal after installation; reject inherited property names as installer IDs.
+- Match release-note versions as literal text instead of inserting command-line input into a regular expression.
+
 ## [0.15.0] — 2026-11-22
 
 ### Added

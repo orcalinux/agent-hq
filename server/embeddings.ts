@@ -1,5 +1,6 @@
 import { loadConfig } from './config';
 import type { Embedder } from './memory';
+import { endpointFromHost, providerFetch, validateEndpoint } from './network';
 
 export const RECOMMENDED_EMBEDDING_MODEL = 'nomic-embed-text';
 const EMBEDDING_NAME = /embed|(^|[^a-z])(bge|gte|e5|minilm|mxbai|arctic|paraphrase|granite-embedding)/i;
@@ -24,9 +25,8 @@ export interface EmbeddingStatus {
 
 export function ollamaBase(): string {
   const conn = loadConfig().connections.ollama;
-  if (conn?.endpointUrl) return conn.endpointUrl.replace(/\/+$/, '');
-  const host = process.env.OLLAMA_HOST;
-  return host ? `http://${host.replace(/^https?:\/\//, '').replace(/\/+$/, '')}` : 'http://127.0.0.1:11434';
+  if (conn?.endpointUrl) return validateEndpoint(conn.endpointUrl);
+  return endpointFromHost(process.env.OLLAMA_HOST, 'http://127.0.0.1:11434');
 }
 
 export function isEmbeddingModel(tag: OllamaModelTag): boolean {
@@ -44,7 +44,7 @@ export function chooseEmbeddingModel(preference: string, installed: string[]): s
 }
 
 async function fetchJson(url: string, init: RequestInit & { timeoutMs: number }): Promise<unknown> {
-  const res = await fetch(url, { ...init, signal: AbortSignal.timeout(init.timeoutMs) });
+  const res = await providerFetch(url, { ...init, signal: AbortSignal.timeout(init.timeoutMs) });
   const body = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new Error(body.error || `Ollama answered HTTP ${res.status}.`);
   return body;
@@ -100,7 +100,7 @@ export async function currentEmbedder(): Promise<{ embedder: Embedder | null; st
 
 /** Streams Ollama's pull progress for a model as { status, completed, total } events. */
 export async function pullModel(model: string, onEvent: (event: { status: string; completed?: number; total?: number }) => void, signal: AbortSignal) {
-  const res = await fetch(`${ollamaBase()}/api/pull`, {
+  const res = await providerFetch(`${ollamaBase()}/api/pull`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ model, stream: true }),

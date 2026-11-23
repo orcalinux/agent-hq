@@ -65,7 +65,7 @@ describe('Claude CLI model identity', () => {
 
   it.skipIf(process.platform === 'win32')('reads identity from CLI JSON during verification and sends exact IDs unchanged', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-hq-model-'));
-    const binary = 'fixture-claude';
+    const binary = 'claude';
     fs.writeFileSync(path.join(dir, binary), `#!/usr/bin/env node
 if (process.argv.includes('--version')) {
   console.log('fixture CLI 1.0');
@@ -81,7 +81,7 @@ if (process.argv.includes('--version')) {
     vi.stubEnv('PATH', `${dir}${path.delimiter}${process.env.PATH}`);
     vi.stubEnv('CLAUDE_CONFIG_DIR', dir);
     try {
-      const conn = { ...connection(), cliBinary: binary };
+      const conn = { ...connection(), cliBinary: 'not-an-approved-provider-cli' };
       const verified = await verifyConnection(conn, dir);
       expect(verified.models[0]).toMatchObject({ name: 'claude-opus-fixture', selectable: true });
       expect((await discoverModels(conn, dir))[0].id).toBe('cli:claude-opus-fixture');

@@ -121,6 +121,11 @@ export function parseAllowedCommand(commandLine: string): ParsedCommand {
   if (args.some((a) => escapesWorkspace(a) || (a.startsWith('-') && a.includes('=') && escapesWorkspace(a.slice(a.indexOf('=') + 1))))) {
     return { ok: false, error: 'Arguments must stay inside the workspace (no absolute or parent paths).' };
   }
-  if (program === 'npx') return { ok: true, program, args: ['--no', '--', ...args] };
-  return { ok: true, program, args };
+  if (rule.program === 'npx') return { ok: true, program: rule.program, args: ['--no', '--', ...args] };
+  return { ok: true, program: rule.program, args };
+}
+
+export function executionTimeoutMs(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 120_000;
+  return Math.max(1000, Math.min(Math.trunc(value), 600_000));
 }
