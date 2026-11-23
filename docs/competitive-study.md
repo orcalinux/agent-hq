@@ -149,3 +149,33 @@ These two runs are smoke tests, not a controlled performance comparison: CLI ver
 **Accounting limitations.** Maestro's event reports 275,299 input tokens, 683 output tokens, 232,064 cached input tokens, and `cost_usd: 0`. The final Codex session counters instead report 322,172 input tokens (236,032 cached) and 748 output tokens, including 59 reasoning tokens. Cached tokens are included in input, not added again. The discrepancy remains unresolved; zero reported cost does not prove free usage or a measured bill. Actual upstream model, billed cost and subscription quota consumed remain unverified.
 
 **Not yet measured.** No multi-agent, recovery, larger-project or controlled cross-app comparison exists. Maestro's packaged CLI can dispatch to the open desktop app using `MAESTRO_USER_DATA` set to its isolated profile, so manual UI control is not required for each task. Other apps may also expose automation; manual sign-in requirements must be checked individually. Maestro detects Claude Code as available even though the earlier shell PATH check did not locate it.
+
+## Benchmark v2: graded backlog tasks (2026-11-23)
+
+The slugify smoke test above cannot separate anything. A second suite uses a small "tabsplit" expense-sharing codebase (money, splitting, balances, SQLite, HTTP API, CLI) with **hidden acceptance tests** that the agent never sees, and a grader that also checks that the existing tests were left untouched and that only the standard library was used. The suite is held out of this repository on purpose so that agents working in it cannot read the answers.
+
+| Tier | Task | Hidden tests |
+|---|---|---|
+| 1 | Build the app from a spec | 87 |
+| 2 | Six backlog issues on a 1.0 codebase: database migration (all-or-nothing, byte-for-byte rollback), CSV line numbers, performance limits, multi-currency, a negative-cents bug, a tie-break bug | 141 (54 new + 87 regression) |
+| 3 | Six independent issues on a 2.0 codebase: exact percentage splits, minimum-payment settle-up (a subset problem where greedy is wrong), edit/delete with an audit log under a "do not change `user_version`, do not touch the file on open" constraint, date recurrence with month-end clamping, a ledger export, and one deliberately vague issue ("add a `settle` command") | 241 (100 new + 141 regression) |
+
+Every tier has a reference solution that scores 100% and a starter that scores well below (16/87, 87/141, 143/241), so the tests are known to be passable and to test something.
+
+### Results (Claude Code, headless, subscription, real runs)
+
+| Model | Tier | Hidden tests | Wall time | Turns | API-rate cost |
+|---|---|---|---|---|---|
+| Sonnet 5.5 | 1 | 87/87 | 66 s | 8 | $0.30 |
+| Sonnet 5.5 | 2 | 141/141 | 152 s | 14 | $0.56 |
+| Haiku 5.5 | 2 | 141/141 | 264 s | 20 | $0.12 |
+| Haiku 5.5 | 3 | 240/241 | 176 s | 18 | $0.05 |
+
+The only missed test is the vague issue's edge case: `settle` on an unknown group should exit with an error, and the run let the exception escape. Costs are API-rate valuations of subscription usage, not money billed.
+
+### What this shows, and what it does not
+
+- **A single current agent saturates these tasks, even the cheapest model.** Wrapping an agent in an orchestration app cannot raise the score on tasks of this size; it can only add time and cost. Quality differences between apps will not show up here.
+- The differences worth measuring are therefore **overhead** (wall time, tokens and cost on top of the bare CLI), **parallel speed** on a backlog like Tier 3, **recovery** when a provider runs out of quota mid-run, **isolation** of parallel edits, and **human steps** needed.
+- Not yet measured: any competitor app or Agent HQ on Tier 2 or 3. Those runs need either sign-in through the app's GUI or a way to drive it headless, and they consume subscription quota (Claude Pro allows only a few runs per 5-hour window). Until they exist, no ranking is claimed.
+- A grader bug was found and fixed during this work: it dropped the `*.db` migration fixtures from its scratch copy, which made one run look like it failed 2 of its own tests. Earlier "existing tests" counts for Tier 2 should be disregarded; the hidden-test scores were not affected.
