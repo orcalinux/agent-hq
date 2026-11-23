@@ -9,6 +9,7 @@ export type DesktopCommand =
   | { type: 'open-terminal' }
   | { type: 'show-agent'; agentId: string }
   | { type: 'check-updates' }
+  | { type: 'show-about' }
   | { type: 'show-updates' };
 
 export type TrayAction =

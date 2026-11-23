@@ -503,6 +503,32 @@ test('built desktop opens an integrated terminal in the project and stops its sh
     .toBe('stopped');
 });
 
+test('the About dialog shows the logo, credits and the full MIT license from the themed Help menu', async ({}, testInfo) => {
+  test.skip(process.platform === 'darwin', 'macOS keeps its native About panel.');
+  const { app, page, errors } = await launch();
+  try {
+    await page.getByRole('button', { name: 'Application menu', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Help', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^About Agent HQ/ }).click();
+    const about = page.getByTestId('about-dialog');
+    await expect(about).toBeVisible();
+    const logo = about.locator('img');
+    await expect(logo).toHaveJSProperty('complete', true);
+    expect(await logo.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    await expect(about.getByText(/Version \d+\.\d+\.\d+/)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('about.png') });
+    await about.getByRole('tab', { name: 'Credits' }).click();
+    await expect(about.getByRole('link', { name: 'Electron', exact: true })).toBeVisible();
+    await about.getByRole('tab', { name: 'License' }).click();
+    await expect(about.getByLabel('MIT License')).toContainText('Permission is hereby granted, free of charge');
+    await page.keyboard.press('Escape');
+    await expect(about).toBeHidden();
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
 test('the themed application menu fits narrow windows and supports keyboard, native actions and both themes', async ({}, testInfo) => {
   test.skip(process.platform === 'darwin', 'macOS keeps its native application menu.');
   const { app, page, errors } = await launch();

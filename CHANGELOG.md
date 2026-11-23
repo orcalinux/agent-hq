@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.16.3] — 2026-11-23
+
+### Fixed
+- The About window on Linux and Windows showed a broken icon and empty Credits and License. It is now an in-app dialog with the Agent HQ logo, version, links, open-source credits and the full MIT license, themed like the rest of the app. The Help menu and the application menu both open it; macOS keeps its native About panel.
+
 ## [0.16.2] — 2026-11-23
 
 Includes the themed desktop menus, immediate update checks and updater repair introduced in 0.16.0.

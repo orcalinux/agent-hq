@@ -3,6 +3,7 @@ import { api } from '@/api/client';
 import { resolveAgentModel, useAgentStore } from '@/store/useAgentStore';
 import { useConnectionsStore } from '@/store/useConnectionsStore';
 import { useUpdateStore } from './useUpdate';
+import { useAboutStore } from '@/components/shell/AboutDialog';
 import { makeTraySnapshot } from './traySnapshot';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMemoryStore } from '@/store/useMemoryStore';
@@ -65,6 +66,9 @@ function handleCommand(command: DesktopCommand): void {
       break;
     case 'check-updates':
       useUpdateStore.getState().check();
+      break;
+    case 'show-about':
+      useAboutStore.getState().show();
       break;
   }
 }

@@ -157,6 +157,11 @@ function checkForUpdatesFromMenu(): void {
   send({ type: 'check-updates' });
 }
 
+function showAbout(): void {
+  showWindow();
+  send({ type: 'show-about' });
+}
+
 function buildMenu(): void {
   const isMac = process.platform === 'darwin';
   const go = (view: Extract<DesktopCommand, { type: 'navigate' }>['view']) => () => {
@@ -211,7 +216,7 @@ function buildMenu(): void {
         { type: 'separator' },
         { label: 'Check for Updates…', click: () => void checkForUpdatesFromMenu() },
         { label: 'Show Settings Folder', click: () => void shell.openPath(app.getPath('userData')) },
-        ...(isMac ? [] : [{ type: 'separator' as const }, { label: `About ${PRODUCT}`, click: () => app.showAboutPanel() }]),
+        ...(isMac ? [] : [{ type: 'separator' as const }, { label: `About ${PRODUCT}`, click: showAbout }]),
       ],
     },
   ];
