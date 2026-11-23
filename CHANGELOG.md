@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.19.2] — 2026-11-23
+
+### Changed
+- Removed the Magpie design-inspiration entry from About → Credits. The existing technology credits remain.
+
 ## [0.19.1] — 2026-11-23
 
 ### Fixed

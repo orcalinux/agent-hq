@@ -22,7 +22,6 @@ const CREDITS: Array<{ name: string; role: string; href: string }> = [
   { name: 'Zustand', role: 'State', href: 'https://github.com/pmndrs/zustand' },
   { name: 'Lucide', role: 'Icons', href: 'https://lucide.dev' },
   { name: 'electron-updater', role: 'Updates', href: 'https://www.electron.build' },
-  { name: 'Magpie', role: 'Design inspiration', href: 'https://github.com/yetone/magpie' },
 ];
 
 type Tab = 'about' | 'credits' | 'license';
