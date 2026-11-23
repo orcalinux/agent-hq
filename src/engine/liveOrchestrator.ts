@@ -35,6 +35,8 @@ import { COMPLEXITIES, COMPLEXITY_HINT, assignAgentModels, assignPlanModels, fal
 import { BALANCES, activeMagpieGroups, isLowQuota, useMagpieStore } from '@/store/useMagpieStore';
 import { useModelWatchStore } from '@/store/useModelWatchStore';
 import { shouldAutoResume } from './runRecovery';
+import { interpretChatCommand, parseChatCommand } from './chatCommands';
+import type { ViewMode } from '@/types';
 import { checkLimits, describeLimit, WARN_RATIO, type LimitKind, type LimitReading } from './runLimits';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
 
@@ -383,6 +385,34 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
   const mode = store.orchestratorMode;
   const sovereign = store.agents['agent-manager'];
   if (!sovereign) return;
+  const command = parseChatCommand(text);
+  if (command) {
+    const result = interpretChatCommand(command, {
+      mode,
+      approval: store.approvalMode,
+      strategy: store.teamStrategy,
+      running: store.isLiveRunning,
+      sovereignModel: resolveAgentModel(sovereign, store.roleDefaults) ?? '',
+    });
+    if (command.name !== 'clear' && command.name !== 'new') store.appendChatMessage({ sender: 'user', text, mode });
+    for (const action of result.actions) {
+      if (action.type === 'mode') store.setOrchestratorMode(action.mode);
+      else if (action.type === 'approval') store.setApprovalMode(action.mode);
+      else if (action.type === 'strategy') store.setTeamStrategy(action.strategy);
+      else if (action.type === 'clear') {
+        chatController?.abort();
+        store.clearChat();
+      } else if (action.type === 'stop') {
+        chatController?.abort();
+        stopRun();
+      } else if (action.type === 'resume') void resumeRun();
+      else if (action.type === 'open') store.setActiveView(action.view as ViewMode);
+    }
+    const message = result.error ?? result.reply;
+    if (message) agentsState().appendChatMessage({ sender: 'system', text: message });
+    if (result.prompt) return sendToOrchestrator(result.prompt, attachments);
+    return;
+  }
   const remember = parseRemember(text, store.agents);
   if (remember) {
     store.appendChatMessage({ sender: 'user', text, mode });

@@ -13,6 +13,13 @@ import { useRouting } from '@/components/models/useRouting';
 import { COMPLEXITIES, COMPLEXITY_LABEL, SOURCE_HINT, SOURCE_LABEL, isGroupRef, taskComplexity } from '@/engine/modelRouting';
 import { Markdown } from './Markdown';
 import { ChatInput } from './ChatInput';
+import { parseChatCommand } from '@/engine/chatCommands';
+
+/** Local commands such as /help or /stop work without a model; plain text and commands that carry a prompt do not. */
+function draftNeedsModel(text: string): boolean {
+  const command = parseChatCommand(text);
+  return !command || (['ask', 'plan', 'build'].includes(command.name) && Boolean(command.rest));
+}
 
 const SOURCE_TONE: Record<ModelSource, 'neutral' | 'accent' | 'success' | 'warning'> = {
   you: 'accent',
@@ -199,7 +206,10 @@ function PlanCard({ message }: { message: ManagerChatMessage }) {
 function Message({ message }: { message: ManagerChatMessage }) {
   const providers = useConnectionsStore((s) => s.providers);
   if (message.sender === 'system') {
-    return <div className="px-1 text-center text-[11.5px] text-fg-subtle">{message.text}</div>;
+    if (message.text.includes('\n')) {
+      return <div data-testid="chat-system-note" className="whitespace-pre-line break-words rounded-xl border border-line bg-surface-2 px-3 py-2 text-left text-[11.5px] leading-relaxed text-fg-muted">{message.text}</div>;
+    }
+    return <div data-testid="chat-system-note" className="px-1 text-center text-[11.5px] text-fg-subtle">{message.text}</div>;
   }
   if (message.sender === 'user') {
     return (
@@ -307,7 +317,7 @@ export function ChatPanel() {
 
   const send = () => {
     const text = draft.trim();
-    if (!text || streaming || !modelOk) return;
+    if (!text || (draftNeedsModel(text) && (streaming || !modelOk))) return;
     setDraft('');
     const files = attachments;
     setAttachments([]);
@@ -402,7 +412,7 @@ export function ChatPanel() {
               {streaming ? (
                 <Button size="sm" variant="danger" icon={Square} onClick={stopChat}>Stop</Button>
               ) : (
-                <Button size="sm" variant="primary" icon={ArrowUp} disabled={!draft.trim() || !modelOk} onClick={send}>Send</Button>
+                <Button size="sm" variant="primary" icon={ArrowUp} disabled={!draft.trim() || (draftNeedsModel(draft) && !modelOk)} onClick={send}>Send</Button>
               )}
             </div>
           </div>

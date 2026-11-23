@@ -57,6 +57,24 @@ These are first-screen observations. None of them says anything about reliabilit
 
 One naming trap: `backend/internal/ports/spawn_budget.go` in Agent Orchestrator is a request **timeout** budget, not a spending budget.
 
+## Chat commands and mentions (added 2026-11-23)
+
+Evidence kind for every row is **Source** (README or code in the research bundle). Maestro and Agent Teams AI are AGPL-3.0, so they are design references only; no code was copied.
+
+| Project | What its chat offers | Evidence |
+| --- | --- | --- |
+| OpenHands | Built-in menu commands `/new`, `/btw` (side question), `/model` (list or switch model), `/goal`, `/plan` and `/code` (switch mode) | `src/utils/constants.ts` |
+| Maestro | Slash commands with autocomplete and user-defined commands with template variables; `@agent` consults another agent inline as a single-turn background call; `@` for files | `README.md` |
+| Agent Teams AI | Slash commands, `#task-id` mentions, `@team-name`, attached code context; a runnable-action command palette is still on its roadmap | `README.md` |
+| Agent Orchestrator | Skills act as slash commands only at the start of a message; `@` can follow any whitespace; emails, URLs and paths stay plain text | `packages/mobile/lib/chat/composerSuggestions.ts` |
+| Paradev | Slash-command discovery runs host-side and is exposed over RPC | `plans/chat-ui-greenfield-research.md` |
+| MetaGPT | Framework without a chat composer; nothing to compare | repository search |
+| Paperclip | Not in the local bundle; not re-checked | none |
+
+What Agent HQ took: commands that run real actions (new conversation, mode switch with an optional prompt, run control, navigation), argument completion, and the start-of-message rule for `/`. Safety rule of its own: chat cannot loosen approvals.
+
+Not built yet, and seen in peers: `/model` to switch a model from chat, user-defined commands, `#task` mentions, `@agent` as a one-off consult, and a `/btw` side question.
+
 ## Where Agent HQ stands today (own source)
 
 Gaps confirmed in this repository, listed so the roadmap is honest:

@@ -9,27 +9,74 @@ export interface ChatSuggestion {
   label: string;
   detail: string;
   insert: string;
+  hasArgs?: boolean;
 }
 
 export interface CompletionToken {
-  kind: 'command' | 'agent';
+  kind: 'command' | 'agent' | 'argument';
   start: number;
   end: number;
   query: string;
+  command?: string;
 }
 
-export const CHAT_COMMANDS: ChatSuggestion[] = [
+export const CHAT_VIEWS = ['workspace', 'agents', 'tasks', 'reports', 'growth', 'connections', 'settings'] as const;
+
+export interface ChatCommandSpec {
+  name: string;
+  detail: string;
+  aliasOf?: string;
+  args?: Array<{ value: string; detail: string }>;
+  acceptsText?: boolean;
+}
+
+export const CHAT_COMMAND_SPECS: ChatCommandSpec[] = [
+  { name: 'help', detail: 'List every chat command.' },
+  { name: 'status', detail: 'Show mode, approval, team strategy, model and run state.' },
+  { name: 'clear', detail: 'Clear this conversation.' },
+  { name: 'new', detail: 'Start a fresh conversation (same as /clear).', aliasOf: 'clear' },
+  { name: 'ask', detail: 'Switch to Ask mode, or add text to send it in Ask mode.', acceptsText: true },
+  { name: 'plan', detail: 'Switch to Plan mode, or add text to send it in Plan mode.', acceptsText: true },
+  { name: 'build', detail: 'Switch to Build mode, or add text to send it in Build mode.', acceptsText: true },
   {
-    id: 'remember',
-    label: '/remember',
-    detail: 'Save a lesson for the team, or add @agent to teach one agent.',
-    insert: '/remember',
+    name: 'approval',
+    detail: 'Make approvals stricter. Loosening them needs the approval picker.',
+    args: [
+      { value: 'ask', detail: 'Ask before every change.' },
+      { value: 'auto', detail: 'Approve routine changes.' },
+      { value: 'full', detail: 'Full access (use the picker to confirm).' },
+    ],
   },
+  {
+    name: 'team',
+    detail: 'Choose how Sovereign builds the team.',
+    args: [
+      { value: 'adaptive', detail: 'Sovereign adds agents the work needs.' },
+      { value: 'fixed', detail: 'Use only the current roster.' },
+    ],
+  },
+  { name: 'stop', detail: 'Stop the current run or reply.' },
+  { name: 'resume', detail: 'Resume the last run from its unfinished tasks.' },
+  { name: 'open', detail: 'Open a view.', args: CHAT_VIEWS.map((view) => ({ value: view, detail: `Open ${view}.` })) },
+  { name: 'remember', detail: 'Save a lesson for the team, or add @agent to teach one agent.', acceptsText: true },
 ];
+
+export const CHAT_COMMANDS: ChatSuggestion[] = CHAT_COMMAND_SPECS.map((spec) => ({
+  id: spec.name,
+  label: `/${spec.name}`,
+  detail: spec.detail,
+  insert: `/${spec.name}`,
+  hasArgs: Boolean(spec.args),
+}));
 
 export function completionToken(text: string, cursor: number, selectionEnd = cursor): CompletionToken | null {
   if (cursor !== selectionEnd || cursor < 0 || cursor > text.length) return null;
   const prefix = text.slice(0, cursor);
+  const argument = /^\s*\/([a-z]+)[ \t]+([^\s/@]*)$/iu.exec(prefix);
+  if (argument && CHAT_COMMAND_SPECS.some((spec) => spec.name === argument[1].toLowerCase() && spec.args)) {
+    const suffix = /^[^\s/@]*/u.exec(text.slice(cursor))![0];
+    return { kind: 'argument', command: argument[1].toLowerCase(), start: cursor - argument[2].length, end: cursor + suffix.length, query: argument[2] };
+  }
   const match = /(?:^|\s)([/@])([^\s/@]*)$/u.exec(prefix);
   if (!match) return null;
   const start = cursor - match[2].length - 1;
@@ -41,6 +88,12 @@ export function completionToken(text: string, cursor: number, selectionEnd = cur
 export function chatSuggestions(token: CompletionToken, agents: CompletionAgent[]): ChatSuggestion[] {
   const query = token.query.toLocaleLowerCase();
   if (token.kind === 'command') return CHAT_COMMANDS.filter((item) => item.label.slice(1).startsWith(query));
+  if (token.kind === 'argument') {
+    const spec = CHAT_COMMAND_SPECS.find((item) => item.name === token.command);
+    return (spec?.args ?? [])
+      .filter((arg) => arg.value.startsWith(query))
+      .map((arg) => ({ id: `${token.command}-${arg.value}`, label: arg.value, detail: arg.detail, insert: arg.value }));
+  }
   return agents
     .filter((agent) => [agent.name, agent.title, agent.id].some((text) => text.toLocaleLowerCase().includes(query)))
     .sort((first, second) => {

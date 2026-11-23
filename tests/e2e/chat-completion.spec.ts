@@ -8,7 +8,7 @@ test('commands and mentions complete by keyboard or mouse without sending the dr
   await page.goto('/');
   const input = page.getByRole('textbox', { name: 'Message Sovereign' });
   const menu = page.getByTestId('chat-completions');
-  await input.fill('/');
+  await input.fill('/rem');
   await expect(menu.getByRole('option', { name: /\/remember/ })).toBeVisible();
   await input.press('Tab');
   await expect(input).toHaveValue('/remember ');

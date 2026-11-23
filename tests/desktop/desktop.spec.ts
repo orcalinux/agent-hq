@@ -550,6 +550,36 @@ test('desktop chat completes commands and agent mentions without sending', async
   }
 });
 
+test('desktop chat commands run: /plan switches mode and /team completes its options', async ({}, testInfo) => {
+  const { app, page, errors } = await launch();
+  try {
+    const input = page.getByRole('textbox', { name: 'Message Sovereign', exact: true });
+    const menu = page.getByTestId('chat-completions');
+    for (const [width, height] of [[640, 360], [1000, 700], [1440, 900]]) {
+      await app.evaluate(({ BrowserWindow }, bounds) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        window.unmaximize();
+        window.setSize(bounds[0], bounds[1]);
+      }, [width, height]);
+      if (!(await input.isVisible().catch(() => false))) {
+        await page.getByRole('tab', { name: 'Chat', exact: true }).or(page.getByRole('button', { name: 'Chat', exact: true })).first().click();
+      }
+      await input.fill('/team ');
+      await expect(menu.getByRole('option')).toHaveCount(2);
+      await page.screenshot({ path: testInfo.outputPath(`chat-commands-${width}.png`) });
+      await input.press('Escape');
+      await input.fill('/plan');
+      await input.press('Escape');
+      await input.press('Enter');
+      await expect(page.getByRole('tab', { name: 'Plan' })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByTestId('chat-system-note').last()).toHaveText('Switched to Plan mode.');
+    }
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
 test('the themed application menu fits narrow windows and supports keyboard, native actions and both themes', async ({}, testInfo) => {
   test.skip(process.platform === 'darwin', 'macOS keeps its native application menu.');
   const { app, page, errors } = await launch();

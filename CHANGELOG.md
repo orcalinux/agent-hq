@@ -11,6 +11,19 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.18.0] — 2026-11-23
+
+### Added
+- **Chat commands that do things.** Type `/` in the chat to pick from `/help`, `/status`, `/clear` (alias `/new`), `/ask`, `/plan`, `/build`, `/approval`, `/team`, `/stop`, `/resume`, `/open` and `/remember`. `/plan`, `/ask` and `/build` switch Sovereign's mode, and any text after them is sent in that mode, for example `/plan add a login page`.
+- **Argument completion.** After `/approval`, `/team` or `/open`, the menu lists the valid options, so there is nothing to memorise. **Tab** or **Enter** inserts, **Escape** closes.
+- Commands that need no model (`/help`, `/status`, `/stop`, `/clear` and the others) work even before a model is picked.
+
+### Safety
+- `/approval` can only make approvals stricter. Loosening them (to `auto` or `full`) still needs the confirmation dialog in the approval picker.
+
+### Notes
+- `docs/competitive-study.md` has a new section on what the studied open-source projects offer in chat, with the evidence kind for each finding. No code was copied.
+
 ## [0.17.0] — 2026-11-23
 
 ### Added

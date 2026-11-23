@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { AtSign, BookOpen } from 'lucide-react';
+import { AtSign, BookOpen, CornerDownRight } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { Kbd } from '@/components/ui/primitives';
 import { applyCompletion, chatSuggestions, completionToken, type ChatSuggestion } from '@/utils/chatCompletion';
@@ -101,7 +101,7 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
     if (!token) return;
     const result = applyCompletion(value, token, suggestion);
     onChange(result.text);
-    setDismissed(true);
+    setDismissed(!suggestion.hasArgs);
     lastSelection.current = { start: result.cursor, end: result.cursor };
     setCursor(result.cursor);
     setSelectionEnd(result.cursor);
@@ -166,7 +166,7 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
       />
       <div id={hintId} className="px-2.5 py-1 text-[10.5px] text-fg-subtle">Type / for commands · @ for agents</div>
       <span role="status" className="sr-only">
-        {open ? `${suggestions.length} ${token?.kind === 'command' ? 'commands' : 'agents'} found. Use up and down arrows to choose, Tab or Enter to insert, Escape to dismiss.` : ''}
+        {open ? `${suggestions.length} ${token?.kind === 'agent' ? 'agents' : token?.kind === 'argument' ? 'options' : 'commands'} found. Use up and down arrows to choose, Tab or Enter to insert, Escape to dismiss.` : ''}
       </span>
       {open && position ? createPortal(
         <div
@@ -180,11 +180,11 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
           onPointerDown={(event) => event.preventDefault()}
         >
           <div className="shrink-0 border-b border-line px-3 py-2 text-[11px] font-medium text-fg-subtle">
-            {token?.kind === 'command' ? 'Commands' : 'Agents'}
+            {token?.kind === 'agent' ? 'Agents' : token?.kind === 'argument' ? `/${token.command} options` : 'Commands'}
           </div>
-          <div ref={optionListRef} id={listId} role="listbox" aria-label={token?.kind === 'command' ? 'Chat commands' : 'Mention an agent'} className="min-h-0 overflow-y-auto p-1">
+          <div ref={optionListRef} id={listId} role="listbox" aria-label={token?.kind === 'agent' ? 'Mention an agent' : token?.kind === 'argument' ? 'Command options' : 'Chat commands'} className="min-h-0 overflow-y-auto p-1">
             {suggestions.length ? suggestions.map((suggestion, index) => {
-              const Icon = token?.kind === 'command' ? BookOpen : AtSign;
+              const Icon = token?.kind === 'agent' ? AtSign : token?.kind === 'argument' ? CornerDownRight : BookOpen;
               return (
                 <div
                   key={suggestion.id}
@@ -202,7 +202,7 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
                   </div>
                 </div>
               );
-            }) : <p className="px-2 py-3 text-[12px] text-fg-muted">No matching {token?.kind === 'command' ? 'commands' : 'agents'}.</p>}
+            }) : <p className="px-2 py-3 text-[12px] text-fg-muted">No matching {token?.kind === 'agent' ? 'agents' : token?.kind === 'argument' ? 'options' : 'commands'}.</p>}
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line px-3 py-1.5 text-[10.5px] text-fg-subtle">
             <span><Kbd>↑↓</Kbd> choose</span><span><Kbd>Tab</Kbd> / <Kbd>↵</Kbd> insert</span><span><Kbd>Esc</Kbd> close</span>
