@@ -100,8 +100,8 @@ Gaps confirmed in this repository, listed so the roadmap is honest:
 
 - **Run ownership.** `src/engine/liveOrchestrator.ts` keeps run controllers in the renderer process. In `src/store/useAgentStore.ts` a running mission that is serialized becomes "cancelled: interrupted by page reload". A `resumeRun` path exists, so resume is partial, not absent.
 - **No worktree isolation.** CLI subprocesses run in the project folder (`server/providers.ts`). The scheduler (`src/engine/scheduler.ts`) orders work by agent and dependency, not by which files conflict.
-- **No audited hard spending cap.** Cost is tracked per run, but nothing in the inspected paths stops a run at a limit. Unknown pricing is shown as unpriced, never as free.
-- **Credentials at rest.** API keys are stored in a JSON file with mode 0600 in a 0700 directory, written atomically and **not encrypted**.
+- **Spending caps are per run only.** `src/engine/runLimits.ts` stops a run at configurable cost, token, time and per-agent call limits (defaults: 10 USD, 5M tokens, 90 min, 60 calls). There is no monthly budget that persists across runs, which Paperclip has. Unknown pricing is shown as unpriced, never as free.
+- **Credentials at rest.** API keys are stored in a JSON file with mode 0600 in a 0700 directory, written atomically. Secrets are sealed with AES-256-GCM (`encryptSecret` in `server/config.ts`), with the key protected by the OS credential store through Electron safeStorage.
 - **Unsigned installers.** Releases are built with signing discovery turned off; the README says so.
 
 ## Where Agent HQ is different
@@ -126,3 +126,21 @@ Both analyses covered only selected files (`package.json`, main and preload bund
 - No real task was run on any competitor, so nothing here compares quality, speed or cost.
 - Paradev's UI past sign-in, and all of Paperclip, OpenHands and MetaGPT at runtime, were not observed.
 - Stars measure attention, not fitness for your work.
+
+
+## Measured results (retained installs)
+
+Added 2026-11-23. Every number here comes from a run on this machine; nothing is estimated.
+
+**Setup.** The four desktop competitors stay installed under `~/.local/share/agent-hq-research` with their own profiles. Launch them from the application menu ("... (comparison)") or `launchers/<name>`. Remove them only on request. Paperclip, OpenHands and MetaGPT remain source-only (they need a Node 24 or server stack).
+
+**Task.** `bench/task-template`: fix `slugify()` so five tests pass (punctuation, whitespace collapse, accents, empty result). Same starting commit, same prompt, standard library only.
+
+| Tool | Engine / auth | Wall time | Tokens | Tests | Notes |
+|---|---|---|---|---|---|
+| Codex CLI 0.167 (baseline) | ChatGPT subscription | 37.2 s | 36,290 | 5/5 pass | Headless `codex exec --sandbox workspace-write` |
+| Agent HQ, Maestro, Agent Orchestrator, Agent Teams AI, Paradev | not run | n/a | n/a | n/a | Need an interactive sign-in or provider pick in the GUI |
+
+The baseline is the engine most of these apps wrap, so it is a floor for latency and tokens, not a comparison of the apps. Subscription runs are not billed per token; the token count is real, a dollar figure would be an API-rate estimate.
+
+**Not yet measured.** No app comparison exists. Each GUI needs a manual sign-in on your side, then the same task and the same acceptance test (`bench/run-codex-baseline.sh` shows the harness). The `claude` CLI was not found on this shell's PATH, so Claude-engine runs are also pending.

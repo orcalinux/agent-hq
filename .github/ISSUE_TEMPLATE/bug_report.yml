@@ -1,0 +1,24 @@
+name: Bug report
+description: Something in Agent HQ does not work as expected
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: {label: Agent HQ version (About dialog), placeholder: "0.20.0"}
+    validations: {required: true}
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Debian/Ubuntu (.deb), Fedora/RHEL (.rpm), Windows, macOS, Other]
+    validations: {required: true}
+  - type: textarea
+    id: steps
+    attributes: {label: Steps to reproduce}
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes: {label: Expected and actual behaviour}
+    validations: {required: true}
+  - type: markdown
+    attributes: {value: "Please remove API keys, private project names and file paths from screenshots and logs."}
