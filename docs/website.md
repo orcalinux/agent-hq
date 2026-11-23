@@ -10,7 +10,7 @@ npm run preview:site
 
 This builds `site-dist/` and starts a local server at `http://127.0.0.1:4180`. Set `SITE_PORT` to use another port. `npm run build:site` builds without a server.
 
-`scripts/build-site.mjs` stamps the version from `package.json` and copies the existing logo, social preview and four application screenshots. Built files and test results are ignored by Git.
+`scripts/build-site.mjs` stamps the version from `package.json` and copies the existing logo, social preview and four application screenshots. Stylesheet and script URLs include content hashes so repeat visitors receive matching assets after a deployment. Built files and test results are ignored by Git.
 
 ## Design and content
 
