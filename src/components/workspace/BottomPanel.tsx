@@ -9,8 +9,51 @@ import { api } from '@/api/client';
 import { Badge, Button, EmptyState, IconButton, Spinner, Tabs } from '@/components/ui/primitives';
 import { fmtDuration } from '@/components/ui/helpers';
 const TerminalPane = lazy(() => import('./TerminalPane').then((m) => ({ default: m.TerminalPane })));
-import type { ProposedFileChange } from '@/types';
+import type { KanbanTaskCard, ProposedFileChange } from '@/types';
 import { cn } from '@/utils/cn';
+import { collapseContext, diffStats, lineDiff } from '@/utils/lineDiff';
+
+/** What applying a proposal would change: a line diff against the file as it is now (or as it was before, once applied). */
+function ProposalDiff({ change }: { change: ProposedFileChange }) {
+  const [before, setBefore] = useState<string | null | undefined>(change.status === 'applied' ? change.previousContent : undefined);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (before !== undefined) return;
+    let live = true;
+    api
+      .readFileIfExists(change.path)
+      .then((f) => live && setBefore(f.exists && !f.binary ? f.content : f.exists ? '' : null))
+      .catch((err) => live && setError((err as Error).message));
+    return () => {
+      live = false;
+    };
+  }, [before, change.path]);
+  const ops = useMemo(() => (before === undefined ? null : lineDiff(before, change.content)), [before, change.content]);
+  if (error) return <p className="mt-1 text-[11.5px] text-danger">{error}</p>;
+  if (!ops) return <div className="mt-1 flex justify-center py-2"><Spinner /></div>;
+  const { added, removed } = diffStats(ops);
+  return (
+    <div className="mt-1 overflow-hidden rounded border border-line" data-testid="proposal-diff">
+      <div className="flex items-center gap-2 border-b border-line bg-surface-2 px-2 py-1 text-[11px] text-fg-subtle">
+        <span className="min-w-0 flex-1 truncate">{before === null ? 'New file' : added + removed === 0 ? 'No change to the current file' : 'Compared with the file on disk'}</span>
+        <span className="shrink-0 font-mono text-success">+{added}</span>
+        <span className="shrink-0 font-mono text-danger">−{removed}</span>
+      </div>
+      <pre className="max-h-64 overflow-auto bg-surface font-mono text-[11.5px] leading-[1.45]">
+        {collapseContext(ops).map((op, index) =>
+          op.kind === 'gap' ? (
+            <div key={index} className="select-none bg-surface-2 px-2 text-fg-subtle">⋯ {op.count} unchanged line{op.count === 1 ? '' : 's'}</div>
+          ) : (
+            <div key={index} className={cn('whitespace-pre px-2', op.kind === 'add' && 'bg-success/10 text-success', op.kind === 'del' && 'bg-danger/10 text-danger')}>
+              <span aria-hidden className="mr-2 inline-block w-2 select-none opacity-70">{op.kind === 'add' ? '+' : op.kind === 'del' ? '−' : ' '}</span>
+              {op.text || ' '}
+            </div>
+          ),
+        )}
+      </pre>
+    </div>
+  );
+}
 
 function CommandsTab() {
   const entries = useWorkspaceStore((s) => s.terminal);
@@ -142,6 +185,7 @@ function ProblemsTab() {
 }
 
 const NO_PROPOSALS: ProposedFileChange[] = [];
+const NO_TASKS: KanbanTaskCard[] = [];
 
 function ChangesTab() {
   const git = useWorkspaceStore((s) => s.git);
@@ -150,6 +194,7 @@ function ChangesTab() {
   const showDiff = useWorkspaceStore((s) => s.showDiff);
   const reload = useWorkspaceStore((s) => s.loadGit);
   const proposals = useAgentStore((s) => s.activeMission?.proposedChanges ?? NO_PROPOSALS);
+  const tasks = useAgentStore((s) => s.activeMission?.tasks ?? NO_TASKS);
   const setStatus = useAgentStore((s) => s.setProposedChangeStatus);
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -185,11 +230,16 @@ function ChangesTab() {
         return (
           <div key={p.id} className="border-b border-line px-3 py-1.5">
             <div className="flex items-center gap-2 text-[12px]">
-              <button type="button" onClick={() => setOpen(open === p.id ? null : p.id)} aria-label="Toggle preview" className="shrink-0 text-fg-subtle">
+              <button type="button" onClick={() => setOpen(open === p.id ? null : p.id)} aria-label={open === p.id ? 'Hide changes' : 'Show changes'} aria-expanded={open === p.id} className="shrink-0 text-fg-subtle">
                 {open === p.id ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               </button>
               <span className="min-w-0 flex-1 truncate font-mono">{p.path}</span>
               {p.autoApplied && p.status === 'applied' ? <Badge tone="accent">auto</Badge> : null}
+              {p.status === 'pending' && p.conflictsWith?.length ? (
+                <span title={`Also changed independently by: ${p.conflictsWith.map((id) => tasks.find((t) => t.id === id)?.title ?? id).join(', ')}. Applying this version discards the others.`}>
+                  <Badge tone="danger">conflict</Badge>
+                </span>
+              ) : null}
               <Badge tone={p.status === 'applied' ? 'success' : p.status === 'discarded' || p.status === 'reverted' ? 'neutral' : 'warning'}>{exists || p.status !== 'pending' ? p.status : `new · ${p.status}`}</Badge>
               {canRevert(p) ? <Button size="sm" variant="ghost" onClick={() => void undo(p.id)}>Undo</Button> : null}
               {p.status === 'pending' ? (
@@ -200,7 +250,7 @@ function ChangesTab() {
                 </>
               ) : null}
             </div>
-            {open === p.id ? <pre className="mt-1 max-h-48 overflow-auto rounded border border-line bg-surface-2 p-2 font-mono text-[11.5px]">{p.content}</pre> : null}
+            {open === p.id ? <ProposalDiff change={p} /> : null}
           </div>
         );
       })}

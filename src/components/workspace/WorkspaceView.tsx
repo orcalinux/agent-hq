@@ -18,11 +18,13 @@ export function WorkspaceView() {
   const L = useLayoutStore();
   const name = useWorkspaceStore((s) => s.name);
   const chatFocus = L.workspaceLayout === 'chat';
-  const showExplorer = L.explorerVisible && !chatFocus;
-  const showBottom = L.bottomVisible && !chatFocus;
   const panesRef = useRef<HTMLDivElement>(null);
   const available = useElementWidth(panesRef);
-  const fit = fitWorkspacePanes(available, { explorer: L.explorerWidth, chat: L.chatWidth }, { explorer: showExplorer, chat: L.chatVisible && !chatFocus });
+  const compact = available > 0 && available < 800;
+  const showExplorer = L.explorerVisible && !chatFocus && (!compact || available >= 485);
+  const showBottom = L.bottomVisible && !chatFocus;
+  const showChat = L.chatVisible && (!compact || chatFocus);
+  const fit = fitWorkspacePanes(available, { explorer: L.explorerWidth, chat: L.chatWidth }, { explorer: showExplorer, chat: showChat && !chatFocus });
   const roomFor = (other: number, min: number, max: number) => (available > 0 ? Math.max(min, Math.min(max, available - other - EDITOR_MIN)) : max);
 
   return (
@@ -36,7 +38,7 @@ export function WorkspaceView() {
           </div>
           <IconButton icon={PanelLeft} label="Toggle explorer (Ctrl+B)" active={showExplorer} disabled={chatFocus} onClick={() => L.toggle('explorerVisible')} />
           <IconButton icon={PanelBottom} label="Toggle bottom panel (Ctrl+J)" active={showBottom} disabled={chatFocus} onClick={() => L.toggle('bottomVisible')} />
-          <IconButton icon={MessageSquare} label="Toggle orchestrator chat (Ctrl+L)" active={L.chatVisible} onClick={() => L.toggle('chatVisible')} />
+          <IconButton icon={MessageSquare} label="Toggle orchestrator chat (Ctrl+L)" active={showChat} onClick={() => compact ? L.set({ workspaceLayout: chatFocus ? 'code' : 'chat', chatVisible: true }) : L.toggle('chatVisible')} />
           <IconButton icon={PanelsTopLeft} label="Reset panel layout" onClick={L.reset} />
         </div>
       </div>
@@ -47,19 +49,19 @@ export function WorkspaceView() {
             <Splitter orientation="vertical" side="start" size={fit.explorer} onResize={(v) => L.set({ explorerWidth: v })} min={160} max={roomFor(fit.chat, 160, 480)} label="Resize explorer" />
           </>
         ) : null}
-        <div className={cn('flex min-w-0 flex-col', chatFocus ? 'w-[38%] shrink-0' : 'flex-1')}>
+        <div className={cn('min-w-0 flex-col', compact && chatFocus ? 'hidden' : 'flex', chatFocus && !compact ? 'w-[38%] shrink-0' : 'flex-1')}>
           <div className="min-h-0 flex-1 bg-canvas"><EditorPane /></div>
           {showBottom ? (
             <>
               <Splitter orientation="horizontal" side="end" size={L.bottomHeight} onResize={(v) => L.set({ bottomHeight: v })} min={100} max={520} label="Resize bottom panel" />
-              <div style={{ height: L.bottomHeight }} className="shrink-0 overflow-hidden"><BottomPanel /></div>
+              <div style={{ height: `min(${L.bottomHeight}px, 55%)` }} className="shrink-0 overflow-hidden"><BottomPanel /></div>
             </>
           ) : null}
         </div>
         {L.chatVisible ? (
           <>
-            <Splitter orientation="vertical" side="end" size={chatFocus ? L.chatWidth : fit.chat} onResize={(v) => L.set({ chatWidth: v })} min={300} max={chatFocus ? 760 : roomFor(fit.explorer, 300, 760)} label="Resize chat" />
-            <div style={chatFocus ? undefined : { width: fit.chat }} className={cn('overflow-hidden', chatFocus ? 'min-w-0 flex-1' : 'shrink-0')}><ChatPanel /></div>
+            {!compact ? <Splitter orientation="vertical" side="end" size={chatFocus ? L.chatWidth : fit.chat} onResize={(v) => L.set({ chatWidth: v })} min={300} max={chatFocus ? 760 : roomFor(fit.explorer, 300, 760)} label="Resize chat" /> : null}
+            <div style={chatFocus ? undefined : { width: fit.chat }} className={cn('overflow-hidden', !showChat && 'hidden', chatFocus ? 'min-w-0 flex-1' : 'shrink-0')}><ChatPanel /></div>
           </>
         ) : null}
       </div>

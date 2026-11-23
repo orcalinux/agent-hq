@@ -11,6 +11,38 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.15.0] — 2026-11-22
+
+### Added
+- **Run limits.** Every run has hard caps per run and per agent: cost ($10), tokens (5M), wall time (90 min) and model calls (60 per agent). You get a warning at 80% and the run stops at 100% with the reason logged; stopped tasks return to pending. Models with unknown pricing count against the token cap and are never treated as free. Change the caps in **Settings → Run limits**.
+- **Conflict detection.** Agents propose changes instead of writing to disk, so two agents proposing the same file are now flagged with a "conflict" badge in the Changes tab. Auto-apply skips conflicted paths and manual apply discards the rival proposals, so nothing is lost silently.
+- **Diff preview.** Each proposed change shows a line diff against the file on disk with +/− counts. The Full access dialog now lists exactly what it allows.
+- **Interrupted-run recovery.** If the app closes mid-run, finished tasks are kept, in-flight tasks go back to pending and the mission is marked interrupted. In Full access the run resumes automatically on start. Quitting while a run is active asks for confirmation.
+- **Server-side run journal.** The active run is mirrored to a per-project file in the config folder (`runs/`, mode 0600). If browser storage is cleared or the profile is new, an unfinished run is restored from it with mid-flight tasks reset to pending. Finished or dismissed runs are not brought back. A desktop test kills the app with SIGKILL mid-run and checks that finished work and a pending approval survive the restart.
+- **Benchmark harness** (`scripts/benchmark.mjs`, [docs/benchmark.md](docs/benchmark.md)): ten real coding tasks run against any OpenAI-compatible endpoint with hidden tests. First results: four Claude and Codex models passed all 80 attempts, so it is a connection smoke test, not a ranking.
+- **Clean-install test** (`scripts/test-clean-install.sh`, `npm run test:install`): installs the built `.deb`/`.rpm` in a fresh Debian 13, Ubuntu 24.04 or Fedora 42 container, launches the app on a virtual display and checks that its server answers and serves the UI.
+- **Project website source** (`site/`, `npm run build:site`): a static, dependency-free page with a live download button, quick start and limitations. Built locally only; it is not published anywhere yet.
+- **`SECURITY.md`** and a `SHA256SUMS.txt` file published with each release so downloads can be verified.
+- **API keys encrypted at rest.** Stored keys are AES-256-GCM encrypted with a random key kept in a separate `0600` file; existing plain-text configs are upgraded the next time the config is saved. This protects a config file that is copied or shared on its own. When the desktop app finds a usable system keychain, the key file is also sealed by it; otherwise it falls back to the plain key file. If a sealed key cannot be read, saving is refused instead of dropping your keys.
+
+### Fixed
+- **Clean Debian install failed to launch.** The `.deb` did not depend on the ALSA library (`libasound2`), so on a fresh Debian 13 the app could not start. The `.deb` now depends on `libasound2t64 | libasound2` and the `.rpm` on `alsa-lib`. Found by the new clean-install test.
+
+### Changed
+- Agent graph layout and narrow-window fixes from 0.14.2 are now covered by unit and end-to-end tests.
+
+## [0.14.2] — 2026-11-22
+
+### Fixed
+- **Desktop tiling.** Lowered the minimum window size from 1024×640 to 640×360 so operating-system tiling shortcuts can place the app beside another window or above/below it. Your desktop's configured shortcuts are used; Agent HQ does not register its own tiling keys. Saved tiled sizes are preserved on restart.
+- **Agent graph never overlaps cards.** A crowded tier now wraps onto extra rows instead of shrinking cards on top of each other, and the canvas grows to fit any team size. A dragged or saved card that would land on another moves to the nearest free spot, and the other cards stay put. Covered by unit tests up to 350 agents and an end-to-end check at two window sizes.
+- **Narrow windows.** Below 800 px of workspace width the Code/Chat switch shows one main surface at a time instead of squeezing both, which removed a 46 px horizontal overflow at 640 px. The chat composer stays mounted so an unsent draft survives switching, and Ctrl/Cmd+L switches to Chat before focusing it. The bottom panel is capped at 55% of the height so short tiled windows keep an editor.
+
+### Added
+- **MIT license.** Added `LICENSE`, the `license` field in `package.json`, a README badge and `CONTRIBUTING.md`.
+- **Competitive study** ([docs/competitive-study.md](docs/competitive-study.md)) and **[ROADMAP.md](ROADMAP.md)**: seven open-source projects reviewed from source, with what was and was not verified.
+- `npm run test:tiling`: runs the real window manager on isolated 1920×1080 and 1280×800 displays with custom Ctrl+Alt tiling shortcuts, so tiling is verified with non-Super keys.
+
 ## [0.14.1] — 2026-11-22
 
 ### Fixed

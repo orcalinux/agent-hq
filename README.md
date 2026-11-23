@@ -16,6 +16,7 @@
 <p align="center">
   <a href="https://github.com/orcalinux/agent-hq/actions/workflows/ci.yml"><img src="https://github.com/orcalinux/agent-hq/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/github/package-json/v/orcalinux/agent-hq?label=version&color=2563eb" alt="Version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-15803d" alt="License: MIT" /></a>
   <img src="https://img.shields.io/badge/React-19-149eca?logo=react&amp;logoColor=white" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-5.8-3178c6?logo=typescript&amp;logoColor=white" alt="TypeScript 5.8" />
   <img src="https://img.shields.io/badge/Vite-6-646cff?logo=vite&amp;logoColor=white" alt="Vite 6" />
@@ -113,6 +114,10 @@ Like the permission modes in Claude Code and Codex, you decide how much the agen
 | **Full access** | Build requests start running at once | Written automatically once Sentinel QA approves the run |
 
 Turning on a more permissive mode asks for confirmation first. Auto mode never writes work that QA rejected, only writes inside the project folder, and keeps each file's previous contents: **Undo** in the Changes tab restores the file, or deletes it if the agent created it. Every automatic write is logged in the activity panel.
+
+### Run limits and conflicts
+
+Each run is capped per run and per agent (defaults: $10, 5M tokens, 90 minutes, 60 model calls per agent). You are warned at 80% and the run stops at 100%, with the reason logged. Change them in **Settings → Run limits**. If two agents propose changes to the same file, both are marked **conflict** in the Changes tab, auto-apply skips them and nothing is overwritten silently. Every proposal shows a line diff before you apply it.
 
 ## Agent memory
 
@@ -281,7 +286,21 @@ To regenerate the README screenshots: `AGENT_HQ_SCREENSHOTS=1 npm run test:e2e -
 
 ## Limitations
 
-- Agent file changes are not written automatically; apply them from the **Changes** tab.
+- In the default **Ask every time** mode, agent file changes are not written until you apply them from the **Changes** tab. **Auto-apply** and **Full access** write them automatically (see Agent permissions).
+- Runs are still controlled by the app window. If it closes mid-run, finished work is kept and the run is marked interrupted (resumed automatically only in Full access); server-owned runs are on the [roadmap](ROADMAP.md).
+- Agents propose changes rather than editing files in parallel worktrees, so conflicts are detected and reported instead of merged.
 - A demo run exists for exploring the visualizations and is labelled `demo` everywhere it appears.
 - Cost is only shown for models with verified pricing; otherwise tokens are shown without a price. Claude Code models are priced from the API rate card the CLI caches for your account, including cache reads and writes. On a subscription this values usage at API rates and is not a bill.
 - Gemini CLI integration is untested on this machine (the CLI is not installed).
+- Installers are not code-signed yet, so your OS may warn on first launch.
+
+## Project
+
+- [ROADMAP.md](ROADMAP.md): what is planned and the criteria for each item.
+- [docs/competitive-study.md](docs/competitive-study.md): how Agent HQ compares with seven open-source projects, and what that study does and does not show.
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to set up, test and send a pull request.
+- [CHANGELOG.md](CHANGELOG.md): every release.
+
+## License
+
+[MIT](LICENSE). Use it, change it and ship it, keeping the copyright notice.

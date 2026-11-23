@@ -27,13 +27,15 @@ import {
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
 import { parallelLimit, planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
-import { autoAppliesChanges, autoStartsRuns, selectAutoApply } from './approval';
+import { autoAppliesChanges, autoStartsRuns, markConflicts, selectAutoApply } from './approval';
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
 import { COMPLEXITIES, COMPLEXITY_HINT, assignAgentModels, assignPlanModels, fallbackForTier, isGroupRef, rankModels, routingFor, taskComplexity, type RoutingPolicy } from './modelRouting';
 import { BALANCES, activeMagpieGroups, isLowQuota, useMagpieStore } from '@/store/useMagpieStore';
 import { useModelWatchStore } from '@/store/useModelWatchStore';
+import { shouldAutoResume } from './runRecovery';
+import { checkLimits, describeLimit, WARN_RATIO, type LimitKind, type LimitReading } from './runLimits';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
 
 const MAX_QA_LOOPS = 1;
@@ -51,6 +53,60 @@ export const TEXT_ONLY_NOTICE =
 let runController: AbortController | null = null;
 const runTotals = { promptTokens: 0, completionTokens: 0, otherTokens: 0, costUSD: 0, unpricedTokens: 0 };
 let chatController: AbortController | null = null;
+
+interface RunGuard {
+  startedAt: number;
+  callsByAgent: Record<string, number>;
+  warned: Set<LimitKind>;
+  stopReason: string | null;
+  timers: Array<ReturnType<typeof setTimeout>>;
+}
+
+let runGuard: RunGuard | null = null;
+
+function limitStopError(reason: string): Error {
+  return Object.assign(new Error(`Stopped by run limit: ${reason}`), { name: 'AbortError' });
+}
+
+function enforceQuietly(guard: RunGuard) {
+  try {
+    enforceLimits(guard);
+  } catch {
+    /* the stop is recorded on the guard and the run controller is aborted */
+  }
+}
+
+function limitText(r: LimitReading): string {
+  return describeLimit(r, r.agentId ? agentsState().agents[r.agentId]?.name : undefined);
+}
+
+/** Checks the run's limits; warns once per limit at 80% and stops the whole run at 100%. */
+function enforceLimits(guard: RunGuard) {
+  if (guard.stopReason) throw limitStopError(guard.stopReason);
+  const { stop, warnings } = checkLimits(agentsState().runLimits, {
+    costUSD: runTotals.costUSD,
+    tokens: runTotals.promptTokens + runTotals.completionTokens + runTotals.otherTokens,
+    elapsedMs: Date.now() - guard.startedAt,
+    callsByAgent: guard.callsByAgent,
+  });
+  const runId = currentMission()?.id;
+  for (const w of warnings) {
+    if (guard.warned.has(w.kind)) continue;
+    guard.warned.add(w.kind);
+    agentsState().logActivity({ kind: 'run', level: 'warn', runId, text: `Run limit at ${Math.round(w.ratio * 100)}%: ${limitText(w)}` });
+  }
+  if (stop) {
+    stopForLimit(guard, limitText(stop));
+    throw limitStopError(guard.stopReason!);
+  }
+}
+
+function stopForLimit(guard: RunGuard, reason: string) {
+  if (guard.stopReason) return;
+  guard.stopReason = reason;
+  agentsState().logActivity({ kind: 'run', level: 'error', runId: currentMission()?.id, text: `Run stopped: ${reason}. Raise the limit in Settings → Run limits, then Resume.` });
+  runController?.abort();
+}
 
 const agentsState = () => useAgentStore.getState();
 
@@ -90,6 +146,11 @@ async function callAgent(
     model = fallback;
     return true;
   };
+  const guard = args.countInRun ? runGuard : null;
+  if (guard) {
+    enforceLimits(guard);
+    guard.callsByAgent[agent.id] = (guard.callsByAgent[agent.id] ?? 0) + 1;
+  }
   if (isProviderExhausted(conns().exhausted, providerOfRef(model))) {
     if (!reroute(`${providerOfRef(model)} is out of credit or rate limited`)) {
       throw new Error(`${providerOfRef(model)} is out of credit or rate limited and no other connected provider is available.`);
@@ -141,6 +202,7 @@ async function callAgent(
     if (cost === null || !usage) runTotals.unpricedTokens += total;
     else runTotals.costUSD += cost;
   }
+  if (guard) enforceLimits(guard);
   return { ...result, model: served };
 }
 
@@ -690,7 +752,13 @@ When you change an existing file, start from its current contents (provided belo
       status: 'pending',
     }));
     const existing = (currentMission()?.proposedChanges ?? []).filter((c) => c.taskId !== task.id || c.status === 'applied');
-    agentsState().updateMission({ proposedChanges: [...existing, ...changes] });
+    const marked = markConflicts([...existing, ...changes], currentMission()?.tasks ?? []);
+    agentsState().updateMission({ proposedChanges: marked });
+    for (const c of marked) {
+      if (c.taskId !== task.id || !c.conflictsWith?.length) continue;
+      const names = c.conflictsWith.map((id) => `"${taskById(id)?.title ?? id}"`).join(', ');
+      agentsState().logActivity({ kind: 'info', level: 'warn', runId: mission.id, agentId: agent.id, taskId: task.id, text: `Conflict: ${agent.name} and ${names} both changed ${c.path} independently. Pick one in the Changes tab; it will not be written automatically.` });
+    }
     agentsState().updateTask(task.id, {
       status: 'completed',
       progress: 100,
@@ -912,17 +980,27 @@ export async function executeRun() {
   runTotals.costUSD = previous?.costUSD ?? 0;
   runTotals.unpricedTokens = previous?.unpricedTokens ?? 0;
   store.setLiveRunning(true);
-  store.updateMission({ status: 'running', error: undefined });
+  store.updateMission({ status: 'running', error: undefined, interrupted: undefined });
+  const guard: RunGuard = { startedAt: Date.now(), callsByAgent: {}, warned: new Set(), stopReason: null, timers: [] };
+  runGuard = guard;
+  const minutes = store.runLimits.maxMinutes;
+  if (minutes !== null) {
+    const ms = minutes * 60_000;
+    guard.timers.push(setTimeout(() => runGuard === guard && enforceQuietly(guard), ms * WARN_RATIO));
+    guard.timers.push(setTimeout(() => runGuard === guard && enforceQuietly(guard), ms));
+  }
 
   try {
     for (;;) {
       await runWorkTasks(controller.signal);
+      if (guard.stopReason) throw limitStopError(guard.stopReason);
       const failed = currentMission()!.tasks.filter((t) => t.id !== QA_TASK_ID && t.status === 'failed');
       if (failed.length) {
         finalize('failed', `${failed.length} task(s) failed. Fix the cause and use Retry.`);
         return;
       }
       const outcome = await runQa(controller.signal);
+      if (guard.stopReason) throw limitStopError(guard.stopReason);
       if (outcome === 'retry') continue;
       if (outcome === 'rejected') {
         finalize('failed', 'QA rejected the result after the allowed rework loop.');
@@ -959,9 +1037,12 @@ export async function executeRun() {
     const autoApplied = autoAppliesChanges(agentsState().approvalMode) ? await autoApplyChanges() : undefined;
     finalize('completed', undefined, autoApplied);
   } catch (err) {
-    if (isAbort(err)) finalize('cancelled', 'Stopped by user.');
+    if (guard.stopReason) finalize('failed', `Stopped by run limit: ${guard.stopReason}. Raise the limit in Settings → Run limits, then Resume.`);
+    else if (isAbort(err)) finalize('cancelled', 'Stopped by user.');
     else finalize('failed', (err as Error).message);
   } finally {
+    guard.timers.forEach(clearTimeout);
+    if (runGuard === guard) runGuard = null;
     if (runController === controller) runController = null;
     void learnFromRun(mission.id);
   }
@@ -1048,6 +1129,15 @@ async function runWorkTasks(signal: AbortSignal) {
   }
 }
 
+/** Called once at startup: in Full access an interrupted run continues by itself, within the run limits. */
+export async function resumeInterruptedRun() {
+  const store = agentsState();
+  const m = currentMission();
+  if (!shouldAutoResume(m, store.approvalMode, store.isLiveRunning)) return;
+  store.logActivity({ kind: 'run', level: 'info', runId: m!.id, text: 'Full access: resuming the run that was interrupted when Agent HQ closed' });
+  await resumeRun();
+}
+
 export async function resumeRun() {
   const m = currentMission();
   if (!m || agentsState().isLiveRunning) return;
@@ -1088,6 +1178,13 @@ export async function applyProposedChange(changeId: string, opts: { auto?: boole
     agentId: change.agentId,
     text: `${opts.auto ? 'Auto-applied' : 'Applied'} ${change.path}${previousContent === null ? ' (new file)' : ''}`,
   });
+  if (change.conflictsWith?.length) {
+    const rivals = (currentMission()?.proposedChanges ?? []).filter((c) => c.id !== changeId && c.path === change.path && c.status === 'pending');
+    for (const rival of rivals) agentsState().setProposedChangeStatus(rival.id, 'discarded');
+    if (rivals.length) agentsState().logActivity({ kind: 'info', level: 'info', runId: m!.id, text: `Kept this version of ${change.path}; discarded ${rivals.length} competing proposal${rivals.length === 1 ? '' : 's'}` });
+  }
+  const after = currentMission();
+  if (after?.proposedChanges) agentsState().updateMission({ proposedChanges: markConflicts(after.proposedChanges, after.tasks) });
 }
 
 /** Puts a file back the way it was before the change was applied; deletes it if the change created it. */
@@ -1109,8 +1206,12 @@ export async function revertProposedChange(changeId: string) {
 
 /** Auto mode: writes QA-approved changes, one per path, and keeps what each file held before so it can be undone. */
 export async function autoApplyChanges(): Promise<{ applied: number; failed: number }> {
-  const { apply, superseded } = selectAutoApply(currentMission()?.proposedChanges ?? []);
+  const { apply, superseded, conflicted } = selectAutoApply(currentMission()?.proposedChanges ?? [], currentMission()?.tasks ?? []);
   for (const change of superseded) agentsState().setProposedChangeStatus(change.id, 'discarded');
+  const clashPaths = [...new Set(conflicted.map((c) => c.path))];
+  if (clashPaths.length) {
+    agentsState().logActivity({ kind: 'info', level: 'warn', runId: currentMission()?.id, text: `Not written automatically, because independent tasks changed the same file: ${clashPaths.join(', ')}. Choose a version in the Changes tab.` });
+  }
   let applied = 0;
   let failed = 0;
   for (const change of apply) {

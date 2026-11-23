@@ -79,3 +79,19 @@ jobs:
       - run: gh release edit "${GITHUB_REF_NAME}" --notes-file notes.md --title "Agent HQ ${GITHUB_REF_NAME}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  checksums:
+    # Publishes SHA256SUMS.txt so a download can be verified: sha256sum -c SHA256SUMS.txt
+    needs: desktop
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hash every installer on the release and upload the list
+        run: |
+          mkdir assets && cd assets
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --pattern '*.AppImage' --pattern '*.deb' --pattern '*.rpm' --pattern '*.exe' --pattern '*.dmg' --pattern '*.zip'
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release upload "${GITHUB_REF_NAME}" SHA256SUMS.txt --repo "${GITHUB_REPOSITORY}" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

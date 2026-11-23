@@ -9,6 +9,7 @@ import {
   nativeImage,
   nativeTheme,
   Notification,
+  safeStorage,
   screen,
   session,
   shell,
@@ -17,6 +18,7 @@ import {
 } from 'electron';
 import { TITLE_BAR_HEIGHT, type DesktopCommand, type DesktopStatus, type UpdatePrefs, type TraySnapshot, type TrayState } from '../src/desktop/types';
 import { startStandaloneServer, type StandaloneServer } from '../server/standalone';
+import { setSecretProtector } from '../server/config';
 import { deepLinkFromArgv, parseDeepLink, PROTOCOL } from './deepLink';
 import { fitToDisplays, loadWindowState, MIN_SIZE, saveWindowState } from './windowState';
 import { createUpdater } from './updater';
@@ -265,6 +267,18 @@ function createTray(): void {
 }
 
 function quit(): void {
+  if (status.running && process.env.AGENT_HQ_SKIP_QUIT_CONFIRM !== '1') {
+    const box: Electron.MessageBoxSyncOptions = {
+      type: 'warning',
+      buttons: ['Keep running', 'Quit'],
+      defaultId: 0,
+      cancelId: 0,
+      message: 'A run is still in progress.',
+      detail: 'If you quit now, the tasks in progress stop. Finished work is kept, and the rest can be resumed the next time you open Agent HQ.',
+    };
+    const choice = mainWindow && !mainWindow.isDestroyed() ? dialog.showMessageBoxSync(mainWindow, box) : dialog.showMessageBoxSync(box);
+    if (choice !== 1) return;
+  }
   quitting = true;
   app.quit();
 }
@@ -463,6 +477,10 @@ async function start(): Promise<void> {
     appUrl = devUrl;
   } else {
     try {
+      const backend = process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : 'os';
+      if (safeStorage.isEncryptionAvailable() && backend !== 'basic_text' && backend !== 'unknown' && process.env.AGENT_HQ_NO_KEYCHAIN !== '1') {
+        setSecretProtector({ seal: (plain) => safeStorage.encryptString(plain.toString('hex')), unseal: (sealed) => Buffer.from(safeStorage.decryptString(sealed), 'hex') });
+      }
       server = await startStandaloneServer({ staticDir: path.join(app.getAppPath(), 'dist'), ports: PREFERRED_PORTS });
       appUrl = server.url;
     } catch (err) {

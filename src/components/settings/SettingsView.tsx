@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Bell, Brain, CircleArrowUp, Cpu, Database, FolderOpen, Keyboard, Palette, ShieldCheck, TestTube2, Users, type LucideIcon } from 'lucide-react';
+import { Bell, Brain, CircleArrowUp, Cpu, Database, FolderOpen, Gauge, Keyboard, Palette, ShieldCheck, TestTube2, Users, type LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
@@ -11,12 +11,14 @@ import { ApprovalModeCards } from '@/components/shell/ApprovalMode';
 import { UpdatesSettings } from './UpdatesSettings';
 import { MemorySettings } from './MemorySettings';
 import { ModelSettings } from './ModelSettings';
+import { RunLimitSettings } from './RunLimitSettings';
 import { IconTile } from '@/components/ui/Card';
 import { useUpdateStore } from '@/desktop/useUpdate';
 
 const SECTIONS: Array<{ id: string; title: string; hint: string; icon: LucideIcon; tint: string }> = [
   { id: 'project', title: 'Project', hint: 'The folder agents work in', icon: FolderOpen, tint: '#2563EB' },
   { id: 'permissions', title: 'Agent permissions', hint: 'How much they may do alone', icon: ShieldCheck, tint: '#16A34A' },
+  { id: 'limits', title: 'Run limits', hint: 'Cost, tokens, time and loop guard', icon: Gauge, tint: '#DC2626' },
   { id: 'memory', title: 'Memory and learning', hint: 'What agents learn and how it is found', icon: Brain, tint: '#9333EA' },
   { id: 'team', title: 'Team building', hint: 'Who decides which agents work', icon: Users, tint: '#EA580C' },
   { id: 'models', title: 'Models and routing', hint: 'Who picks each model, Magpie accounts, new models', icon: Cpu, tint: '#4F46E5' },
@@ -196,6 +198,10 @@ export default function SettingsView() {
           <Section id="permissions">
             <p className="text-[12.5px] text-fg-muted">Choose how much the agents may do without asking. Changes are always reviewed by QA first, stay inside the project folder, and can be undone from the Changes panel.</p>
             <ApprovalModeCards />
+          </Section>
+
+          <Section id="limits">
+            <RunLimitSettings />
           </Section>
 
           <Section id="memory">

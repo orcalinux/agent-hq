@@ -50,6 +50,15 @@ describe('window state', () => {
     expect(fitted).toMatchObject({ width: 1920, height: 1080 });
   });
 
+  it('restores side-by-side and top/bottom tiled sizes without enlarging them', () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'agent-hq-tiled-')), 'window-state.json');
+    for (const size of [{ width: 640, height: 720 }, { width: 1280, height: 360 }]) {
+      const state = { x: 0, y: 0, ...size, maximized: false };
+      saveWindowState(file, state);
+      expect(loadWindowState(file)).toEqual(state);
+    }
+  });
+
   it('round-trips through a file and survives a broken one', () => {
     const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'agent-hq-ws-')), 'nested', 'window-state.json');
     expect(loadWindowState(file)).toEqual(DEFAULT_WINDOW);

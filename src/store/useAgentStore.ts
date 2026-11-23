@@ -51,6 +51,8 @@ import { createNewInternProfile, promoteGraduatedIntern, applyInternXpGain } fro
 import { juniorsOf, mentorCandidates, suggestMentor } from '../engine/team';
 import { getSOPStageIndex, simulationController } from '../engine/simulationEngine';
 import { safeStorage } from './storage';
+import { reconcileInterrupted } from '../engine/runRecovery';
+import { DEFAULT_RUN_LIMITS, normalizeLimits, type RunLimits } from '../engine/runLimits';
 
 export function formatClock(ts: number): string {
   const d = new Date(ts);
@@ -93,6 +95,8 @@ export interface AgentStoreState {
   orchestratorMode: OrchestratorMode;
   teamStrategy: TeamStrategy;
   maxParallel: number;
+  /** Spending, time and loop limits applied to every run. */
+  runLimits: RunLimits;
   modelScope: ModelScope;
   /** False until the user picks a scope; 0.10.0 saved 'sovereign' as the default for everyone. */
   modelScopeChosen: boolean;
@@ -139,6 +143,7 @@ export interface AgentStoreState {
   setOrchestratorMode: (mode: OrchestratorMode) => void;
   setTeamStrategy: (strategy: TeamStrategy) => void;
   setMaxParallel: (limit: number) => void;
+  setRunLimits: (patch: Partial<RunLimits>) => void;
   setModelScope: (scope: ModelScope) => void;
   setComplexityRouting: (on: boolean) => void;
   /** Pin a model for a complexity, or pass '' to go back to the automatic (newest) choice. */
@@ -244,6 +249,7 @@ export const useAgentStore = create<AgentStoreState>()(
         orchestratorMode: 'ask',
         teamStrategy: 'adaptive',
         maxParallel: 3,
+        runLimits: DEFAULT_RUN_LIMITS,
         modelScope: 'any',
         modelScopeChosen: false,
         complexityRouting: true,
@@ -291,6 +297,7 @@ export const useAgentStore = create<AgentStoreState>()(
         setOrchestratorMode: (mode) => set({ orchestratorMode: mode }),
         setTeamStrategy: (strategy) => set({ teamStrategy: strategy }),
         setMaxParallel: (limit) => set({ maxParallel: Math.max(0, Math.floor(limit)) }),
+        setRunLimits: (patch) => set((s) => ({ runLimits: normalizeLimits({ ...s.runLimits, ...patch }) })),
         setModelScope: (scope) => set({ modelScope: scope, modelScopeChosen: true }),
         setComplexityRouting: (on) => set({ complexityRouting: on }),
         setTierModel: (tier, model) =>
@@ -918,6 +925,7 @@ export const useAgentStore = create<AgentStoreState>()(
         orchestratorMode: s.orchestratorMode,
         teamStrategy: s.teamStrategy,
         maxParallel: s.maxParallel,
+        runLimits: s.runLimits,
         modelScope: s.modelScope,
         modelScopeChosen: s.modelScopeChosen,
         complexityRouting: s.complexityRouting,
@@ -934,16 +942,12 @@ export const useAgentStore = create<AgentStoreState>()(
         runHistory: s.runHistory,
         activity: s.activity.slice(-200),
         terminalLogs: s.terminalLogs.filter((l) => !l.text.startsWith('[sim]')).slice(-200),
-        activeMission:
-          s.activeMission?.source === 'live'
-            ? s.activeMission.status === 'running'
-              ? { ...s.activeMission, status: 'cancelled' as const, error: 'Interrupted by page reload.' }
-              : s.activeMission
-            : null,
+        activeMission: s.activeMission?.source === 'live' ? reconcileInterrupted(s.activeMission) : null,
       }),
       migrate: () => ({}) as AgentStoreState,
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        state.runLimits = normalizeLimits(state.runLimits);
         if (!state.modelScopeChosen && state.modelScope !== 'any') setTimeout(() => useAgentStore.setState({ modelScope: 'any' }), 0);
         const preference = state.themePreference ?? 'system';
         state.setThemePreference(preference);

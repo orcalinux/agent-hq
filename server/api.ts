@@ -35,6 +35,7 @@ import { observeCliModels } from './cliModelIdentity';
 import { deleteFile, gitStatus, readFile, scanTree, writeFile } from './workspace';
 import { addLessons, deleteLesson, indexLessons, LESSONS_FILE, lessonsFor, loadLessons, memoryContext, MemoryError, searchLessons, updateLesson, type LessonInput } from './memory';
 import { currentEmbedder, embeddingStatus, forgetEmbedder, pullModel } from './embeddings';
+import { clearJournal, loadJournal, saveJournal } from './runJournal';
 
 const MAX_BODY = 8 * 1024 * 1024;
 
@@ -183,6 +184,26 @@ type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<
 const routes: Record<string, Handler> = {
   'GET /api/health': async (_req, res) => {
     send(res, 200, { ok: true, workspace: getWorkspaceRoot(), time: Date.now() });
+  },
+
+  'GET /api/runs/journal': async (_req, res) => {
+    send(res, 200, { ok: true, journal: loadJournal(getWorkspaceRoot()) });
+  },
+
+  'PUT /api/runs/journal': async (req, res) => {
+    const body = await readJson(req);
+    if (!body.mission || typeof body.mission !== 'object') throw new HttpError(400, 'A mission is required.');
+    try {
+      saveJournal(getWorkspaceRoot(), body.mission);
+    } catch (err) {
+      throw new HttpError(413, (err as Error).message);
+    }
+    send(res, 200, { ok: true });
+  },
+
+  'DELETE /api/runs/journal': async (_req, res) => {
+    clearJournal(getWorkspaceRoot());
+    send(res, 200, { ok: true });
   },
 
   'GET /api/connections': async (_req, res) => {

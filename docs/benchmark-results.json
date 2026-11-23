@@ -1,0 +1,692 @@
+{
+  "date": "2026-11-22",
+  "runs": 2,
+  "tasks": [
+    "slugify",
+    "rangeMerge",
+    "romanToInt",
+    "groupAnagrams",
+    "parseDuration",
+    "evalExpr",
+    "wrapText",
+    "buildOrder",
+    "minWindow",
+    "lru"
+  ],
+  "summary": [
+    {
+      "model": "claude/claude-haiku-5-5",
+      "attempts": 20,
+      "errors": 0,
+      "passed": 20,
+      "medianMs": 3959,
+      "tokens": 15721
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "attempts": 20,
+      "errors": 0,
+      "passed": 20,
+      "medianMs": 3184,
+      "tokens": 7803
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "attempts": 20,
+      "errors": 0,
+      "passed": 20,
+      "medianMs": 4558,
+      "tokens": 4129
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "attempts": 20,
+      "errors": 0,
+      "passed": 20,
+      "medianMs": 4536,
+      "tokens": 4415
+    }
+  ],
+  "results": [
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "slugify",
+      "run": 1,
+      "pass": true,
+      "ms": 3607,
+      "tokens": 463
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "slugify",
+      "run": 2,
+      "pass": true,
+      "ms": 3853,
+      "tokens": 467
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "rangeMerge",
+      "run": 1,
+      "pass": true,
+      "ms": 2457,
+      "tokens": 182
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "rangeMerge",
+      "run": 2,
+      "pass": true,
+      "ms": 2357,
+      "tokens": 182
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "romanToInt",
+      "run": 1,
+      "pass": true,
+      "ms": 2395,
+      "tokens": 164
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "romanToInt",
+      "run": 2,
+      "pass": true,
+      "ms": 2337,
+      "tokens": 164
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "groupAnagrams",
+      "run": 1,
+      "pass": true,
+      "ms": 2211,
+      "tokens": 108
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "groupAnagrams",
+      "run": 2,
+      "pass": true,
+      "ms": 2194,
+      "tokens": 114
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "parseDuration",
+      "run": 1,
+      "pass": true,
+      "ms": 6891,
+      "tokens": 1302
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "parseDuration",
+      "run": 2,
+      "pass": true,
+      "ms": 6813,
+      "tokens": 1239
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "evalExpr",
+      "run": 1,
+      "pass": true,
+      "ms": 9088,
+      "tokens": 2132
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "evalExpr",
+      "run": 2,
+      "pass": true,
+      "ms": 11099,
+      "tokens": 2739
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "wrapText",
+      "run": 1,
+      "pass": true,
+      "ms": 5899,
+      "tokens": 1022
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "wrapText",
+      "run": 2,
+      "pass": true,
+      "ms": 4923,
+      "tokens": 842
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "buildOrder",
+      "run": 1,
+      "pass": true,
+      "ms": 6543,
+      "tokens": 1283
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "buildOrder",
+      "run": 2,
+      "pass": true,
+      "ms": 2798,
+      "tokens": 307
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "minWindow",
+      "run": 1,
+      "pass": true,
+      "ms": 2994,
+      "tokens": 382
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "minWindow",
+      "run": 2,
+      "pass": true,
+      "ms": 6924,
+      "tokens": 1347
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "lru",
+      "run": 1,
+      "pass": true,
+      "ms": 3959,
+      "tokens": 484
+    },
+    {
+      "model": "claude/claude-haiku-5-5",
+      "task": "lru",
+      "run": 2,
+      "pass": true,
+      "ms": 4578,
+      "tokens": 798
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "slugify",
+      "run": 1,
+      "pass": true,
+      "ms": 2530,
+      "tokens": 112
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "slugify",
+      "run": 2,
+      "pass": true,
+      "ms": 2541,
+      "tokens": 112
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "rangeMerge",
+      "run": 1,
+      "pass": true,
+      "ms": 2899,
+      "tokens": 182
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "rangeMerge",
+      "run": 2,
+      "pass": true,
+      "ms": 2686,
+      "tokens": 182
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "romanToInt",
+      "run": 1,
+      "pass": true,
+      "ms": 2703,
+      "tokens": 157
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "romanToInt",
+      "run": 2,
+      "pass": true,
+      "ms": 2812,
+      "tokens": 157
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "groupAnagrams",
+      "run": 1,
+      "pass": true,
+      "ms": 2543,
+      "tokens": 112
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "groupAnagrams",
+      "run": 2,
+      "pass": true,
+      "ms": 2395,
+      "tokens": 112
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "parseDuration",
+      "run": 1,
+      "pass": true,
+      "ms": 6966,
+      "tokens": 690
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "parseDuration",
+      "run": 2,
+      "pass": true,
+      "ms": 3165,
+      "tokens": 250
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "evalExpr",
+      "run": 1,
+      "pass": true,
+      "ms": 11224,
+      "tokens": 1609
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "evalExpr",
+      "run": 2,
+      "pass": true,
+      "ms": 9745,
+      "tokens": 1343
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "wrapText",
+      "run": 1,
+      "pass": true,
+      "ms": 3021,
+      "tokens": 238
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "wrapText",
+      "run": 2,
+      "pass": true,
+      "ms": 3184,
+      "tokens": 259
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "buildOrder",
+      "run": 1,
+      "pass": true,
+      "ms": 4420,
+      "tokens": 518
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "buildOrder",
+      "run": 2,
+      "pass": true,
+      "ms": 4510,
+      "tokens": 504
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "minWindow",
+      "run": 1,
+      "pass": true,
+      "ms": 3664,
+      "tokens": 363
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "minWindow",
+      "run": 2,
+      "pass": true,
+      "ms": 3695,
+      "tokens": 367
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "lru",
+      "run": 1,
+      "pass": true,
+      "ms": 3959,
+      "tokens": 254
+    },
+    {
+      "model": "claude/claude-sonnet-5-5",
+      "task": "lru",
+      "run": 2,
+      "pass": true,
+      "ms": 3623,
+      "tokens": 282
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "slugify",
+      "run": 1,
+      "pass": true,
+      "ms": 2804,
+      "tokens": 76
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "slugify",
+      "run": 2,
+      "pass": true,
+      "ms": 2166,
+      "tokens": 74
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "rangeMerge",
+      "run": 1,
+      "pass": true,
+      "ms": 3471,
+      "tokens": 125
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "rangeMerge",
+      "run": 2,
+      "pass": true,
+      "ms": 2997,
+      "tokens": 125
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "romanToInt",
+      "run": 1,
+      "pass": true,
+      "ms": 3720,
+      "tokens": 122
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "romanToInt",
+      "run": 2,
+      "pass": true,
+      "ms": 3051,
+      "tokens": 131
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "groupAnagrams",
+      "run": 1,
+      "pass": true,
+      "ms": 2546,
+      "tokens": 71
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "groupAnagrams",
+      "run": 2,
+      "pass": true,
+      "ms": 1961,
+      "tokens": 71
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "parseDuration",
+      "run": 1,
+      "pass": true,
+      "ms": 4869,
+      "tokens": 197
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "parseDuration",
+      "run": 2,
+      "pass": true,
+      "ms": 4263,
+      "tokens": 195
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "evalExpr",
+      "run": 1,
+      "pass": true,
+      "ms": 11241,
+      "tokens": 550
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "evalExpr",
+      "run": 2,
+      "pass": true,
+      "ms": 10842,
+      "tokens": 555
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "wrapText",
+      "run": 1,
+      "pass": true,
+      "ms": 5779,
+      "tokens": 207
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "wrapText",
+      "run": 2,
+      "pass": true,
+      "ms": 4679,
+      "tokens": 198
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "buildOrder",
+      "run": 1,
+      "pass": true,
+      "ms": 6528,
+      "tokens": 296
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "buildOrder",
+      "run": 2,
+      "pass": true,
+      "ms": 5207,
+      "tokens": 232
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "minWindow",
+      "run": 1,
+      "pass": true,
+      "ms": 7371,
+      "tokens": 280
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "minWindow",
+      "run": 2,
+      "pass": true,
+      "ms": 5597,
+      "tokens": 276
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "lru",
+      "run": 1,
+      "pass": true,
+      "ms": 4558,
+      "tokens": 174
+    },
+    {
+      "model": "codex/gpt-6-luna",
+      "task": "lru",
+      "run": 2,
+      "pass": true,
+      "ms": 4042,
+      "tokens": 174
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "slugify",
+      "run": 1,
+      "pass": true,
+      "ms": 2802,
+      "tokens": 74
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "slugify",
+      "run": 2,
+      "pass": true,
+      "ms": 2418,
+      "tokens": 74
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "rangeMerge",
+      "run": 1,
+      "pass": true,
+      "ms": 3939,
+      "tokens": 137
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "rangeMerge",
+      "run": 2,
+      "pass": true,
+      "ms": 3401,
+      "tokens": 137
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "romanToInt",
+      "run": 1,
+      "pass": true,
+      "ms": 3533,
+      "tokens": 118
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "romanToInt",
+      "run": 2,
+      "pass": true,
+      "ms": 2987,
+      "tokens": 113
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "groupAnagrams",
+      "run": 1,
+      "pass": true,
+      "ms": 2933,
+      "tokens": 77
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "groupAnagrams",
+      "run": 2,
+      "pass": true,
+      "ms": 2490,
+      "tokens": 77
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "parseDuration",
+      "run": 1,
+      "pass": true,
+      "ms": 5881,
+      "tokens": 202
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "parseDuration",
+      "run": 2,
+      "pass": true,
+      "ms": 4456,
+      "tokens": 195
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "evalExpr",
+      "run": 1,
+      "pass": true,
+      "ms": 10457,
+      "tokens": 484
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "evalExpr",
+      "run": 2,
+      "pass": true,
+      "ms": 9022,
+      "tokens": 444
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "wrapText",
+      "run": 1,
+      "pass": true,
+      "ms": 5247,
+      "tokens": 174
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "wrapText",
+      "run": 2,
+      "pass": true,
+      "ms": 4536,
+      "tokens": 190
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "buildOrder",
+      "run": 1,
+      "pass": true,
+      "ms": 11709,
+      "tokens": 526
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "buildOrder",
+      "run": 2,
+      "pass": true,
+      "ms": 9674,
+      "tokens": 478
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "minWindow",
+      "run": 1,
+      "pass": true,
+      "ms": 6766,
+      "tokens": 292
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "minWindow",
+      "run": 2,
+      "pass": true,
+      "ms": 6025,
+      "tokens": 283
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "lru",
+      "run": 1,
+      "pass": true,
+      "ms": 4561,
+      "tokens": 175
+    },
+    {
+      "model": "codex/gpt-6.1-terra",
+      "task": "lru",
+      "run": 2,
+      "pass": true,
+      "ms": 3976,
+      "tokens": 165
+    }
+  ]
+}

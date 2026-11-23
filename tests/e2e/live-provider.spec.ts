@@ -47,7 +47,7 @@ test.use({ actionTimeout: 30_000 });
 
 const modelOption = (name: string) => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( \\(.*\\))?$`);
 
-test('real provider: plan, approve and run end to end', async ({ page, request }) => {
+async function setUpRealTeam(page: Page, request: import('@playwright/test').APIRequestContext) {
   resetFixtureWorkspace();
   const connect = await request.post('/api/connections/connect', { data: { providerId: PROVIDER, method: 'local_endpoint', endpointUrl: ENDPOINT } });
   const connected = await connect.json();
@@ -67,8 +67,11 @@ test('real provider: plan, approve and run end to end', async ({ page, request }
     await page.getByRole('button', { name: `Default model for ${role}`, exact: true }).click();
     await page.getByRole('option', { name: modelOption(model!.name) }).first().click();
   }
-  await nav.getByRole('button', { name: 'Workspace', exact: true }).click();
+  return { errors, calls, nav };
+}
 
+async function askForTwoTasks(page: Page) {
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Workspace', exact: true }).click();
   await page.getByRole('tab', { name: 'Plan' }).click();
   await page.getByRole('button', { name: 'Team strategy', exact: true }).click();
   await page.getByRole('option', { name: 'Only use my existing agents' }).click();
@@ -78,6 +81,11 @@ test('real provider: plan, approve and run end to end', async ({ page, request }
       'Use agent ids agent-frontend and agent-backend.'
   );
   await page.getByRole('button', { name: 'Send' }).click();
+}
+
+test('real provider: plan, approve and run end to end', async ({ page, request }) => {
+  const { errors, calls } = await setUpRealTeam(page, request);
+  await askForTwoTasks(page);
 
   const planOrError = page.getByText(/Proposed plan · \d+ tasks|Could not read a plan/);
   await expect(planOrError).toBeVisible({ timeout: 10 * 60_000 });
@@ -100,6 +108,28 @@ test('real provider: plan, approve and run end to end', async ({ page, request }
     type: 'calls',
     description: calls.map((c) => `${c.system.includes('Mode: PLAN') ? 'plan' : c.system.includes('"verdict"') ? 'qa' : 'task'} ${((c.end! - c.start) / 1000).toFixed(1)}s`).join(', '),
   });
+  console.log(JSON.stringify(test.info().annotations, null, 1));
+  expect(errors).toEqual([]);
+});
+
+test('real provider: a run limit stops a real run and keeps it resumable', async ({ page, request }) => {
+  const { errors, calls, nav } = await setUpRealTeam(page, request);
+  await nav.getByRole('button', { name: 'Settings', exact: true }).click();
+  const tokens = page.getByRole('spinbutton', { name: /Tokens per run/ });
+  await tokens.fill('1');
+  await tokens.press('Enter');
+  await askForTwoTasks(page);
+
+  await expect(page.getByText(/Proposed plan · \d+ tasks|Could not read a plan/)).toBeVisible({ timeout: 10 * 60_000 });
+  await expect(page.getByText(/Could not read a plan/)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Approve & run' }).click();
+
+  await expect(page.getByText(/Run failed: Stopped by run limit: [\d,]+ of the 1 token limit/).first()).toBeVisible({ timeout: 10 * 60_000 });
+  await expect(page.getByRole('button', { name: 'Resume run' })).toBeVisible();
+  const taskCalls = calls.filter((c) => c.user.includes('Your task: '));
+  expect(taskCalls.length, 'no task started after the limit was reached (at most the 3 allowed to run at once)').toBeLessThanOrEqual(3);
+  expect(calls.some((c) => c.system.includes('"verdict"')), 'QA never ran').toBe(false);
+  test.info().annotations.push({ type: 'task calls', description: String(taskCalls.length) });
   console.log(JSON.stringify(test.info().annotations, null, 1));
   expect(errors).toEqual([]);
 });

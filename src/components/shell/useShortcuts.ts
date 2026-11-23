@@ -54,6 +54,7 @@ export function useShortcuts() {
         e.preventDefault();
         agent.setActiveView('workspace');
         if (!layout.chatVisible) layout.toggle('chatVisible');
+        if (!document.getElementById('orchestrator-input')?.getClientRects().length) layout.set({ workspaceLayout: 'chat' });
         requestAnimationFrame(() => document.getElementById('orchestrator-input')?.focus());
       } else if (mod && key === 's') {
         const ws = useWorkspaceStore.getState();

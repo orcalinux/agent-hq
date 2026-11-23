@@ -9,9 +9,9 @@ import { FlowLayer } from './FlowLayer';
 import { PanZoom } from './PanZoom';
 import { useAgentFlows, useReducedMotion } from './flows';
 import { AgentAvatar, ProgressLine, VizSidebar, useElementSize } from './vizShared';
+import { NODE_H, layoutGraph } from './graphLayout';
 
 const ROW_OF: Record<AgentRole, number> = { manager: 0, architect: 1, frontend: 2, backend: 2, qa: 2, intern: 3 };
-const NODE_H = 96;
 const MIN_H = 560;
 
 interface Placed {
@@ -41,23 +41,17 @@ export function AgentGraph() {
   const setLayout = useLayoutStore((s) => s.set);
   const [live, setLive] = useState<{ id: string; x: number; y: number } | null>(null);
   const gesture = useRef<{ id: string; sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
-  const width = Math.max(size.width, 360);
-  const height = Math.max(size.height, MIN_H);
+  const viewW = Math.max(size.width, 360);
+  const viewH = Math.max(size.height, MIN_H);
 
-  const { placed, nodeW, delegation, mentorship, dependencies } = useMemo(() => {
-    const rows: AgentProfile[][] = [[], [], [], []];
-    Object.values(agents).forEach((a) => rows[ROW_OF[a.role] ?? 2].push(a));
-    const used = rows.filter((r) => r.length > 0);
-    const widest = Math.max(1, ...used.map((r) => r.length));
-    const w = Math.max(120, Math.min(250, width / (widest + 1) - 12));
-    const top = 28 + NODE_H / 2;
-    const step = used.length > 1 ? (height - 28 * 2 - NODE_H) / (used.length - 1) : 0;
+  const { placed, nodeW, width, height, base, delegation, mentorship, dependencies } = useMemo(() => {
+    const list = Object.values(agents);
+    const nodes = list.map((a) => ({ id: a.id, tier: ROW_OF[a.role] ?? 2 }));
+    const layout = layoutGraph(nodes, viewW, viewH, live ? { ...offsets, [live.id]: { x: live.x, y: live.y } } : offsets, live?.id);
     const map = new Map<string, Placed>();
-    used.forEach((row, ri) => {
-      row.forEach((agent, i) => {
-        const moved = live?.id === agent.id ? live : offsets[agent.id];
-        map.set(agent.id, { agent, cx: (width * (i + 1)) / (row.length + 1) + (moved?.x ?? 0), cy: top + ri * step + (moved?.y ?? 0) });
-      });
+    list.forEach((agent) => {
+      const p = layout.positions.get(agent.id)!;
+      map.set(agent.id, { agent, cx: p.x, cy: p.y });
     });
     const get = (id: string | undefined) => (id ? map.get(id) : undefined);
     const all = Object.values(agents);
@@ -84,8 +78,8 @@ export function AgentGraph() {
         if (from && to && from !== to) deps.set(from.agent.id + '>' + to.agent.id, { from, to, label: (dep?.title ?? depId) + ' → ' + t.title });
       });
     });
-    return { placed: [...map.values()], nodeW: w, delegation: deleg, mentorship: ment, dependencies: [...deps.values()] };
-  }, [agents, mission, width, height, offsets, live]);
+    return { placed: [...map.values()], nodeW: layout.nodeW, width: layout.width, height: layout.height, base: layout.base, delegation: deleg, mentorship: ment, dependencies: [...deps.values()] };
+  }, [agents, mission, viewW, viewH, offsets, live]);
 
   const pointOf = (id: string) => {
     const p = placed.find((x) => x.agent.id === id);
@@ -113,8 +107,10 @@ export function AgentGraph() {
     const g = gesture.current;
     gesture.current = null;
     if (!g) return;
-    if (g.moved && live) setLayout({ graphPositions: { ...offsets, [id]: { x: live.x, y: live.y } } });
-    else select(id === selectedId ? null : id);
+    const shown = placed.find((p) => p.agent.id === id);
+    const origin = base.get(id);
+    if (g.moved && live && shown && origin) setLayout({ graphPositions: { ...offsets, [id]: { x: shown.cx - origin.x, y: shown.cy - origin.y } } });
+    else if (!g.moved) select(id === selectedId ? null : id);
     setLive(null);
     if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
   };

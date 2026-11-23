@@ -59,6 +59,12 @@ async function call<T>(method: string, path: string, body?: unknown, signal?: Ab
 
 // ------------------------------------------------------------------ connections
 
+export const runJournalApi = {
+  load: () => call<{ journal: { savedAt: string; mission: unknown } | null }>('GET', '/api/runs/journal'),
+  save: (mission: unknown) => call<{ ok: true }>('PUT', '/api/runs/journal', { mission }),
+  clear: () => call<{ ok: true }>('DELETE', '/api/runs/journal'),
+};
+
 export interface ConnectionsResponse {
   providers: ProviderState[];
 }

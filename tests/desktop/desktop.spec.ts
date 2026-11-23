@@ -1,6 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 
@@ -45,6 +46,63 @@ async function launch(extraEnv: Record<string, string> = {}): Promise<{ app: Ele
 }
 
 test.beforeAll(freshDirs);
+
+test('native desktop shortcuts tile the main window into the available work area', async ({}, testInfo) => {
+  test.skip(process.platform !== 'linux' || process.env.AGENT_HQ_TEST_TILING !== '1', 'Requires X11, Xfwm and xdotool; enable with AGENT_HQ_TEST_TILING=1.');
+  const shortcuts = execFileSync('xfconf-query', ['-c', 'xfce4-keyboard-shortcuts', '-lv'], { encoding: 'utf8' });
+  const shortcutFor = (action: string) => {
+    const bindings = shortcuts.split('\n').filter((line) => line.trim().endsWith(` ${action}`));
+    const binding = bindings.find((line) => line.startsWith('/xfwm4/custom/')) ?? bindings[0];
+    if (!binding) throw new Error(`No desktop shortcut configured for ${action}`);
+    const accelerator = binding.trim().split(/\s+/)[0].replace(/^\/xfwm4\/(?:custom|default)\//, '');
+    return accelerator.replace(/<(Super|Primary|Control|Alt|Shift)>/g, (_, modifier: string) => ({
+      Super: 'Super_L+', Primary: 'Control_L+', Control: 'Control_L+', Alt: 'Alt_L+', Shift: 'Shift_L+',
+    })[modifier]!);
+  };
+  const { app, page, errors } = await launch({ SHELL: path.join(root, 'tests/demo/shell/bash') });
+  try {
+    const windowId = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getNativeWindowHandle().readUInt32LE(0));
+    const area = await app.evaluate(({ BrowserWindow, screen }) => screen.getDisplayMatching(BrowserWindow.getAllWindows()[0].getBounds()).workArea);
+    for (const edge of ['left', 'right', 'up', 'down']) {
+      await app.evaluate(({ BrowserWindow }) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        window.unmaximize();
+        window.setBounds({ x: 100, y: 100, width: 1100, height: 700 });
+        window.show();
+        window.focus();
+      });
+      execFileSync('xdotool', ['windowactivate', '--sync', String(windowId)]);
+      execFileSync('xdotool', ['key', '--clearmodifiers', shortcutFor(`tile_${edge}_key`)]);
+      await expect.poll(async () => {
+        const bounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds());
+        const horizontal = edge === 'left' || edge === 'right';
+        const expected = {
+          x: area.x + (edge === 'right' ? Math.floor(area.width / 2) : 0),
+          y: area.y + (edge === 'down' ? Math.floor(area.height / 2) : 0),
+          width: horizontal ? Math.floor(area.width / 2) : area.width,
+          height: horizontal ? area.height : Math.floor(area.height / 2),
+        };
+        return Object.entries(expected).every(([key, value]) => Math.abs(bounds[key as keyof typeof bounds] - value) <= 2);
+      }, { message: `OS shortcut should tile ${edge}` }).toBe(true);
+      await expect(page.getByTestId('desktop-title-bar')).toBeVisible();
+      await expect.poll(() => page.evaluate(() => Math.max(0, document.documentElement.scrollWidth - innerWidth))).toBe(0);
+      const layout = page.getByRole('group', { name: 'Layout', exact: true });
+      await layout.getByRole('button', { name: 'Chat', exact: true }).click();
+      const composer = page.getByRole('textbox', { name: 'Message Sovereign', exact: true });
+      await composer.fill('Keep this draft while changing layouts');
+      await layout.getByRole('button', { name: 'Code', exact: true }).click();
+      await page.keyboard.press('Control+l');
+      await expect(composer).toBeVisible();
+      await expect(composer).toBeFocused();
+      await expect(composer).toHaveValue('Keep this draft while changing layouts');
+      await layout.getByRole('button', { name: 'Code', exact: true }).click();
+      await page.screenshot({ path: testInfo.outputPath(`tiling-${edge}.png`) });
+    }
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
 
 test('agent detail cards support editing and discarding in the desktop shell', async () => {
   const { app, page, errors } = await launch();
@@ -556,5 +614,38 @@ test("the first launch after an update shows What's new once", async () => {
     await expect(page.getByRole('dialog', { name: /What's new/ })).toHaveCount(0);
   } finally {
     await app.close();
+  }
+});
+
+test('killing the app mid-run keeps finished work and a pending approval on the next start', async () => {
+  const mission = {
+    id: 'run-kill', presetId: 'custom', source: 'live', title: 'Killed mid-run', prompt: 'x', status: 'running', startedAt: Date.now(), currentStage: 'implementation', stageIndex: 2,
+    tasks: [
+      { id: 'done', title: 'Finished task', description: '', stage: 'implementation', assignedAgentId: 'agent-frontend', status: 'completed', priority: 'medium', progress: 100, tags: [], dependsOn: [], output: 'kept' },
+      { id: 'mid', title: 'Mid-flight task', description: '', stage: 'implementation', assignedAgentId: 'agent-backend', status: 'in_progress', priority: 'medium', progress: 40, tags: [], dependsOn: [] },
+    ],
+    proposedChanges: [{ id: 'done:src/new.ts', path: 'src/new.ts', content: 'export const kept = true;\n', taskId: 'done', agentId: 'agent-frontend', status: 'pending' }],
+  };
+  const first = await launch({ AGENT_HQ_USER_DATA: path.join(base, 'user-data-kill-1') });
+  const pid = first.app.process().pid!;
+  try {
+    const saved = await first.page.evaluate(async (body) => (await fetch('/api/runs/journal', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mission: body }) })).ok, mission);
+    expect(saved).toBe(true);
+    process.kill(pid, 'SIGKILL');
+  } finally {
+    await first.app.close().catch(() => undefined);
+  }
+  const second = await launch({ AGENT_HQ_USER_DATA: path.join(base, 'user-data-kill-2') });
+  try {
+    await expect.poll(() => second.page.evaluate(() => JSON.parse(localStorage.getItem('agent-hq.state') ?? '{}').state?.activeMission?.id), { timeout: 15000 }).toBe('run-kill');
+    const restored = await second.page.evaluate(() => JSON.parse(localStorage.getItem('agent-hq.state')!).state.activeMission);
+    expect(restored).toMatchObject({ status: 'cancelled', interrupted: true });
+    expect(restored.tasks.map((task: { status: string }) => task.status)).toEqual(['completed', 'pending']);
+    expect(restored.tasks[0].output).toBe('kept');
+    expect(restored.proposedChanges).toHaveLength(1);
+    expect(restored.proposedChanges[0]).toMatchObject({ path: 'src/new.ts', status: 'pending' });
+    await second.page.evaluate(() => fetch('/api/runs/journal', { method: 'DELETE' }));
+  } finally {
+    await second.app.close();
   }
 });

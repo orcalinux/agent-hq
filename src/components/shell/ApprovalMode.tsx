@@ -49,6 +49,9 @@ function useApprovalModeChange() {
         <li>Files that pass QA review are written into the open project without asking.</li>
         <li>Agents can only write inside the project folder, and terminal commands stay on the allow-list.</li>
         <li>Every auto-applied file is logged and can be undone from the Changes panel.</li>
+        <li>A file that two independent tasks both changed is never written automatically; you pick the version.</li>
+        <li>Run limits in Settings (cost, tokens, time, calls per agent) still stop a run that goes too far.</li>
+        {pending === 'full' ? <li>A run interrupted by closing the app resumes by itself the next time it opens.</li> : null}
       </ul>
     </Dialog>
   );

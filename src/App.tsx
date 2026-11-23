@@ -34,9 +34,17 @@ export default function App() {
       const watch = useModelWatchStore.getState();
       if (isCheckDue(watch.lastCheckedAt, watch.intervalHours)) void watch.check();
     };
-    void useConnectionsStore.getState().load().then(checkIfDue);
+    const connections = useConnectionsStore.getState().load().then(checkIfDue);
     void useConnectionsStore.getState().detect();
-    void useWorkspaceStore.getState().load();
+    const workspace = useWorkspaceStore.getState().load();
+    void Promise.allSettled([connections, workspace])
+      .then(() => import('@/engine/runJournal'))
+      .then(async (journal) => {
+        await journal.restoreFromJournal();
+        journal.startRunJournal();
+      })
+      .then(() => import('@/engine/liveOrchestrator'))
+      .then((m) => m.resumeInterruptedRun());
     const timer = window.setInterval(checkIfDue, 10 * 60_000);
     return () => window.clearInterval(timer);
   }, []);

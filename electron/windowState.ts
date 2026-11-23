@@ -17,7 +17,7 @@ export interface Area {
 }
 
 export const DEFAULT_WINDOW: WindowState = { width: 1440, height: 900, maximized: false };
-export const MIN_SIZE = { width: 1024, height: 640 };
+export const MIN_SIZE = { width: 640, height: 360 };
 
 export function loadWindowState(file: string): WindowState {
   try {

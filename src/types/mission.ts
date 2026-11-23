@@ -239,6 +239,8 @@ export interface ProposedFileChange {
   previousContent?: string | null;
   /** Written by auto mode rather than by the user clicking Apply. */
   autoApplied?: boolean;
+  /** Tasks that proposed the same file without depending on this one (or it on them). Never auto-applied. */
+  conflictsWith?: string[];
 }
 
 /**
@@ -268,6 +270,8 @@ export type MissionStatus =
 
 export interface MissionState {
   id: string;
+  /** Set when the app stopped while this run was going; cleared when it resumes. */
+  interrupted?: boolean;
   presetId: string;
   source: MissionSource;
   title: string;

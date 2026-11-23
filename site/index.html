@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent HQ – a local command center for teams of AI coding agents</title>
+  <meta name="description" content="Open-source desktop app. Describe what you want built, review the plan, and a team of AI agents does it on your machine with the subscriptions you already have." />
+  <meta name="color-scheme" content="dark light" />
+  <meta property="og:title" content="Agent HQ" />
+  <meta property="og:description" content="A local command center for teams of AI coding agents. MIT licensed." />
+  <meta property="og:image" content="assets/workspace.png" />
+  <link rel="icon" href="assets/icon.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#top"><img src="assets/icon.png" alt="" width="28" height="28" />Agent HQ</a>
+    <nav aria-label="Primary">
+      <a href="#how">How it works</a>
+      <a href="#start">Quick start</a>
+      <a href="#limits">Limitations</a>
+      <a href="https://github.com/orcalinux/agent-hq">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="eyebrow">Version <span data-version>{{VERSION}}</span> · MIT licensed · runs on your machine</p>
+      <h1>A command center for teams of AI coding agents.</h1>
+      <p class="lead">Describe what you want built. Review the plan. A team of agents does the work in your project, using the Claude, Codex, Gemini or local models you already have.</p>
+      <p class="cta">
+        <a class="button primary" id="download" href="https://github.com/orcalinux/agent-hq/releases/latest">Download for Linux, Windows or macOS</a>
+        <a class="button" href="https://github.com/orcalinux/agent-hq">View source</a>
+      </p>
+      <p class="note" id="download-note">Installers are not code-signed yet, so your system may warn on first launch. Releases built from the next version on list SHA-256 checksums.</p>
+      <img class="shot" src="assets/workspace.png" alt="Agent HQ workspace with file explorer, editor, diff view and orchestrator chat" width="1200" />
+    </section>
+
+    <section id="how">
+      <h2>How it works</h2>
+      <ol class="steps">
+        <li><h3>Connect</h3><p>One subscription or API key is enough. Agent HQ detects Claude Code, Codex, Gemini CLI, Ollama and a Magpie gateway on your computer.</p></li>
+        <li><h3>Plan</h3><p>Tell Sovereign, the orchestrator, what you need. It proposes tasks, agents and models. You edit and approve before anything runs.</p></li>
+        <li><h3>Build</h3><p>Agents work in dependency order, in parallel where they can. A senior reviews juniors, and QA can send work back once.</p></li>
+        <li><h3>Apply</h3><p>Changes arrive as diffs. Apply them yourself, or choose Auto-apply or Full access and undo any file later.</p></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Built to be trusted</h2>
+      <ul class="grid">
+        <li><h3>You set the trust level</h3><p>Ask every time by default. Auto-apply writes QA-approved changes. Full access also skips plan approval, and says exactly what it allows first.</p></li>
+        <li><h3>Spending limits</h3><p>Per-run and per-agent caps for cost, tokens, time and model calls. You are warned at 80% and the run stops at 100%.</p></li>
+        <li><h3>No silent overwrites</h3><p>Two agents proposing the same file are flagged as a conflict and never applied behind your back.</p></li>
+        <li><h3>Survives crashes</h3><p>The active run is journaled. After a crash or restart, finished work and pending approvals are still there.</p></li>
+        <li><h3>The right model per task</h3><p>Tasks are rated simple, standard or complex and sent to the strongest connected model of that level, with failover when a provider runs out of credit.</p></li>
+        <li><h3>Local and open</h3><p>Everything runs on your machine. Stored API keys are encrypted. MIT licensed, with a public roadmap.</p></li>
+      </ul>
+    </section>
+
+    <section id="start">
+      <h2>Quick start</h2>
+      <ol class="quick">
+        <li>Install the <code>.deb</code>, <code>.rpm</code>, AppImage, or the Windows or macOS installer from <a href="https://github.com/orcalinux/agent-hq/releases/latest">Releases</a>.</li>
+        <li>Open <b>Connections</b> and connect a provider.</li>
+        <li>Open a project folder, then describe the task to Sovereign.</li>
+        <li>Review the plan, approve it, and review the changes.</li>
+      </ol>
+      <p>Once a release includes <code>SHA256SUMS.txt</code>, verify a download with <code>sha256sum -c SHA256SUMS.txt</code>.</p>
+    </section>
+
+    <section id="limits">
+      <h2>Limitations, stated plainly</h2>
+      <ul class="plain">
+        <li>Installers are not code-signed yet.</li>
+        <li>Runs are controlled by the app. If it quits mid-run, finished work is kept and the run resumes from where it stopped, automatically only in Full access.</li>
+        <li>Agents propose file changes; they do not get a shell, and they do not edit in parallel worktrees.</li>
+        <li>No benchmark ranks models yet. The <a href="https://github.com/orcalinux/agent-hq/blob/main/docs/benchmark.md">small test suite</a> is a connection check; every model passed it.</li>
+        <li>Gemini CLI support is untested on the maintainer's machine.</li>
+      </ul>
+      <p>See the <a href="https://github.com/orcalinux/agent-hq/blob/main/ROADMAP.md">roadmap</a> and <a href="https://github.com/orcalinux/agent-hq/blob/main/CHANGELOG.md">changelog</a>.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Agent HQ is MIT licensed. <a href="https://github.com/orcalinux/agent-hq/blob/main/LICENSE">License</a> · <a href="https://github.com/orcalinux/agent-hq/blob/main/SECURITY.md">Security</a> · <a href="https://github.com/orcalinux/agent-hq/blob/main/CONTRIBUTING.md">Contribute</a></p>
+    <p>Privacy: the site sets no cookies and has no trackers. The download button asks GitHub's public API for the latest release. The app talks only to the providers you connect and, if enabled, GitHub for updates.</p>
+  </footer>
+  <script src="app.js" defer></script>
+</body>
+</html>
