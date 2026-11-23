@@ -11,6 +11,14 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.22.2] — 2026-11-23
+
+### Fixed
+- Rework proposals now have unique revision IDs. Previously a revised file could reuse the ID of an already applied proposal and be skipped during apply.
+- A QA rejection after passing verification must identify a proposed file, its task and an exact code excerpt. Unsupported concerns remain visible without discarding the verified files. This is an evidence gate, not proof that passing tests cover every requirement.
+- Keep a persisted snapshot of the last candidate that passed verification. When rework fails or exhausts its retries, restore that candidate and run verification again before completing with unresolved QA concerns. These runs do not receive a QA approval certificate.
+- Undo verification writes in reverse order, and stop if a file was edited externally. Partial writes or unresolved proposal conflicts cannot be certified by a passing verification command.
+
 ## [0.22.1] — 2026-11-23
 
 ### Fixed

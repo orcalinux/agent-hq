@@ -201,7 +201,7 @@ export function extractFileBlocks(text: string): FileBlock[] {
 export interface QaVerdict {
   verdict: 'approve' | 'reject';
   summary: string;
-  issues: Array<{ taskId: string; problem: string }>;
+  issues: Array<{ taskId: string; problem: string; path?: string; evidence?: string }>;
 }
 
 export function parseQaVerdict(text: string, taskIds: string[]): QaVerdict {
@@ -210,7 +210,12 @@ export function parseQaVerdict(text: string, taskIds: string[]): QaVerdict {
   if (verdict !== 'approve' && verdict !== 'reject') throw new Error('QA verdict must be "approve" or "reject".');
   const issues = Array.isArray(raw.issues)
     ? raw.issues
-        .map((i: Record<string, unknown>) => ({ taskId: String(i.taskId ?? ''), problem: String(i.problem ?? i.issue ?? '') }))
+        .map((i: Record<string, unknown>) => ({
+          taskId: String(i.taskId ?? ''),
+          problem: String(i.problem ?? i.issue ?? ''),
+          ...(typeof i.path === 'string' ? { path: i.path } : {}),
+          ...(typeof i.evidence === 'string' ? { evidence: i.evidence } : {}),
+        }))
         .filter((i) => i.problem)
     : [];
   const validIssues = issues.map((i) => ({ ...i, taskId: taskIds.includes(i.taskId) ? i.taskId : '' }));

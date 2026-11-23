@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, markConflicts, selectAutoApply, blameTasks, verificationCouldNotRun } from '../../src/engine/approval';
+import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, checkpointProposals, evidencedQaIssues, markConflicts, selectAutoApply, blameTasks, verificationCouldNotRun } from '../../src/engine/approval';
 import type { ProposedFileChange } from '../../src/types';
 
 const change = (id: string, path: string, status: ProposedFileChange['status'] = 'pending', extra: Partial<ProposedFileChange> = {}): ProposedFileChange => ({
@@ -10,6 +10,45 @@ const change = (id: string, path: string, status: ProposedFileChange['status'] =
   agentId: 'agent-frontend',
   status,
   ...extra,
+});
+
+describe('verified candidate review', () => {
+  const files = [change('t1', 'money.py', 'applied', { content: 'return int(amount) / rate\n' })];
+  const issue = { taskId: 't1', problem: 'rate=0 divides by zero', path: 'money.py', evidence: 'int(amount) / rate' };
+
+  it('keeps a rejection grounded in code actually written by the named task', () => {
+    expect(evidencedQaIssues({ verdict: 'reject', summary: 'bug', issues: [issue] }, files)).toEqual([issue]);
+  });
+
+  it('does not treat hidden-test speculation or invented code as evidence', () => {
+    expect(evidencedQaIssues({ verdict: 'reject', summary: 'cannot see hidden tests', issues: [
+      { taskId: 't1', problem: 'need more tests' },
+      { ...issue, evidence: 'invented code excerpt' },
+      { ...issue, taskId: 't2' },
+      { ...issue, path: 'other.py' },
+      { ...issue, evidence: '' },
+    ] }, files)).toEqual([]);
+  });
+
+  it('checks the latest applied revision and ignores pending or discarded content', () => {
+    const revised = [...files, change('t2', 'money.py', 'applied', { content: 'return safe_divide(amount, rate)\n' })];
+    expect(evidencedQaIssues({ verdict: 'reject', summary: 'old defect', issues: [issue] }, revised)).toEqual([]);
+    expect(evidencedQaIssues({ verdict: 'reject', summary: 'unwritten defect', issues: [issue] }, [
+      { ...files[0], status: 'pending' },
+    ])).toEqual([]);
+  });
+
+  it('restores only the latest passing revision per file without mutating the checkpoint', () => {
+    const checkpoint = [
+      change('old', 'money.py', 'applied'),
+      change('new', 'money.py', 'applied'),
+      change('tests', 'test_money.py', 'applied'),
+    ];
+    const proposals = checkpointProposals(checkpoint);
+    expect(proposals.map((entry) => entry.status)).toEqual(['discarded', 'pending', 'pending']);
+    expect(selectAutoApply(proposals).apply.map((entry) => entry.id)).toEqual(['new', 'tests']);
+    expect(checkpoint.every((entry) => entry.status === 'applied')).toBe(true);
+  });
 });
 
 describe('approval modes', () => {

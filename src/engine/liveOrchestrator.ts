@@ -27,7 +27,7 @@ import {
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
 import { parallelLimit, planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
-import { autoAppliesChanges, autoStartsRuns, blameTasks, markConflicts, selectAutoApply, verificationCouldNotRun } from './approval';
+import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, evidencedQaIssues, markConflicts, selectAutoApply, verificationCouldNotRun } from './approval';
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
@@ -798,7 +798,7 @@ When you change an existing file, start from its current contents (provided belo
       agentsState().logActivity({ kind: 'learning', level: 'warn', runId: mission.id, agentId: agent.id, taskId: task.id, text: `${agent.name} tried to edit the project memory folder; those file changes were dropped` });
     }
     const changes: ProposedFileChange[] = files.map((f) => ({
-      id: `${task.id}:${f.path}`,
+      id: `${task.id}:${f.path}:${crypto.randomUUID()}`,
       path: f.path,
       content: f.content,
       taskId: task.id,
@@ -872,7 +872,7 @@ When you change an existing file, start from its current contents (provided belo
   }
 }
 
-async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 'retry'> {
+async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 'retry' | 'retained'> {
   const store = agentsState();
   const mission = currentMission()!;
   const qa = store.agents['agent-qa'];
@@ -886,12 +886,16 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
   const command = store.verificationCommand.trim();
   let candidateApplied: string[] = [];
   let verificationNote = '';
+  let verified = false;
   if (command && !autoAppliesChanges(store.approvalMode)) {
     store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, text: `Verification "${command}" was not run: in manual approval nothing is written until you apply it, so it would test the old code. Run it after applying.` });
   }
   if (command && autoAppliesChanges(store.approvalMode)) {
     const pendingBefore = new Set((currentMission()?.proposedChanges ?? []).filter((c) => c.status === 'pending').map((c) => c.id));
-    await autoApplyChanges();
+    const written = await autoApplyChanges();
+    if (written.failed || currentMission()?.proposedChanges?.some((change) => change.status === 'pending')) {
+      throw new Error('Verification cannot certify this candidate: some proposed files could not be written or have unresolved conflicts.');
+    }
     candidateApplied = (currentMission()?.proposedChanges ?? []).filter((c) => c.status === 'applied' && pendingBefore.has(c.id)).map((c) => c.id);
     store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, text: `Running verification on the proposed changes: ${command}` });
     const res = await useWorkspaceStore.getState().runCommand(command);
@@ -921,6 +925,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
       store.updateMission({ qaRejectCount: rejectCount, status: 'qa_loopback' });
       store.setAgentStatus(qa.id, 'idle');
       if (rejectCount > MAX_QA_LOOPS) {
+        if (await restorePassingCandidate(`Verification failed after ${MAX_QA_LOOPS} rework rounds.`)) return 'retained';
         store.updateTask(QA_TASK_ID, { status: 'rejected', progress: 100, qaFeedback: `Verification "${command}" still failed after ${MAX_QA_LOOPS} rework rounds.` });
         return 'rejected';
       }
@@ -937,14 +942,19 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     verificationNote = unrunnable
       ? `\n\nVerification "${command}" could not be run (${why}). Nothing was tested, so review the code carefully.`
       : `\n\nVerification: "${command}" passed (exit 0) when run on the proposed changes. Output (end):\n${raw.slice(-1500)}`;
+    verified = passed;
+    if (passed) {
+      const current = currentMission()!;
+      store.updateMission({ passingCandidate: structuredClone({ changes: current.proposedChanges ?? [], tasks: current.tasks, verification }) });
+    }
   }
 
   const deliverables = workTasks
     .map((t) => `## [${t.id}] ${t.title} — ${store.agents[t.assignedAgentId]?.name}\n${truncate(stripThinking(t.output ?? ''), 10_000)}`)
     .join('\n\n');
   const result = await callAgent(qa, {
-    system: `${qa.systemPrompt}${await memoryBrief(qa.id, mission.prompt)}\n\nRespond with ONLY a JSON object: {"verdict": "approve" | "reject", "summary": "...", "issues": [{"taskId": "<task id>", "problem": "..."}]}. Reject only for real defects, security problems or unmet requirements.`,
-    messages: [{ role: 'user', content: `Request:\n${mission.prompt}\n\nDeliverables:\n${deliverables}${verificationNote}` }],
+    system: `${qa.systemPrompt}${await memoryBrief(qa.id, mission.prompt)}\n\nRespond with ONLY a JSON object: {"verdict": "approve" | "reject", "summary": "...", "issues": [{"taskId": "<task id>", "problem": "<concrete defect and failing input or unmet requirement>", "path": "<exact proposed file path>", "evidence": "<exact code excerpt of at least 12 characters causing the defect>"}]}. Reject only for real defects, security problems or unmet requirements. Passing verification is direct execution evidence. Missing hidden tests, hypothetical failures, lack of visibility and requests for more test coverage are advisory concerns, not grounds for rejection. For a rejection after passing verification, cite the exact offending code from the supplied file contents and explain its incorrect behavior.`,
+    messages: [{ role: 'user', content: `Request:\n${mission.prompt}\n\nDeliverables:\n${deliverables}${verificationNote}${verified ? `\n\nVerified file contents:\n${truncate((currentMission()?.proposedChanges ?? []).filter((change) => change.status === 'applied').map((change) => `FILE ${change.path} (task ${change.taskId})\n${change.content}`).join('\n\n'), 80_000)}` : ''}` }],
     signal,
     note: 'QA review',
     countInRun: true,
@@ -968,13 +978,25 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
   store.setAgentStatus(qa.id, 'idle');
 
   if (verdict.verdict === 'reject') {
-    await withdrawCandidate(candidateApplied);
+    if (verified) {
+      const issues = evidencedQaIssues(verdict, currentMission()?.proposedChanges ?? []);
+      if (!issues.length) {
+        store.updateMission({ qaConcerns: `Verification passed; QA raised advisory concerns without a concrete code citation: ${verdict.summary}` });
+        store.updateTask(QA_TASK_ID, { status: 'completed', progress: 100, completedAt: Date.now(), qaFeedback: verdict.summary });
+        store.logActivity({ kind: 'qa', level: 'warn', runId: mission.id, text: 'Kept the verified changes. QA supplied no concrete code evidence for rejection; its concerns remain visible.' });
+        return 'retained';
+      }
+      verdict.issues = issues;
+    } else {
+      await withdrawCandidate(candidateApplied);
+    }
     const rejectCount = (currentMission()?.qaRejectCount ?? 0) + 1;
     store.updateMission({ qaRejectCount: rejectCount, status: 'qa_loopback' });
     const flagged = new Set(verdict.issues.map((i) => i.taskId).filter(Boolean));
     const targets = flagged.size ? workTasks.filter((t) => flagged.has(t.id)) : workTasks;
     store.logActivity({ kind: 'qa', level: 'warn', runId: mission.id, agentId: qa.id, text: `Sentinel rejected ${targets.length} task(s): ${verdict.summary}` });
     if (rejectCount > MAX_QA_LOOPS) {
+      if (await restorePassingCandidate(verdict.summary)) return 'retained';
       store.updateTask(QA_TASK_ID, { status: 'rejected', progress: 100, qaFeedback: verdict.summary });
       return 'rejected';
     }
@@ -996,14 +1018,43 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
 
 /** Puts changes that were written for verification back, and makes them proposals again so a later round can use them. */
 async function withdrawCandidate(ids: string[]) {
-  for (const id of ids) {
+  for (const id of [...ids].reverse()) {
     try {
       await revertProposedChange(id);
     } catch (err) {
       agentsState().logActivity({ kind: 'info', level: 'error', runId: currentMission()?.id, text: `Could not undo a verification write: ${(err as Error).message}` });
+      throw err;
     }
     agentsState().updateProposedChange(id, { status: 'pending', appliedAt: undefined, autoApplied: undefined });
   }
+}
+
+async function restorePassingCandidate(concerns: string): Promise<boolean> {
+  const store = agentsState();
+  const current = currentMission();
+  const checkpoint = current?.passingCandidate;
+  if (!checkpoint || !autoAppliesChanges(store.approvalMode)) return false;
+  await withdrawCandidate((current.proposedChanges ?? []).filter((change) => change.status === 'applied').map((change) => change.id));
+  store.updateMission({
+    proposedChanges: checkpointProposals(checkpoint.changes),
+    tasks: structuredClone(checkpoint.tasks),
+  });
+  const written = await autoApplyChanges();
+  if (written.failed) throw new Error('Could not restore all files from the passing candidate.');
+  const result = await useWorkspaceStore.getState().runCommand(checkpoint.verification.command);
+  const verification = {
+    command: checkpoint.verification.command,
+    exitCode: result.exitCode ?? null,
+    output: truncate(`${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim(), 20_000),
+    durationMs: result.durationMs ?? 0,
+    ranAt: Date.now(),
+  };
+  store.updateMission({ verification });
+  if (result.rejected || result.exitCode !== 0) throw new Error('Restored candidate no longer passes verification; review the verification output.');
+  store.updateMission({ qaConcerns: `Restored the last passing candidate. Unresolved QA concerns: ${concerns}` });
+  store.updateTask(QA_TASK_ID, { status: 'completed', progress: 100, completedAt: Date.now(), qaFeedback: concerns });
+  store.logActivity({ kind: 'qa', level: 'warn', runId: current.id, text: 'Restored the last passing candidate and verified it again. QA concerns remain unresolved.' });
+  return true;
 }
 
 async function sha256(text: string): Promise<string> {
@@ -1056,7 +1107,9 @@ function finalize(status: MissionState['status'], error?: string, autoApplied?: 
     text:
       status !== 'completed'
         ? `Run ${status}${error ? `: ${error}` : '.'}`
-        : autoApplied
+        : m.qaConcerns
+          ? `Run completed with unresolved QA concerns. Verified changes are on disk. ${m.qaConcerns}`
+          : autoApplied
           ? `Run completed and approved by QA. Auto mode wrote ${autoApplied.applied} file(s) to the project${autoApplied.failed ? `; ${autoApplied.failed} could not be written` : ''}. Undo any of them in the Changes panel.`
           : `Run completed and approved by QA. ${m.proposedChanges?.length ?? 0} proposed file change(s) are ready to review in the Changes panel.`,
   });
@@ -1087,11 +1140,16 @@ export async function executeRun() {
   }
 
   try {
+    let retained = false;
     for (;;) {
       await runWorkTasks(controller.signal);
       if (guard.stopReason) throw limitStopError(guard.stopReason);
       const failed = currentMission()!.tasks.filter((t) => t.id !== QA_TASK_ID && t.status === 'failed');
       if (failed.length) {
+        if (await restorePassingCandidate(`${failed.length} rework task(s) failed.`)) {
+          retained = true;
+          break;
+        }
         finalize('failed', `${failed.length} task(s) failed. Fix the cause and use Retry.`);
         return;
       }
@@ -1102,6 +1160,7 @@ export async function executeRun() {
         finalize('failed', 'QA rejected the result after the allowed rework loop.');
         return;
       }
+      retained = outcome === 'retained';
       break;
     }
 
@@ -1113,7 +1172,7 @@ export async function executeRun() {
       currentStage: 'shipped',
       stageIndex: 4,
       tasks: m.tasks.map((t) => ({ ...t, stage: 'shipped' })),
-      qaCertificate: {
+      qaCertificate: retained ? undefined : {
         certificateId: `cert-${m.id}`,
         missionId: m.id,
         missionTitle: m.title,
@@ -1291,6 +1350,9 @@ export async function revertProposedChange(changeId: string) {
   const m = currentMission();
   const change = m?.proposedChanges?.find((c) => c.id === changeId);
   if (!change || change.status !== 'applied' || change.previousContent === undefined) return;
+  if (await currentContent(change.path) !== change.content) {
+    throw new Error(`${change.path} changed after Agent HQ wrote it. Undo stopped to preserve external edits.`);
+  }
   const workspace = useWorkspaceStore.getState();
   if (change.previousContent === null) {
     await api.deleteFile(change.path);

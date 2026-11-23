@@ -284,6 +284,12 @@ export interface MissionState {
   error?: string;
   proposedChanges?: ProposedFileChange[];
   verification?: VerificationResult;
+  passingCandidate?: {
+    changes: ProposedFileChange[];
+    tasks: KanbanTaskCard[];
+    verification: VerificationResult;
+  };
+  qaConcerns?: string;
   qaNotes?: string;
   qaRejectCount?: number;
   startedAt: number;

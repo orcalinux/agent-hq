@@ -1,4 +1,24 @@
 import type { ApprovalMode, OrchestratorMode, ProposedFileChange } from '@/types';
+import type { QaVerdict } from './orchestratorParsing';
+
+export function evidencedQaIssues(verdict: QaVerdict, changes: ProposedFileChange[]): QaVerdict['issues'] {
+  const latest = new Map<string, ProposedFileChange>();
+  for (const change of changes) if (change.status === 'applied') latest.set(change.path, change);
+  return verdict.issues.filter((issue) => {
+    const change = issue.path ? latest.get(issue.path) : undefined;
+    return !!change && !!issue.taskId && change.taskId === issue.taskId
+      && !!issue.evidence?.trim() && issue.evidence.trim().length >= 12
+      && change.content.includes(issue.evidence.trim());
+  });
+}
+
+export function checkpointProposals(changes: ProposedFileChange[]): ProposedFileChange[] {
+  const latest = new Map<string, string>();
+  for (const change of changes) if (change.status === 'applied') latest.set(change.path, change.id);
+  return changes.map((change) => change.status === 'applied'
+    ? { ...change, status: latest.get(change.path) === change.id ? 'pending' : 'discarded', appliedAt: undefined }
+    : { ...change });
+}
 
 export interface ApprovalModeInfo {
   id: ApprovalMode;
