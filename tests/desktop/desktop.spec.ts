@@ -529,6 +529,27 @@ test('the About dialog shows the logo, credits and the full MIT license from the
   }
 });
 
+test('desktop chat completes commands and agent mentions without sending', async () => {
+  const { app, page, errors } = await launch();
+  try {
+    const input = page.getByRole('textbox', { name: 'Message Sovereign', exact: true });
+    const menu = page.getByTestId('chat-completions');
+    await input.fill('/rem');
+    await expect(menu.getByRole('option')).toContainText('/remember');
+    await input.press('Tab');
+    await expect(input).toHaveValue('/remember ');
+    await input.pressSequentially('@pu');
+    await expect(menu.getByRole('option')).toContainText('@Pulse');
+    await input.press('Enter');
+    await expect(input).toHaveValue('/remember @Pulse ');
+    await expect(input).toBeFocused();
+    await expect(menu).toBeHidden();
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
 test('the themed application menu fits narrow windows and supports keyboard, native actions and both themes', async ({}, testInfo) => {
   test.skip(process.platform === 'darwin', 'macOS keeps its native application menu.');
   const { app, page, errors } = await launch();

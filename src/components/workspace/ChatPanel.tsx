@@ -12,6 +12,7 @@ import { ApprovalModeSelect } from '@/components/shell/ApprovalMode';
 import { useRouting } from '@/components/models/useRouting';
 import { COMPLEXITIES, COMPLEXITY_LABEL, SOURCE_HINT, SOURCE_LABEL, isGroupRef, taskComplexity } from '@/engine/modelRouting';
 import { Markdown } from './Markdown';
+import { ChatInput } from './ChatInput';
 
 const SOURCE_TONE: Record<ModelSource, 'neutral' | 'accent' | 'success' | 'warning'> = {
   you: 'accent',
@@ -388,20 +389,11 @@ export function ChatPanel() {
           </div>
         ) : null}
         <div className="rounded-xl border border-line bg-surface-2 shadow-card transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft">
-          <textarea
-            id="orchestrator-input"
+          <ChatInput
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            rows={3}
+            onChange={setDraft}
+            onSend={send}
             placeholder={mode === 'ask' ? 'Ask about the project…' : 'Describe what to build or change…'}
-            aria-label="Message Sovereign"
-            className="block w-full resize-none bg-transparent px-2.5 pt-2 text-[13px] placeholder:text-fg-subtle focus:outline-none"
           />
           <div className="flex items-center justify-between gap-2 px-1.5 pb-1.5">
             <AttachPicker onPick={(p) => setAttachments((x) => (x.includes(p) ? x : [...x, p]))} />

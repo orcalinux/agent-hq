@@ -11,6 +11,13 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.17.0] — 2026-11-23
+
+### Added
+- Chat suggestions for supported slash commands and the current agent roster. Type `/` to discover `/remember`, or `@` to find an agent by name, title or ID. Choose with ↑/↓ and insert with Tab, Enter or a click; Escape dismisses the menu. Completing text never sends a message.
+- Suggestions follow the cursor, replace only the current token and preserve the rest of the draft. Multiword and duplicate names insert unique references compatible with the memory command. Selected text, multiline editing and IME composition keep their editing behaviour.
+- The themed suggestion menu appears above the composer, outside clipping containers, and repositions on resize. It includes keyboard hints and screen-reader announcements while focus stays in the message input.
+
 ## [0.16.4] — 2026-11-23
 
 ### Changed
