@@ -4,7 +4,7 @@
   "desktopName": "agent-hq.desktop",
   "private": true,
   "license": "MIT",
-  "version": "0.24.1",
+  "version": "0.24.2",
   "description": "A local command center for teams of AI coding agents.",
   "author": "orcalinux",
   "homepage": "https://github.com/orcalinux/agent-hq",

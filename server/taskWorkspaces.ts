@@ -48,11 +48,11 @@ export async function stageTaskWorkspace(
   for (const file of files) safeFile(root, file.path);
   let top: string;
   try {
-    top = fs.realpathSync((await git(root, ['rev-parse', '--show-toplevel'])).trim());
+    top = fs.realpathSync.native((await git(root, ['rev-parse', '--show-toplevel'])).trim());
   } catch {
     return { kind: 'proposals', reason: 'This folder is not a Git repository; changes stay in the proposal review flow.' };
   }
-  if (path.relative(fs.realpathSync(root), top) !== '') return { kind: 'proposals', reason: 'Open the repository root to enable worktree snapshots.' };
+  if (path.relative(fs.realpathSync.native(root), top) !== '') return { kind: 'proposals', reason: 'Open the repository root to enable worktree snapshots.' };
   const relativeStorage = path.relative(top, path.resolve(managedRoot));
   if (!relativeStorage || (!relativeStorage.startsWith(`..${path.sep}`) && relativeStorage !== '..' && !path.isAbsolute(relativeStorage))) {
     throw new Error('Worker recovery storage must be outside the project repository.');

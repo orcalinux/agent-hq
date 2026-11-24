@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.24.2] — 2026-11-24
+
+### Fixed
+- Windows Git worktree recovery resolves short DOS paths and long paths with the native filesystem API before comparing them. The release runner uses `RUNNER~1` for its temporary folder while Git reports `runneradmin`; treating them as different folders blocked the Windows build and prevented publishing 0.24.1.
+
 ## [0.24.1] — 2026-11-24
 
 ### Fixed
