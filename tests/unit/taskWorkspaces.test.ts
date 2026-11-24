@@ -65,4 +65,18 @@ describe('real Git worker snapshots', () => {
     execFileSync('git', ['init', '-q'], { cwd: empty });
     expect(await stageTaskWorkspace(empty, 'run', 'task', 1, [], managed)).toMatchObject({ kind: 'proposals', reason: expect.stringContaining('first Git commit') });
   });
+
+  it('does not snapshot a repository when a subdirectory is opened', async () => {
+    const nested = path.join(root, 'nested');
+    fs.mkdirSync(nested);
+    expect(await stageTaskWorkspace(nested, 'run', 'nested', 1, [], managed)).toMatchObject({
+      kind: 'proposals', reason: expect.stringContaining('repository root'),
+    });
+  });
+
+  it.runIf(process.platform === 'win32')('accepts Windows drive-letter casing differences', async () => {
+    const alternateRoot = root[0].toLowerCase() + root.slice(1);
+    const result = await stageTaskWorkspace(alternateRoot, 'run', 'casing', 1, [], managed);
+    expect(result.kind).toBe('worktree');
+  });
 });

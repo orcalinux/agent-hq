@@ -11,6 +11,12 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.24.1] — 2026-11-24
+
+### Fixed
+- Restored desktop release publishing after Windows test failures prevented v0.24.0 from being published. Worktree recovery now compares canonical paths using platform path rules, so Windows drive-letter casing and separators do not incorrectly reject the repository root.
+- PATH lookup tests now use the current Node executable and platform delimiter. The Linux package-installer responsiveness test runs on Linux, where its shell and package manager are available. Windows unit tests now run on every change as well as during releases.
+
 ## [0.24.0] — 2026-11-23
 
 ### Fixed

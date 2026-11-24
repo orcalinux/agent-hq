@@ -27,8 +27,9 @@ describe('package install', () => {
   });
 
   it('only searches absolute PATH entries', () => {
-    expect(findOnPath('sh', '/bin:/usr/bin')).toMatch(/sh$/);
-    expect(findOnPath('sh', 'bin:.')).toBeNull();
+    const executable = path.basename(process.execPath);
+    expect(findOnPath(executable, path.dirname(process.execPath))).toBe(path.join(path.dirname(process.execPath), executable));
+    expect(findOnPath(executable, ['bin', '.'].join(path.delimiter))).toBeNull();
   });
 
   it('fails without freezing when the file or pkexec is missing', async () => {
@@ -41,7 +42,7 @@ describe('package install', () => {
     expect(noPkexec.ok === false && noPkexec.message).toMatch(/pkexec/);
   });
 
-  it('reports a failing installer and stays responsive while it runs', async () => {
+  it.runIf(process.platform === 'linux')('reports a failing installer and stays responsive while it runs', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-'));
     const file = path.join(dir, 'a.deb');
     fs.writeFileSync(file, 'not a package');
