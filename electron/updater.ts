@@ -3,7 +3,7 @@ import path from 'path';
 import { app, net } from 'electron';
 import { DEFAULT_UPDATE_PREFS, type UpdatePrefs, type UpdateState } from '../src/desktop/types';
 import { compareVersions } from '../src/desktop/changelog';
-import { packageKind, runPackageInstall } from './packageInstall';
+import { manualCommand, packageKind, runPackageInstall, runTerminalPackageInstall } from './packageInstall';
 
 const REPO_RAW = 'https://raw.githubusercontent.com/orcalinux/agent-hq';
 const FIRST_CHECK_MS = 10_000;
@@ -29,6 +29,7 @@ export interface Updater {
   download: () => void;
   /** 'now' quits and installs; 'idle' waits until no agent is working. */
   install: (when: 'now' | 'idle') => void;
+  installInTerminal: () => void;
   /** Tells the updater that agents stopped working, for a restart that waits. */
   idle: () => void;
   changelog: (version?: string) => Promise<string | null>;
@@ -180,11 +181,14 @@ export function createUpdater({ onState, onReady, busy, beforeInstall }: Updater
   const ownsInstall = () => process.platform === 'linux' && !process.env.APPIMAGE && !simulated;
 
   let installing = false;
-  const installPackage = async (file: string) => {
+  const installPackage = async (file: string, terminal = false) => {
     if (installing) return;
     installing = true;
-    set({ ...current, installing: true, installFailure: undefined });
-    const result = await runPackageInstall(file);
+    set({ ...current, installing: true, waiting: false, installFailure: undefined });
+    const result = await Promise.resolve().then(() => terminal ? runTerminalPackageInstall(file) : runPackageInstall(file)).catch((error: Error) => ({
+      ok: false as const, message: `Could not start installation: ${error.message}`,
+      command: manualCommand(packageKind(file) ?? 'deb', file), file,
+    }));
     installing = false;
     if (result.ok) {
       beforeInstall();
@@ -253,6 +257,10 @@ export function createUpdater({ onState, onReady, busy, beforeInstall }: Updater
       }).catch((err: Error) => set({ status: 'error', version: current.version, error: err.message, checkedAt: Date.now() }));
     },
     install,
+    installInTerminal: () => {
+      if (current.status !== 'ready' || !current.installFailure || installing || !ownsInstall() || !downloadedFile || !packageKind(downloadedFile)) return;
+      void installPackage(downloadedFile, true);
+    },
     idle: () => {
       if (current.waiting && !busy()) quitAndInstall();
     },

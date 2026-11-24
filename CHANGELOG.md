@@ -11,6 +11,14 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.24.7] — 2026-11-24
+
+### Fixed
+- Claude's “hit your 5-hour limit” and Codex's usage-limit responses pause a run when no other connected provider is available. Finished tasks, file proposals and work awaiting QA are kept. Dependent tasks stay pending, and a quota pause does not trigger reflection calls, QA rejection or a failed model score.
+- Provider cooldowns survive restarting the app. Known reset times, including named time zones and relative durations, appear in Workspace and Tasks. Resume before reset makes no model calls unless another provider is available. If no reset time was supplied, the app labels its 30-minute retry estimate.
+- Linux updates offer **Install in terminal** after administrator authentication fails. The app waits for the installer's exit status before restarting; launching a terminal alone is not success. Failed authentication no longer incorrectly states that no polkit agent is running. Automatic restart requests are cleared on an install attempt to prevent repeated administrator prompts after failure.
+- A Debian install retries the downloaded package after dependency repair, so a successful dependency repair alone cannot be mistaken for a successful update.
+
 ## [0.24.6] — 2026-11-24
 
 ### Fixed

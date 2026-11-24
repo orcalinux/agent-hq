@@ -25,7 +25,7 @@ import {
   topoOrder,
   truncate,
 } from './orchestratorParsing';
-import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
+import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel, quotaResetAt } from './failover';
 import { parallelLimit, planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
 import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, evidencedQaIssues, finalFileDigest, markConflicts, qaIssueKey, replaceMergedProposals, reworkClosure, runCreatedTests, selectAutoApply, verificationCouldNotRun } from './approval';
@@ -74,6 +74,7 @@ interface RunGuard {
   costByAgent: Record<string, number>;
   warned: Set<LimitKind>;
   stopReason: string | null;
+  providerLimit?: MissionState['providerLimit'];
   timers: Array<ReturnType<typeof setTimeout>>;
 }
 
@@ -163,18 +164,31 @@ async function callAgent(
     return true;
   };
   const guard = args.countInRun ? runGuard : null;
+  const pauseForQuota = (provider: string, resetAt: number, resetKnown: boolean): never => {
+    const until = new Date(resetAt).toLocaleString();
+    const message = `${provider} usage limit reached. ${resetKnown ? `Resets ${until}` : `Reset time was not supplied; try again after ${until}`}. Finished work is kept. Resume after the limit resets or connect another provider.`;
+    if (guard) {
+      guard.providerLimit ??= { provider, resetAt, resetKnown };
+      runController?.abort();
+      throw Object.assign(new Error(message), { name: 'AbortError' });
+    }
+    throw new Error(message);
+  };
   if (guard) {
     enforceLimits(guard);
     guard.callsByAgent[agent.id] = (guard.callsByAgent[agent.id] ?? 0) + 1;
   }
   if (isProviderExhausted(conns().exhausted, providerOfRef(model))) {
     if (!reroute(`${providerOfRef(model)} is out of credit or rate limited`)) {
-      throw new Error(`${providerOfRef(model)} is out of credit or rate limited and no other connected provider is available.`);
+      const provider = providerOfRef(model)!;
+      const previousLimit = currentMission()?.providerLimit;
+      pauseForQuota(provider, conns().exhausted[provider], previousLimit?.provider === provider && previousLimit.resetKnown);
     }
   }
   let result: Awaited<ReturnType<typeof streamChat>>;
   let transientRetries = 0;
   for (;;) {
+    if (args.signal.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
     let full = '';
     try {
       result = await streamChat({
@@ -213,8 +227,10 @@ async function callAgent(
         continue;
       }
       const failedProvider = providerOfRef(model);
-      if (failedProvider) conns().markExhausted(failedProvider, Date.now() + EXHAUSTED_COOLDOWN_MS);
-      if (!reroute(`${failedProvider} reported: ${truncate(message, 120)}`)) throw err;
+      const parsedReset = quotaResetAt(message);
+      const resetAt = parsedReset ?? Date.now() + EXHAUSTED_COOLDOWN_MS;
+      if (failedProvider) conns().markExhausted(failedProvider, resetAt);
+      if (!reroute(`${failedProvider} reported: ${truncate(message, 120)}`)) pauseForQuota(failedProvider ?? model, resetAt, parsedReset !== null);
     }
   }
   const { providers, userPricing } = useConnectionsStore.getState();
@@ -1424,7 +1440,7 @@ function finalize(status: MissionState['status'], error?: string, autoApplied?: 
   const mission = currentMission();
   if (!mission) return;
   const now = Date.now();
-  store.updateMission({ status, error, completedAt: now });
+  store.updateMission({ status, error, completedAt: status === 'paused' ? undefined : now });
   store.setLiveRunning(false);
   for (const a of Object.values(store.agents)) {
     if (['thinking', 'coding', 'reviewing', 'waiting'].includes(a.status)) store.setAgentStatus(a.id, 'idle');
@@ -1436,7 +1452,7 @@ function finalize(status: MissionState['status'], error?: string, autoApplied?: 
     source: 'live',
     status,
     startedAt: m.startedAt,
-    completedAt: now,
+    completedAt: status === 'paused' ? undefined : now,
     tasksTotal: m.tasks.length,
     tasksCompleted: m.tasks.filter((t) => t.status === 'completed').length,
     tasksFailed: m.tasks.filter((t) => t.status === 'failed').length,
@@ -1455,7 +1471,7 @@ function finalize(status: MissionState['status'], error?: string, autoApplied?: 
   store.finalizeRun(record);
   store.logActivity({
     kind: 'run',
-    level: status === 'completed' ? 'success' : status === 'cancelled' ? 'warn' : 'error',
+    level: status === 'completed' ? 'success' : status === 'cancelled' || status === 'paused' ? 'warn' : 'error',
     runId: m.id,
     text: `Run ${status}${error ? `: ${error}` : ''}`,
   });
@@ -1571,14 +1587,30 @@ export async function executeRun() {
       : undefined;
     finalize('completed', undefined, autoApplied);
   } catch (err) {
-    if (guard.stopReason) finalize('failed', `Stopped by run limit: ${guard.stopReason}. Raise the limit in Settings → Run limits, then Resume.`);
+    if (guard.providerLimit) {
+      const limit = guard.providerLimit;
+      store.updateMission({
+        providerLimit: limit,
+        tasks: currentMission()!.tasks.map((task) => {
+          if (task.status !== 'in_progress' && task.status !== 'review') return task;
+          return task.computerActions
+            ? { ...task, status: 'failed', progress: 0, error: DESKTOP_INTERRUPTED, computerNeedsReview: true }
+            : { ...task, status: 'pending', progress: 0, error: undefined };
+        }),
+      });
+      const until = new Date(limit.resetAt).toLocaleString();
+      finalize('paused', `${limit.provider} usage limit reached. ${limit.resetKnown ? `Resets ${until}` : `Reset time unknown; try again after ${until}`}. Finished work is kept. Resume after reset or connect another provider.`);
+    } else if (guard.stopReason) finalize('failed', `Stopped by run limit: ${guard.stopReason}. Raise the limit in Settings → Run limits, then Resume.`);
     else if (isAbort(err)) finalize('cancelled', 'Stopped by user.');
     else finalize('failed', (err as Error).message);
   } finally {
     guard.timers.forEach(clearTimeout);
     if (runGuard === guard) runGuard = null;
     if (runController === controller) runController = null;
-    void learnFromRun(mission.id);
+    if (!guard.providerLimit) {
+      store.updateMission({ providerLimit: undefined });
+      void learnFromRun(mission.id);
+    }
   }
 }
 
@@ -1679,6 +1711,16 @@ export async function resumeInterruptedRun() {
 export async function resumeRun() {
   const m = currentMission();
   if (!m || agentsState().isLiveRunning) return;
+  if (m.providerLimit && m.providerLimit.resetAt > Date.now()) {
+    const { providers, exhausted } = useConnectionsStore.getState();
+    const blocked = m.providerLimit.provider;
+    const available = providers.some((provider) => provider.id !== blocked && provider.connection
+      && !isProviderExhausted(exhausted, provider.id) && provider.models.some((model) => model.selectable !== false));
+    if (!available) {
+      agentsState().logActivity({ kind: 'run', level: 'warn', runId: m.id, text: m.error ?? 'Provider usage limit has not reset yet.' });
+      return;
+    }
+  }
   if (m.tasks.some((task) => task.computerNeedsReview || task.error === DESKTOP_INTERRUPTED)) {
     agentsState().logActivity({ kind: 'run', level: 'warn', runId: m.id, text: 'Inspect the desktop app, then Retry the interrupted desktop task before resuming. Its actions may already have taken effect.' });
     return;

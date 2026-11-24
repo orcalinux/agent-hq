@@ -379,6 +379,7 @@ export function ChatPanel() {
             <span className="shrink-0 text-fg-muted">{done}/{live.tasks.length} · {live.status}</span>
           </div>
           <ProgressBar value={live.tasks.length ? (done / live.tasks.length) * 100 : 0} />
+          {live.providerLimit && live.error ? <p role="status" className="text-[12px] text-warning">{live.error}</p> : null}
           <div className="flex gap-2">
             {liveRunning ? <Button size="sm" variant="danger" icon={Square} onClick={stopRun}>Stop run</Button> : null}
             {!liveRunning && (live.status === 'cancelled' || live.status === 'failed' || live.status === 'paused') ? <Button size="sm" onClick={() => void resumeRun()}>Resume run</Button> : null}

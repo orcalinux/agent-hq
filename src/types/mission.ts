@@ -288,6 +288,7 @@ export interface MissionState {
   stageIndex: number;
   status: MissionStatus;
   error?: string;
+  providerLimit?: { provider: string; resetAt: number; resetKnown: boolean };
   proposedChanges?: ProposedFileChange[];
   verification?: VerificationResult;
   passingCandidate?: {

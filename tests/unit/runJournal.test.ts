@@ -57,4 +57,13 @@ describe('restoring from the journal', () => {
     expect(restorableFromJournal({ ...base, status: 'running', tasks: 'nope' })).toBeNull();
     expect(restorableFromJournal(null)).toBeNull();
   });
+
+  it('recovers a quota pause without starting it automatically or losing the reset time', () => {
+    const paused = {
+      ...base, status: 'paused', providerLimit: { provider: 'anthropic', resetAt: Date.now() + 60_000, resetKnown: true },
+      tasks: [{ id: 't1', status: 'pending', progress: 0 }, base.tasks[1]],
+    };
+    expect(restorableFromJournal(paused)).toEqual(paused);
+    expect(restorableFromJournal({ ...paused, providerLimit: undefined })).toBeNull();
+  });
 });

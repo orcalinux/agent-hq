@@ -139,7 +139,7 @@ export function WhatsNewDialog() {
         {confirm && installing ? (
           <div className="flex items-start gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-[12px] text-fg" role="status" data-testid="update-installing">
             <Spinner className="mt-px h-3.5 w-3.5 shrink-0" />
-            <span>Installing the update. Approve the administrator prompt if your system shows one. Agent HQ restarts when it finishes.</span>
+            <span>Installing the update. Approve the administrator prompt, or enter your password in the terminal if you chose that option. Agent HQ restarts when it finishes.</span>
           </div>
         ) : null}
         {confirm && failure && !installing ? (
@@ -153,6 +153,7 @@ export function WhatsNewDialog() {
               <code className="min-w-0 flex-1 truncate font-mono text-[11.5px]" title={failure.command}>{failure.command}</code>
               <Button size="sm" icon={copied ? Check : Copy} onClick={() => void copyCommand()}>{copied ? 'Copied' : 'Copy'}</Button>
             </div>
+            {desktopApi()?.platform === 'linux' ? <Button size="sm" onClick={() => desktopApi()?.installUpdateInTerminal()}>Install in terminal</Button> : null}
           </div>
         ) : null}
         {confirm && running ? (

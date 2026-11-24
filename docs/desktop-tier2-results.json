@@ -237,6 +237,30 @@
         "wallSeconds": 117,
         "outcome": "provider-blocked",
         "issue": "Five-hour subscription limit reached before implementation; no quality conclusion."
+      },
+      {
+        "run": "agent-hq-0246-codex-1124-090216",
+        "version": "0.24.6 development build",
+        "models": ["gpt-6-sol"],
+        "hiddenPassed": 86,
+        "hiddenTotal": 141,
+        "existingTestsUntouched": true,
+        "wallSeconds": 922.078,
+        "outcome": "provider-blocked",
+        "desktopOutcome": "failed",
+        "issue": "Codex usage limit reached after task proposals; no implementation reached disk. Not a successful comparison."
+      },
+      {
+        "run": "agent-hq-0246-repeat-codex-1124-091522",
+        "version": "0.24.6",
+        "models": ["gpt-6-sol"],
+        "hiddenPassed": 86,
+        "hiddenTotal": 141,
+        "existingTestsUntouched": true,
+        "wallSeconds": 146.863,
+        "outcome": "provider-blocked",
+        "desktopOutcome": "failed",
+        "issue": "Codex usage limit reached early; dependent tasks were incorrectly failed. Not a successful comparison."
       }
     ],
     "limitations": [

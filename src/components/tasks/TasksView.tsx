@@ -100,6 +100,7 @@ export default function TasksView() {
         </div>
       </header>
 
+      {mission?.providerLimit && mission.error ? <p role="status" className="shrink-0 border-b border-line px-4 py-2 text-[12px] text-warning">{mission.error}</p> : null}
       <div className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-1.5">
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks" aria-label="Search tasks" className="w-48 min-w-24 shrink" />
         <Select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} aria-label="Filter by agent" className="w-36 min-w-20 shrink">

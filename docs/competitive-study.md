@@ -446,3 +446,22 @@ implementation. It is a provider-blocked attempt, not evidence about
 implementation quality. Follow-up validation uses Codex while Claude is
 unavailable. Original tests remain untouched and hidden graders remain
 outside the agents' workspaces.
+
+### Provider limits during the Codex follow-up
+
+Both 0.24.6 Codex attempts stopped on a subscription limit:
+`agent-hq-0246-codex-1124-090216` after 922.078 seconds and
+`agent-hq-0246-repeat-codex-1124-091522` after 146.863 seconds.
+Independent Tier 2 grading scored **86/141** for each workspace, with
+original tests unchanged and no implementation files on disk. These are
+incomplete, provider-blocked attempts, not successful quality comparisons.
+Codex reported “You've hit your usage limit” and a retry clock time;
+the first attempt had completed task proposals before that response.
+
+Version 0.24.7 handles exhausted providers as a resumable pause, with
+completed work retained and dependent tasks pending. Known cooldowns
+survive restarting the app; an early Resume does not call the blocked
+provider. Parallel in-flight calls are aborted and QA remains pending if
+its review was interrupted. The app does not ask the exhausted model to
+reflect on the paused run. Regression tests cover these control paths;
+they do not establish end-to-end benchmark success after the reset.

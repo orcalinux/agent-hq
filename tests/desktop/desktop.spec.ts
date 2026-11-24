@@ -47,6 +47,55 @@ async function launch(extraEnv: Record<string, string> = {}): Promise<{ app: Ele
 
 test.beforeAll(freshDirs);
 
+test('a provider limit pauses the run and survives reload without retrying the provider', async () => {
+  const { app, page, errors } = await launch({ AGENT_HQ_USER_DATA: path.join(base, 'quota-user-data') });
+  let calls = 0;
+  await page.route('**/api/chat', async (route) => {
+    calls++;
+    await route.fulfill({ status: 429, json: { error: "You've hit your 5-hour limit · resets in 2h" } });
+  });
+  try {
+    await page.waitForFunction(() => localStorage.getItem('agent-hq.state'));
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
+    await page.evaluate(() => {
+      const saved = JSON.parse(localStorage.getItem('agent-hq.state')!);
+      Object.assign(saved.state, {
+        activeView: 'tasks', approvalMode: 'ask', learningMode: 'off', verificationCommand: '',
+        runHistory: [], maxParallel: 1,
+        activeMission: {
+          id: 'desktop-quota', presetId: 'live', title: 'Provider limit recovery', prompt: 'Review the source.', source: 'live', status: 'paused',
+          startedAt: Date.now(), currentStage: 'implementation', stageIndex: 2, proposedChanges: [], stepIndex: 0, totalSteps: 3,
+          tasks: [
+            { id: 'done', title: 'Finished work', description: '', stage: 'implementation', assignedAgentId: 'agent-architect', status: 'completed', progress: 100, tags: [], dependsOn: [] },
+            { id: 'work', title: 'Pending work', description: 'Review requirements.', stage: 'implementation', assignedAgentId: 'agent-backend', model: 'anthropic:cli:claude-haiku-5-5', status: 'pending', progress: 0, tags: [], dependsOn: ['done'] },
+            { id: 'qa-review', title: 'QA', description: '', stage: 'qa_review', assignedAgentId: 'agent-qa', status: 'pending', progress: 0, tags: [], dependsOn: ['work'] },
+          ],
+        },
+      });
+      localStorage.setItem('agent-hq.state', JSON.stringify(saved));
+      location.reload();
+    });
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Tasks', exact: true }).click();
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    const notice = page.getByRole('status').filter({ hasText: 'anthropic usage limit reached' });
+    await expect(notice).toContainText('Finished work is kept');
+    await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+    expect(calls).toBe(1);
+    await page.reload();
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Tasks', exact: true }).click();
+    await expect(notice).toContainText('Resets');
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    expect(calls).toBe(1);
+    const mission = await page.evaluate(() => JSON.parse(localStorage.getItem('agent-hq.state')!).state.activeMission);
+    expect(mission.status).toBe('paused');
+    expect(mission.tasks.map((task: { status: string }) => task.status)).toEqual(['completed', 'pending', 'pending']);
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
 test('a blocked verifier fails before any model call and keeps the run resumable', async () => {
   const { app, page, errors } = await launch({ AGENT_HQ_USER_DATA: path.join(base, 'verification-user-data') });
   let modelCalls = 0;
@@ -837,6 +886,7 @@ test('a failed install keeps the dialog open with the reason and a command to ru
     await expect(dialog).toBeVisible();
     await expect(dialog.getByTestId('update-install-failed')).toContainText('nothing was installed');
     await expect(dialog.getByTestId('update-install-failed')).toContainText('sudo dpkg -i');
+    if (process.platform === 'linux') await expect(dialog.getByRole('button', { name: 'Install in terminal', exact: true })).toBeVisible();
     await expect(dialog.getByTestId('update-restart')).toHaveText('Try again');
     await expect(dialog.getByRole('button', { name: 'Later' })).toBeEnabled();
     expect(errors).toEqual([]);

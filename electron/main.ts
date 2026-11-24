@@ -465,6 +465,9 @@ function registerIpc(): void {
   ipcMain.on('desktop:update-install', (event, when: unknown) => {
     if (fromApp(event)) updater.install(when === 'idle' ? 'idle' : 'now');
   });
+  ipcMain.on('desktop:update-install-terminal', (event) => {
+    if (fromApp(event)) updater.installInTerminal();
+  });
   ipcMain.on('desktop:update-ack', (event) => {
     if (fromApp(event)) updater.ackUpdated();
   });

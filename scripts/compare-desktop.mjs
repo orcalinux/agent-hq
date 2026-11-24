@@ -196,7 +196,12 @@ try {
       write('state.json', state);
       const history = state.runHistory ?? [];
       if (history.length) {
-        metadata.outcome = history.at(-1).status;
+        const paused = history.at(-1).status === 'paused' && state.activeMission?.providerLimit;
+        metadata.outcome = paused ? 'provider-blocked' : history.at(-1).status;
+        if (paused) {
+          metadata.providerLimit = state.activeMission.providerLimit;
+          process.exitCode = 2;
+        }
         break;
       }
       if (!approved) {

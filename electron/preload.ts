@@ -33,6 +33,7 @@ const api: DesktopApi = {
   checkForUpdates: () => ipcRenderer.send('desktop:update-check'),
   downloadUpdate: () => ipcRenderer.send('desktop:update-download'),
   installUpdate: (when) => ipcRenderer.send('desktop:update-install', when === 'idle' ? 'idle' : 'now'),
+  installUpdateInTerminal: () => ipcRenderer.send('desktop:update-install-terminal'),
   getUpdatePrefs: () => ipcRenderer.invoke('desktop:update-prefs') as Promise<UpdatePrefs>,
   setUpdatePrefs: (prefs) => ipcRenderer.invoke('desktop:update-prefs-set', prefs) as Promise<UpdatePrefs>,
   getChangelog: (version) => ipcRenderer.invoke('desktop:changelog', typeof version === 'string' ? version : '') as Promise<string | null>,

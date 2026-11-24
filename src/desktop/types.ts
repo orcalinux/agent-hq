@@ -141,6 +141,7 @@ export interface DesktopApi {
   downloadUpdate: () => void;
   /** Quits, installs the downloaded update and starts the new version. `later` restarts once no agent is working. */
   installUpdate: (when?: 'now' | 'idle') => void;
+  installUpdateInTerminal: () => void;
   getUpdatePrefs: () => Promise<UpdatePrefs>;
   setUpdatePrefs: (prefs: Partial<UpdatePrefs>) => Promise<UpdatePrefs>;
   /** CHANGELOG.md of a version: the installed one, or a newer one from GitHub. */

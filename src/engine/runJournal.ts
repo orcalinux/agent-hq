@@ -7,7 +7,8 @@ import type { MissionState } from '@/types';
 export function restorableFromJournal(mission: unknown): MissionState | null {
   const candidate = mission as MissionState | null;
   if (!candidate || candidate.source !== 'live' || !Array.isArray(candidate.tasks)) return null;
-  const unfinished = candidate.status === 'running' || (candidate.status === 'cancelled' && candidate.interrupted === true);
+  const unfinished = candidate.status === 'running' || (candidate.status === 'paused' && !!candidate.providerLimit)
+    || (candidate.status === 'cancelled' && candidate.interrupted === true);
   return unfinished ? reconcileInterrupted(candidate) : null;
 }
 

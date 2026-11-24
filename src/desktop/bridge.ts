@@ -32,6 +32,7 @@ export function statusFrom(state: ReturnType<typeof useAgentStore.getState>): De
     label = `${busy} agent${busy === 1 ? '' : 's'} working` + (total ? ` · ${done}/${total} tasks` : '');
   } else if (mission?.status === 'completed') label = 'Last run finished';
   else if (mission?.status === 'failed') label = 'Last run failed';
+  else if (mission?.status === 'paused') label = mission.providerLimit ? `Paused · ${mission.providerLimit.provider} usage limit` : 'Run paused';
   return { busy, label, running };
 }
 

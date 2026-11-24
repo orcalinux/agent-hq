@@ -19,6 +19,15 @@ fails. An available update can be downloaded there. A downloaded update offers
 **Review and restart**, using the existing release-note and busy-agent safeguards.
 Closing the window leaves a download running.
 
+On Linux, installing a `.deb` or `.rpm` requires administrator authentication.
+If the graphical authentication step fails, the release-notes dialog offers
+**Install in terminal** as well as a command to copy. Enter your password in
+the terminal that opens. Agent HQ stays open and restarts only after the
+installer reports success. If installation fails, the dialog remains available
+for another attempt. Opening a terminal does not itself count as success.
+If you install the package manually, quit Agent HQ from its tray or application
+menu and open it again to run the installed version.
+
 Development builds explain that installation is unavailable and link to Releases.
 They do not claim to have checked for a published version.
 

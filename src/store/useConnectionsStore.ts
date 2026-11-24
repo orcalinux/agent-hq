@@ -120,7 +120,7 @@ export const useConnectionsStore = create<ConnectionsState>()(
     {
       name: 'agent-hq.connections',
       storage: safeStorage,
-      partialize: (s) => ({ userPricing: s.userPricing }),
+      partialize: (s) => ({ userPricing: s.userPricing, exhausted: s.exhausted }),
     }
   )
 );
