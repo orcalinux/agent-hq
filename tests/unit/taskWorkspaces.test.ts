@@ -36,7 +36,11 @@ describe('real Git worker snapshots', () => {
       stageTaskWorkspace(root, 'run', 'first', 1, [{ path: 'shared.py', content: 'worker one\n' }], managed),
       stageTaskWorkspace(root, 'run', 'second', 1, [{ path: 'shared.py', content: 'worker two\n' }], managed),
     ]);
-    expect(results.every((result) => result.kind === 'worktree')).toBe(true);
+    expect(results.every((result) => result.kind === 'worktree'), JSON.stringify({
+      root, realRoot: fs.realpathSync(root), nativeRoot: fs.realpathSync.native(root),
+      gitRoot: git('rev-parse', '--show-toplevel').trim(),
+      realGitRoot: fs.realpathSync(git('rev-parse', '--show-toplevel').trim()), results,
+    })).toBe(true);
     expect(results[0].path).not.toBe(results[1].path);
     for (const [index, result] of results.entries()) {
       expect(fs.readFileSync(path.join(result.path!, 'shared.py'), 'utf8')).toBe(index === 0 ? 'worker one\n' : 'worker two\n');
