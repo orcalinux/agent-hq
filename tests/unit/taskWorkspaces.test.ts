@@ -15,6 +15,7 @@ const managed = path.join(scratch, 'workers');
 fs.mkdirSync(root);
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' }).toString();
 git('init', '-q');
+git('config', 'core.autocrlf', 'false');
 fs.writeFileSync(path.join(root, 'shared.py'), 'original\n');
 fs.writeFileSync(path.join(root, 'other.py'), 'base\n');
 fs.writeFileSync(path.join(root, '.gitignore'), 'ignored.txt\n');
