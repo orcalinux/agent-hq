@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-11-24",
+  "task": "tabsplit Tier 2, ISSUES.md #11 through #16",
+  "starterCommit": "57f7898aa5a317312f1494be2833c9a0f44c88aa",
+  "taskSha256": "9659c6388a250083f99c560913ad1c4e1a1940c0dd3dab070db2d05900cb54c0",
+  "hiddenSuite": {
+    "newCases": 54,
+    "regressionCases": 87,
+    "total": 141,
+    "unchangedStarterPassed": 86,
+    "location": "Outside all task workspaces"
+  },
+  "codexGroup": {
+    "cliVersion": "0.171.0",
+    "codingModel": "gpt-6-sol",
+    "codingEffort": "medium",
+    "modelRunsSequential": true,
+    "results": [
+      {
+        "setup": "Codex CLI alone",
+        "run": "codex-cli-gpt6-1123-170955",
+        "date": "2026-11-23",
+        "newPassed": 54,
+        "regressionPassed": 87,
+        "existingTestsUntouched": true,
+        "wallSeconds": 636.019,
+        "workflowApiRateValueUSD": 1.73293,
+        "sampledPeakPssMiB": 720.1015625,
+        "gatewayRequests": 35
+      },
+      {
+        "setup": "Maestro, one Codex agent",
+        "run": "maestro-codex-gpt6-1123-170955",
+        "date": "2026-11-23",
+        "newPassed": 54,
+        "regressionPassed": 87,
+        "existingTestsUntouched": true,
+        "wallSeconds": 497.574,
+        "workflowApiRateValueUSD": 1.632628,
+        "sampledPeakPssMiB": 881.6748046875,
+        "initialPssMiB": 156.2265625,
+        "gatewayRequests": 25,
+        "auxiliaryCalls": [
+          {
+            "purpose": "Automatic title",
+            "servedModel": "gpt-6.1-sol",
+            "effort": "low",
+            "apiRateValueUSD": 0.068423
+          },
+          {
+            "purpose": "Synopsis after coding completed",
+            "servedModel": "gpt-6-sol",
+            "effort": "low"
+          }
+        ]
+      },
+      {
+        "setup": "Agent Orchestrator, one Codex worker",
+        "run": "orchestrator-codex-1124",
+        "date": "2026-11-24",
+        "newPassed": 54,
+        "regressionPassed": 87,
+        "existingTestsUntouched": true,
+        "wallSeconds": 777.2,
+        "workflowApiRateValueUSD": 2.477106,
+        "sampledPeakPssMiB": 1525.982421875,
+        "initialPssMiB": 198.216796875,
+        "gatewayRequests": 42,
+        "observedCodingModels": ["gpt-6-sol"],
+        "observedGatewayEfforts": ["medium"],
+        "memorySamplesMissingRoot": 0,
+        "memorySamplesMissingChildren": 2
+      },
+      {
+        "setup": "Agent HQ 0.24.2, adaptive team",
+        "appCommit": "d7ffbf6445b60af1c79609e6c842c3252844678f",
+        "run": "agent-hq-0242-codex-1124",
+        "date": "2026-11-24",
+        "newPassed": 54,
+        "regressionPassed": 87,
+        "existingTestsUntouched": true,
+        "wallSeconds": 740.178,
+        "workflowApiRateValueUSD": 3.541076,
+        "sampledPeakPssMiB": 1579.6884765625,
+        "initialPssMiB": 365.888671875,
+        "hostCalls": 19,
+        "gatewayRequests": 24,
+        "observedCodingModels": ["gpt-6-sol"],
+        "observedGatewayEfforts": ["medium"],
+        "maxParallelTasks": 3,
+        "tokenAndCostCaps": "Disabled for the comparison",
+        "wallLimitMinutes": 45,
+        "attachments": ["SPEC.md", "ISSUES.md"],
+        "verificationCommand": "python -m pytest -q"
+      }
+    ]
+  },
+  "agentHqHaikuFollowup": {
+    "version": "0.24.0",
+    "model": "claude-haiku-5-5",
+    "costSource": "Sum of final cost-state per native Claude session",
+    "results": [
+      {
+        "run": "agent-hq-0240-haiku-1124b",
+        "hiddenPassed": 141,
+        "existingTestsUntouched": true,
+        "wallSeconds": 586.105,
+        "workflowApiRateValueUSD": 0.12130349,
+        "sampledPeakPssMiB": 742.4658203125,
+        "hostCalls": 15
+      },
+      {
+        "run": "agent-hq-0240-haiku-1124c",
+        "hiddenPassed": 141,
+        "existingTestsUntouched": true,
+        "wallSeconds": 617.41,
+        "workflowApiRateValueUSD": 0.13531543,
+        "sampledPeakPssMiB": 653.728515625,
+        "hostCalls": 17
+      }
+    ]
+  },
+  "limitations": [
+    "One task on Linux; one completed Codex attempt per setup.",
+    "Different tool environments and workflow assistance; Agent HQ has attached specifications and three task slots.",
+    "API-rate valuations include recorded auxiliary work and are not additional subscription bills.",
+    "Completion timing excludes post-run learning and synopsis generation.",
+    "Maestro and Orchestrator retain earlier sessions; Agent HQ uses a fresh profile.",
+    "PSS samples include process descendants, exclude GPU memory and can miss short-lived peaks.",
+    "Brief update-feed probes overlapped Agent HQ on the same host, without other benchmark model runs.",
+    "These sanitized summaries omit full prompts, local paths and account data; detailed evidence is retained outside Git."
+  ]
+}

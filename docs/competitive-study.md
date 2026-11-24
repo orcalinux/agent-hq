@@ -274,14 +274,81 @@ reviewer what it cannot do.
 On a fresh clone of the same starter, the rebuilt app completed in **586 s**
 and graded **141/141** on the unchanged hidden suite, with the original tests
 untouched. This joins the Haiku group (Claude alone, Orchestrator and Maestro,
-all 141/141). Cost and memory for this run are saved in the evidence folder and
-are not yet compared here. A repeat on another fresh clone also completed (617 s) and graded 141/141 with
+all 141/141). Summing the native Claude session's final cost-state once per call
+gives $0.1213 across 15 calls, including planning, review and post-run learning.
+The sampled process-tree peak was 742 MiB PSS. A repeat on another fresh clone
+also completed (617 s) and graded 141/141 with
 the original tests untouched, so the result held across two runs. It is still
 one task and one model, so it shows that the failure is fixed, not that Agent HQ
-is faster or cheaper.
+is faster or cheaper. The repeat used 17 calls, valued at $0.1353, and peaked at
+654 MiB PSS. Native assistant messages in all 32 sessions report
+`claude-haiku-5-5`; these calls went directly through Claude Code rather than
+Magpie, so their cost source is the native session record, not a gateway
+estimate. These figures are API-rate valuations, not additional subscription
+charges. Comparable live memory was not captured for the earlier Haiku controls.
 
-The Codex group is incomplete. The Orchestrator Codex run ended when the Codex
-account hit its usage limit at 22:38 UTC (its transcript shows the provider
-error); its worktree was unchanged, so it is not a quality result. Agent HQ on
-`gpt-6-sol` has not been re-run since the fix because the limit was still active
-at 00:01 UTC.
+The first Orchestrator Codex run was interrupted when the account hit its usage
+limit at 22:38 UTC. Its transcript also records three failed edit commands
+before that error: `apply_patch` was absent, and two subsequent `git apply`
+attempts used invalid patches. Its worktree was unchanged. This is an
+interrupted attempt with tool failures, not a completed quality comparison;
+quota exhaustion alone does not explain why no files had been written.
+
+### Completed Codex comparison, November 24
+
+The open runs were completed after quota returned. All four setups used
+Codex CLI 0.171.0 and `gpt-6-sol` at medium effort for the coding task, with
+fresh clones of starter `57f7898aa5a317312f1494be2833c9a0f44c88aa`.
+The unchanged task's SHA-256 is
+`9659c6388a250083f99c560913ad1c4e1a1940c0dd3dab070db2d05900cb54c0`.
+Native session settings and gateway records were audited separately. Model
+runs were sequential; the CLI and Maestro runs are from November 23, and the
+two new runs are from November 24.
+
+| Setup | New cases | Regression | Wall time | Workflow API-rate value | Sampled peak PSS |
+| --- | --- | --- | --- | --- | --- |
+| Codex CLI alone | 54/54 | 87/87 | 636.0 s | $1.733 | 720 MiB |
+| Maestro, one Codex agent | 54/54 | 87/87 | 497.6 s | $1.633 | 882 MiB |
+| Agent Orchestrator, one Codex worker | 54/54 | 87/87 | 777.2 s | $2.477 | 1,526 MiB |
+| Agent HQ 0.24.2, adaptive team | 54/54 | 87/87 | 740.2 s | $3.541 | 1,580 MiB |
+
+Every result is **141/141**, preserves the original tests, and introduces no
+third-party runtime imports. The archived CLI and Maestro outputs were also
+graded again with the same unchanged suite. Agent HQ's two Haiku outputs were
+regraded too and both remain 141/141. Machine-readable measurements and
+qualifications are in [desktop-tier2-results.json](desktop-tier2-results.json).
+
+**Workflow differences and cost scope.** Agent HQ uses three task slots,
+planning, mentor reviews, combined-file verification, QA and learning. Its
+operator attaches `SPEC.md` and `ISSUES.md`; native controls discover files
+using their own tools. These are different workflows, not identical tool
+environments. Agent HQ made 19 host calls that produced 24 gateway requests;
+all 24 were served by `gpt-6-sol` at medium effort. Orchestrator's 42 gateway
+requests were also served by that model at medium effort. The successful
+Orchestrator run still encountered missing `apply_patch`, malformed patches and
+a failed completion-report command, then recovered without operator edits.
+
+The Maestro total includes its task, an automatic title call valued at
+$0.068423 that was served by `gpt-6.1-sol` at low effort, and a low-effort
+`gpt-6-sol` synopsis requested after the coding task completed. Its coding
+requests used `gpt-6-sol` at medium effort. Thus its primary model is controlled,
+but its auxiliary workflow is not entirely the same model and effort.
+Agent HQ's total includes planning, reviews and post-run learning. Completion
+times exclude post-run learning and synopsis generation. These are the
+gateway's API-rate valuations, not additional subscription charges.
+
+**Memory and timing limits.** Memory is the Linux process-tree PSS sum, sampled
+about every two seconds, including model and tool children. It is neither GPU
+memory nor a continuous maximum. Maestro and Orchestrator retain previous
+sessions; Agent HQ uses a fresh profile. Their initial sampled PSS values were
+156, 198 and 366 MiB respectively. The new Orchestrator observer captured its
+root throughout; two samples missed short-lived children. Brief update-feed
+probes on the same host overlapped the Agent HQ run, but no other benchmark
+model run overlapped it. These differences and the lack of repeated Codex runs
+prevent a reliable speed or memory ranking.
+
+The fixes now establish quality parity on this task with both tested engines.
+They do not establish that Agent HQ is better than the competitors: on this
+Codex sample it took longer and used more API-rate value and sampled memory
+than bare Codex and Maestro. Repeated context and engine startup, review cost,
+recovery and harder independent tasks remain areas to measure and improve.

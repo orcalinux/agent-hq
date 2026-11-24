@@ -167,8 +167,34 @@ See [`CONTRIBUTING.md`](../CONTRIBUTING.md#versions-and-releases) for version po
 6. Verify the website download and the application's update flow against the
    published release.
 
-A pushed `v*` tag publishes a GitHub release and installers. A manual Release
-workflow dispatch builds artifacts without publishing a tagged release. Code
+A pushed `v*` tag starts the release workflow; it does not prove that installers
+were published. A failed platform job prevents the publish job from running.
+Before announcing an update, verify the exact release run and the public latest
+release:
+
+```bash
+gh run list --workflow release.yml --limit 5
+gh run view <run-id> --json conclusion,jobs
+gh release view v<version> --json tagName,isDraft,isPrerelease,assets
+gh api repos/orcalinux/agent-hq/releases/latest --jq .tag_name
+```
+
+The run must succeed, the release must be public and stable, and the latest tag
+must match the intended version. Check `latest-linux.yml`, `latest-mac.yml` and
+`latest.yml`, download an installer and verify it against `SHA256SUMS.txt`.
+Use `scripts/check-packaged-update.mjs` with an older packaged executable to
+exercise the real feed in an isolated profile; it must report `available` with
+the intended version. It does not install the update.
+
+Verified on November 24, 2026: v0.24.0 and v0.24.1 were tagged but failed Windows
+tests, so neither was published. The v0.24.2 release run succeeded on Linux,
+Windows and macOS. GitHub reports it as the latest public stable release; its
+Debian installer checksum matches. The installed v0.19.0 app detects v0.24.2 in
+isolated profiles using both AppImage and normal Debian update modes. The
+downloaded public v0.24.2 Debian installer was extracted without changing the
+system installation, launched and verified to report `up-to-date` for v0.24.2.
+
+A manual Release workflow dispatch builds artifacts without publishing a tagged release. Code
 signing still requires signing credentials; enabling GitHub security settings
 does not sign installers.
 
