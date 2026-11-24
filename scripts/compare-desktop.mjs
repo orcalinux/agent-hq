@@ -227,7 +227,8 @@ try {
     await page.screenshot({ path: path.join(output, 'outcome.png') });
     write('state.json', await snapshot());
     write('calls.json', calls);
-    const reportedModels = calls.flatMap((entry) => entry.events.filter((event) => event.type === 'start' && event.model).map((event) => event.model));
+    const reportedModels = calls.flatMap((entry) => entry.events.flatMap((event) =>
+      event.type === 'done' && event.servedModel ? [event.servedModel] : event.type === 'start' && event.model ? [event.model] : []));
     const matchesPinned = calls.every((entry) => entry.model === model) && reportedModels.every((served) => served === model);
     metadata.modelPinned = matchesPinned;
     write('model-check.json', {
