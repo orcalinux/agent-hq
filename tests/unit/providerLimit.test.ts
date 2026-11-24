@@ -82,11 +82,15 @@ describe('pausing at provider limits', () => {
     expect(useAgentStore.getState().activeMission?.status).toBe('paused');
   });
 
-  it('resumes only unfinished tasks after reset and clears the pause', async () => {
+  it.each(['reset', 'explicit retry'])('resumes only unfinished tasks after %s and clears the pause', async (reason) => {
     vi.mocked(streamChat).mockRejectedValueOnce(new Error('usage limit reached; resets in 1m'));
     await executeRun();
-    useConnectionsStore.setState({ exhausted: { anthropic: Date.now() - 1 } });
-    useAgentStore.getState().updateMission({ providerLimit: { provider: 'anthropic', resetAt: Date.now() - 1, resetKnown: true } });
+    if (reason === 'reset') {
+      useConnectionsStore.setState({ exhausted: { anthropic: Date.now() - 1 } });
+      useAgentStore.getState().updateMission({ providerLimit: { provider: 'anthropic', resetAt: Date.now() - 1, resetKnown: true } });
+    } else {
+      useConnectionsStore.getState().clearExhausted('anthropic');
+    }
     useAgentStore.setState({ learningMode: 'off' });
     vi.mocked(streamChat)
       .mockResolvedValueOnce({ text: '```python path=src/review.py\nreviewed = True\n```', latencyMs: 1 })

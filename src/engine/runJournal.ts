@@ -1,6 +1,7 @@
 import { runJournalApi } from '@/api/client';
 import { reconcileInterrupted } from '@/engine/runRecovery';
 import { useAgentStore } from '@/store/useAgentStore';
+import { useConnectionsStore } from '@/store/useConnectionsStore';
 import type { MissionState } from '@/types';
 
 /** Only an unfinished live run is worth bringing back; finished or dismissed runs stay gone. */
@@ -19,6 +20,9 @@ export async function restoreFromJournal(): Promise<boolean> {
     const { journal } = await runJournalApi.load();
     const mission = restorableFromJournal(journal?.mission);
     if (!mission || useAgentStore.getState().activeMission) return false;
+    if (mission.providerLimit && mission.providerLimit.resetAt > Date.now()) {
+      useConnectionsStore.getState().markExhausted(mission.providerLimit.provider, mission.providerLimit.resetAt);
+    }
     useAgentStore.setState({ activeMission: mission });
     return true;
   } catch {

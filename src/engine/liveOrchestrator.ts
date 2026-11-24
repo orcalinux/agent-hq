@@ -1711,7 +1711,7 @@ export async function resumeInterruptedRun() {
 export async function resumeRun() {
   const m = currentMission();
   if (!m || agentsState().isLiveRunning) return;
-  if (m.providerLimit && m.providerLimit.resetAt > Date.now()) {
+  if (m.providerLimit && isProviderExhausted(useConnectionsStore.getState().exhausted, m.providerLimit.provider)) {
     const { providers, exhausted } = useConnectionsStore.getState();
     const blocked = m.providerLimit.provider;
     const available = providers.some((provider) => provider.id !== blocked && provider.connection
