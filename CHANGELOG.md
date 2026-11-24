@@ -20,6 +20,7 @@ git push --follow-tags
 - QA and integration repairs receive attached requirements. QA can read the current project and check exact code citations in shared or unchanged files, so passing a narrow test suite does not hide a concrete unmet requirement.
 - Completion and certificates are blocked when proposed files remain unwritten.
 - Exhausted repairs retain the last passing files without marking unresolved defects as a successful run. QA rework includes the offending file and code citation and requests a regression test. Certificates include final merged and repaired file contents.
+- Website deployment waits for uploaded Pages artifact metadata and uses a unique artifact name for each workflow attempt, preventing missing-artifact races and duplicate artifacts after a retry.
 
 ## [0.24.2] — 2026-11-24
 
