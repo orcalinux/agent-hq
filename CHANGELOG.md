@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.24.4] — 2026-11-24
+
+### Fixed
+- Choosing a chat completion with Tab, Enter or a click places the caret as soon as the inserted text renders, instead of on the next animation frame. Typing right after a completion could otherwise be put in the wrong place. For example, `/remember ` followed by `@pu` became `/remember pu@`, and the agent menu never opened.
+
 ## [0.24.3] — 2026-11-24
 
 ### Fixed

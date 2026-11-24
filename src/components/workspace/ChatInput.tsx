@@ -21,6 +21,7 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
   const [cursor, setCursor] = useState(0);
   const [selectionEnd, setSelectionEnd] = useState(0);
   const lastSelection = useRef({ start: 0, end: 0 });
+  const pendingCaret = useRef<{ text: string; cursor: number } | null>(null);
   const [focused, setFocused] = useState(false);
   const [composing, setComposing] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -97,18 +98,24 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
     return () => document.removeEventListener('pointerdown', outside);
   }, [open]);
 
+  useLayoutEffect(() => {
+    const pending = pendingCaret.current;
+    const input = inputRef.current;
+    if (!pending || !input || input.value !== pending.text) return;
+    pendingCaret.current = null;
+    if (document.activeElement !== input) input.focus();
+    input.setSelectionRange(pending.cursor, pending.cursor);
+  });
+
   const choose = (suggestion: ChatSuggestion) => {
     if (!token) return;
     const result = applyCompletion(value, token, suggestion);
-    onChange(result.text);
     setDismissed(!suggestion.hasArgs);
     lastSelection.current = { start: result.cursor, end: result.cursor };
+    pendingCaret.current = { text: result.text, cursor: result.cursor };
+    onChange(result.text);
     setCursor(result.cursor);
     setSelectionEnd(result.cursor);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(result.cursor, result.cursor);
-    });
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
