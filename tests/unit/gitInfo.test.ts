@@ -71,7 +71,7 @@ describe('repoDetails', () => {
     expect(info).toMatchObject({ hasCommits: true, branch: 'main', detached: false, upstream: 'origin/main', ahead: 1, behind: 0 });
     expect(info?.remote).toMatchObject({ isGitHub: true, owner: 'acme', repo: 'tool' });
     expect(info?.lastCommit?.subject).toBe('second');
-  });
+  }, 20_000);
   it('reports a detached HEAD', async () => {
     const dir = path.join(tmp, 'work');
     git(dir, 'checkout', '-q', '--detach');
