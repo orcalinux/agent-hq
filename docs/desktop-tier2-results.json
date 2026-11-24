@@ -261,6 +261,26 @@
         "outcome": "provider-blocked",
         "desktopOutcome": "failed",
         "issue": "Codex usage limit reached early; dependent tasks were incorrectly failed. Not a successful comparison."
+      },
+      {
+        "run": "agent-hq-0247-haiku-1124-153652",
+        "version": "0.24.7",
+        "commit": "dde56fe",
+        "models": ["claude-haiku-5-5"],
+        "matchesPinned": true,
+        "hiddenPassed": 141,
+        "hiddenTotal": 141,
+        "visibleTestsPassed": 228,
+        "visibleTestsTotal": 228,
+        "existingTestsUntouched": true,
+        "tasksCompleted": 15,
+        "tasksTotal": 15,
+        "wallSeconds": 900.485,
+        "outcome": "completed",
+        "verificationExitCode": 0,
+        "qaVerdict": "approve",
+        "integrationRepairRounds": 1,
+        "issue": "Successful full desktop workflow. Clean build before the explicit provider Retry now follow-up; one sample, not a reliability or performance ranking."
       }
     ],
     "limitations": [

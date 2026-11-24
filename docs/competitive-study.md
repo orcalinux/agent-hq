@@ -465,3 +465,24 @@ provider. Parallel in-flight calls are aborted and QA remains pending if
 its review was interrupted. The app does not ask the exhausted model to
 reflect on the paused run. Regression tests cover these control paths;
 they do not establish end-to-end benchmark success after the reset.
+
+### Completed Haiku validation after the reset
+
+The fresh real desktop run `agent-hq-0247-haiku-1124-153652` completed
+successfully in **900.485 seconds**. All 15 tasks, including QA, finished;
+the independent grader passed **141/141 hidden checks** and **228/228
+visible project checks**, with the original tests untouched and no
+third-party implementation dependencies. The served-model audit confirmed
+that every reported model remained the pinned Claude Haiku 5.5.
+
+This run used the clean 0.24.7 build from `dde56fe`, before the small
+follow-up that makes an explicit provider **Retry now** override the pause.
+The integration loop combined proposals, encountered a failing project
+verification, repaired one file and reran verification successfully.
+QA then approved the files on disk. Hidden tests were run only after
+completion and were never supplied to the agents.
+
+This is one successful full workflow after the fixes, not evidence of
+production reliability across projects or a new speed/cost ranking.
+The two earlier provider-blocked Codex attempts remain unsuccessful
+attempts and are not replaced by this result.
