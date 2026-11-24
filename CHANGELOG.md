@@ -11,6 +11,11 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.24.6] — 2026-11-24
+
+### Fixed
+- Newly hired specialists obey forced setup and locked level models even when complexity routing is off. A planner could previously assign a new specialist a different model while the existing roster remained pinned, bypassing the user's setup.
+
 ## [0.24.5] — 2026-11-24
 
 ### Fixed

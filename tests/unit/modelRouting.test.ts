@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignAgentModels, assignPlanModels, chooseTiers, isManagedGroup, magpieGroupsFor, quotaKeyOf, fallbackForTier, learnedBonus, parseComplexity, profileOf, rankModels, resolveRouting, resolveTiers, routeTaskModel, routingFor, scopeModels, suggestTiers, taskComplexity, tierOf, versionOf } from '../../src/engine/modelRouting';
+import { assignAgentModels, assignPlanModels, chooseTiers, hireModel, isManagedGroup, magpieGroupsFor, quotaKeyOf, fallbackForTier, learnedBonus, parseComplexity, profileOf, rankModels, resolveRouting, resolveTiers, routeTaskModel, routingFor, scopeModels, suggestTiers, taskComplexity, tierOf, versionOf } from '../../src/engine/modelRouting';
 import { diffModels, isCheckDue, snapshotModels } from '../../src/engine/modelWatch';
 import { parsePlan } from '../../src/engine/orchestratorParsing';
 import { DEFAULT_AGENTS } from '../../src/store/defaultState';
@@ -23,6 +23,27 @@ function provider(id: ProviderState['id'], name: string, models: Array<{ ref: st
     models: [...models.map((m) => ({ ...m, providerId: id, id: m.ref, via: 'cli' as const, capabilities: ['chat'], selectable: true })), ...aliases],
   };
 }
+
+describe('new specialist model policy', () => {
+  const allowed = new Set(['fast', 'strong']);
+
+  it('keeps forced pins when the planner hires a specialist on a different model', () => {
+    expect(hireModel({ role: 'backend', model: 'strong' }, allowed, { force: true, pinned: { standard: 'fast' } })).toBe('fast');
+    expect(hireModel({ role: 'qa', model: 'strong' }, allowed, { modes: { complex: 'locked' }, pinned: { complex: 'fast' } })).toBe('fast');
+    expect(hireModel({ role: 'backend', junior: true, model: 'strong' }, allowed, { force: true, pinned: { simple: 'fast' } })).toBe('fast');
+  });
+
+  it('uses role defaults when force has no available pin', () => {
+    expect(hireModel({ model: 'strong' }, allowed, { force: true })).toBeUndefined();
+    expect(hireModel({ model: 'strong' }, allowed, { force: true, pinned: { standard: 'unavailable' } })).toBeUndefined();
+  });
+
+  it('allows dynamic choices and replaces choices outside the available scope', () => {
+    expect(hireModel({ model: 'strong' }, allowed, {}, { standard: 'fast' })).toBe('strong');
+    expect(hireModel({ model: 'unavailable' }, allowed, {}, { standard: 'fast' })).toBe('fast');
+    expect(hireModel({ role: 'backend' }, allowed)).toBeUndefined();
+  });
+});
 
 describe('model tiers', () => {
   it('sorts families into simple, standard and complex for any provider', () => {

@@ -386,6 +386,24 @@ export function assignAgentModels<T extends RoutableTask>(tasks: T[], allowed: R
   });
 }
 
+/** The level a newly hired agent works at: juniors do simple work, architects and QA complex work. */
+export function hireLevel(hire: { junior?: boolean; role?: string }): Complexity {
+  return hire.junior ? 'simple' : hire.role === 'architect' || hire.role === 'qa' ? 'complex' : 'standard';
+}
+
+/**
+ * The model a newly hired agent gets. Your setup wins: with Force or a locked level, Sovereign's suggestion
+ * is ignored and the level's pinned model is used (or, with none, the role default by returning undefined).
+ * Otherwise Sovereign's suggestion stands when it is in scope, else the level's model.
+ */
+export function hireModel(hire: { model?: AIModelId; junior?: boolean; role?: string }, allowed: ReadonlySet<AIModelId>, policy: RoutingPolicy = {}, tiers: Partial<Record<Complexity, AIModelId>> = {}): AIModelId | undefined {
+  const level = hireLevel(hire);
+  const pinned = policy.pinned?.[level];
+  if (policy.force || policy.modes?.[level] === 'locked') return pinned && (!allowed.size || allowed.has(pinned)) ? pinned : undefined;
+  if (hire.model && (!allowed.size || allowed.has(hire.model))) return hire.model;
+  return tiers[level] || pinned || undefined;
+}
+
 /** Which subscription a model draws on, for quota checks: Magpie's provider id ("claude", "codex"…). */
 export function quotaKeyOf(ref: AIModelId): string | undefined {
   const viaMagpie = /^magpie:([^/]+)\//.exec(ref);

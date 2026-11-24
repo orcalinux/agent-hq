@@ -227,11 +227,16 @@ try {
     await page.screenshot({ path: path.join(output, 'outcome.png') });
     write('state.json', await snapshot());
     write('calls.json', calls);
+    const reportedModels = calls.flatMap((entry) => entry.events.filter((event) => event.type === 'start' && event.model).map((event) => event.model));
+    const matchesPinned = calls.every((entry) => entry.model === model) && reportedModels.every((served) => served === model);
+    metadata.modelPinned = matchesPinned;
     write('model-check.json', {
       requested: [...new Set(calls.map((entry) => entry.model))],
+      served: [...new Set(reportedModels)],
       reported: calls.flatMap((entry) => entry.events.filter((event) => event.type === 'done')),
-      matchesPinned: calls.every((entry) => entry.model === model),
+      matchesPinned,
     });
+    if (!matchesPinned) throw new Error('The run used models outside the benchmark pin. Evidence is retained; do not treat it as a same-model comparison.');
   } else {
     metadata.outcome = 'prepared-only';
     log('No task submitted. Add --run to consume real subscription usage.');

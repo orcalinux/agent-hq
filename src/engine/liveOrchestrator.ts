@@ -32,7 +32,7 @@ import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, ev
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
-import { COMPLEXITIES, COMPLEXITY_HINT, assignAgentModels, assignPlanModels, fallbackForTier, isGroupRef, rankModels, routingFor, taskComplexity, type RoutingPolicy } from './modelRouting';
+import { COMPLEXITIES, COMPLEXITY_HINT, assignAgentModels, assignPlanModels, fallbackForTier, hireModel, isGroupRef, rankModels, routingFor, taskComplexity, type RoutingPolicy } from './modelRouting';
 import { BALANCES, activeMagpieGroups, isLowQuota, useMagpieStore } from '@/store/useMagpieStore';
 import { useModelWatchStore } from '@/store/useModelWatchStore';
 import { DESKTOP_INTERRUPTED, shouldAutoResume } from './runRecovery';
@@ -572,11 +572,15 @@ export function routePlanModels(plan: OrchestratorPlan): OrchestratorPlan {
   const allowed = new Set(models.map((m) => m.ref));
   const policy = routingPolicy(models);
   void useMagpieStore.getState().sync();
-  if (!store.complexityRouting) return { ...plan, tasks: assignAgentModels(plan.tasks, allowed, policy) };
+  const newAgents = plan.newAgents?.map((agent) => ({
+    ...agent,
+    model: hireModel(agent, allowed, policy, store.complexityRouting ? tiers : {}),
+  }));
+  if (!store.complexityRouting) return { ...plan, newAgents, tasks: assignAgentModels(plan.tasks, allowed, policy) };
   const juniorKeys = new Set((plan.newAgents ?? []).filter((n) => n.junior).map((n) => n.key));
   return {
     ...plan,
-    newAgents: plan.newAgents?.map((n) => (n.model && allowed.has(n.model) ? n : { ...n, model: tiers[n.junior ? 'simple' : n.role === 'architect' || n.role === 'qa' ? 'complex' : 'standard'] || undefined })),
+    newAgents,
     tasks: assignPlanModels(plan.tasks, { tiers, peers }, allowed, (t) => juniorKeys.has(t.agentId) || Boolean(store.agents[t.agentId]?.internship?.isIntern), policy),
   };
 }
