@@ -275,8 +275,10 @@ On a fresh clone of the same starter, the rebuilt app completed in **586 s**
 and graded **141/141** on the unchanged hidden suite, with the original tests
 untouched. This joins the Haiku group (Claude alone, Orchestrator and Maestro,
 all 141/141). Cost and memory for this run are saved in the evidence folder and
-are not yet compared here. It is one run on one task, so it shows that the
-failure is fixed, not that Agent HQ is faster or cheaper.
+are not yet compared here. A repeat on another fresh clone also completed (617 s) and graded 141/141 with
+the original tests untouched, so the result held across two runs. It is still
+one task and one model, so it shows that the failure is fixed, not that Agent HQ
+is faster or cheaper.
 
 The Codex group is incomplete. The Orchestrator Codex run ended when the Codex
 account hit its usage limit at 22:38 UTC (its transcript shows the provider
