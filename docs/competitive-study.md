@@ -344,8 +344,10 @@ sessions; Agent HQ uses a fresh profile. Their initial sampled PSS values were
 156, 198 and 366 MiB respectively. The new Orchestrator observer captured its
 root throughout; two samples missed short-lived children. Brief update-feed
 probes on the same host overlapped the Agent HQ run, but no other benchmark
-model run overlapped it. These differences and the lack of repeated Codex runs
-prevent a reliable speed or memory ranking.
+model run overlapped it. The desktop remained in use: the installed Agent HQ
+package was upgraded from 0.19.0 to 0.24.2 at 07:39:29–07:39:36 UTC, during the
+Orchestrator run. These differences and the lack of repeated Codex runs prevent
+a reliable speed or memory ranking.
 
 The fixes now establish quality parity on this task with both tested engines.
 They do not establish that Agent HQ is better than the competitors: on this

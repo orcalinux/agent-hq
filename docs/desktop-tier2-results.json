@@ -129,6 +129,7 @@
     "Maestro and Orchestrator retain earlier sessions; Agent HQ uses a fresh profile.",
     "PSS samples include process descendants, exclude GPU memory and can miss short-lived peaks.",
     "Brief update-feed probes overlapped Agent HQ on the same host, without other benchmark model runs.",
+    "The desktop remained in use; an installed Agent HQ package upgrade at 07:39:29–07:39:36 UTC overlapped Orchestrator.",
     "These sanitized summaries omit full prompts, local paths and account data; detailed evidence is retained outside Git."
   ]
 }

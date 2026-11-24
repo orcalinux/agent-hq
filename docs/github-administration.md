@@ -193,6 +193,9 @@ Debian installer checksum matches. The installed v0.19.0 app detects v0.24.2 in
 isolated profiles using both AppImage and normal Debian update modes. The
 downloaded public v0.24.2 Debian installer was extracted without changing the
 system installation, launched and verified to report `up-to-date` for v0.24.2.
+The system package log subsequently records a real upgrade from v0.19.0 to
+v0.24.2 at 07:39:29–07:39:36 UTC. `dpkg-query` reports v0.24.2 installed and a
+new process is running from `/opt/Agent HQ/agent-hq`.
 
 A manual Release workflow dispatch builds artifacts without publishing a tagged release. Code
 signing still requires signing credentials; enabling GitHub security settings
