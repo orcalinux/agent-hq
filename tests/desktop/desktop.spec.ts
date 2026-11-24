@@ -47,6 +47,47 @@ async function launch(extraEnv: Record<string, string> = {}): Promise<{ app: Ele
 
 test.beforeAll(freshDirs);
 
+test('a blocked verifier fails before any model call and keeps the run resumable', async () => {
+  const { app, page, errors } = await launch({ AGENT_HQ_USER_DATA: path.join(base, 'verification-user-data') });
+  let modelCalls = 0;
+  page.on('request', (request) => { if (new URL(request.url()).pathname === '/api/chat') modelCalls++; });
+  try {
+    await page.waitForFunction(() => localStorage.getItem('agent-hq.state'));
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
+    await page.evaluate(() => {
+      const saved = JSON.parse(localStorage.getItem('agent-hq.state')!);
+      Object.assign(saved.state, {
+        activeView: 'tasks', approvalMode: 'auto', learningMode: 'off',
+        verificationCommand: 'agent-hq-nonexistent-check', runHistory: [],
+        activeMission: {
+          id: 'desktop-verifier-gate', presetId: 'live', title: 'Verification recovery', prompt: 'Keep implementation pending until verification is available.', source: 'live', status: 'failed',
+          startedAt: Date.now(), currentStage: 'implementation', stageIndex: 2, proposedChanges: [],
+          stepIndex: 0, totalSteps: 2,
+          tasks: [
+            { id: 'work', title: 'Pending implementation', description: 'Make a change.', stage: 'implementation', assignedAgentId: 'agent-backend', status: 'pending', priority: 'medium', progress: 0, tags: [], dependsOn: [] },
+            { id: 'qa-review', title: 'QA review', description: 'Verify changes.', stage: 'qa_review', assignedAgentId: 'agent-qa', status: 'pending', priority: 'medium', progress: 0, tags: [], dependsOn: ['work'] },
+          ],
+        },
+      });
+      localStorage.setItem('agent-hq.state', JSON.stringify(saved));
+      location.reload();
+    });
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Tasks', exact: true }).click();
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('agent-hq.state')!).state.activeMission.error ?? '')).toContain('is unavailable');
+    const mission = await page.evaluate(() => JSON.parse(localStorage.getItem('agent-hq.state')!).state.activeMission);
+    expect(mission.status).toBe('failed');
+    expect(mission.qaCertificate).toBeUndefined();
+    expect(mission.tasks.every((task: { status: string }) => task.status === 'pending')).toBe(true);
+    await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+    expect(modelCalls).toBe(0);
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
 test('native desktop shortcuts tile the main window into the available work area', async ({}, testInfo) => {
   test.skip(process.platform !== 'linux' || process.env.AGENT_HQ_TEST_TILING !== '1', 'Requires X11, Xfwm and xdotool; enable with AGENT_HQ_TEST_TILING=1.');
   const shortcuts = execFileSync('xfconf-query', ['-c', 'xfce4-keyboard-shortcuts', '-lv'], { encoding: 'utf8' });

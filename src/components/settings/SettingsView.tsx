@@ -251,7 +251,7 @@ export default function SettingsView() {
           </Section>
 
           <Section id="qa">
-            <Field label="Verification command" hint="Run after agents finish so QA sees real results, for example npm test or npx tsc --noEmit. Must be an allowed command; see the terminal.">
+            <Field label="Verification command" hint="Checked before work starts and rerun after changes. Failed tests feed back into repair; a missing test runner blocks completion until you fix the environment and Resume. For example npm test or npx tsc --noEmit. Must be an allowed command; see the terminal.">
               <div className="flex gap-2">
                 <Input value={verify} onChange={(e) => { setVerify(e.target.value); setSaved(false); }} placeholder="npm test" />
                 <Button disabled={verify === verification} onClick={() => { setVerification(verify.trim()); setSaved(true); }}>Save</Button>

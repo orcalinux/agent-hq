@@ -121,6 +121,70 @@
       }
     ]
   },
+  "agentHqReliabilityFollowup": {
+    "date": "2026-11-24",
+    "model": "claude-haiku-5-5",
+    "developmentBuilds": true,
+    "results": [
+      {
+        "run": "agent-hq-0243-haiku-1124-055714",
+        "reportedVersion": "0.24.2",
+        "hiddenPassed": 138,
+        "hiddenTotal": 141,
+        "existingTestsUntouched": true,
+        "wallSeconds": 694.977,
+        "outcome": "failed",
+        "issue": "Unresolved independent CLI file proposals prevented complete application."
+      },
+      {
+        "run": "agent-hq-0243c-haiku-1124-064323",
+        "reportedVersion": "0.24.2",
+        "hiddenPassed": 103,
+        "hiddenTotal": 141,
+        "existingTestsUntouched": true,
+        "wallSeconds": 809.58,
+        "outcome": "completed",
+        "issue": "Verification could not run because pytest was absent; QA approval incorrectly allowed completion."
+      },
+      {
+        "run": "agent-hq-feedback-haiku-1124-070354",
+        "reportedVersion": "0.24.2",
+        "hiddenPassed": 137,
+        "hiddenTotal": 141,
+        "existingTestsUntouched": true,
+        "wallSeconds": 1157.883,
+        "outcome": "completed",
+        "issue": "QA found unmet requirements; a timed-out repair restored a locally passing candidate but incorrectly completed with unresolved defects."
+      }
+    ]
+  },
+  "agentHq0243Validation": {
+    "date": "2026-11-24",
+    "task": "Same Tier 2 starter, request and unchanged independent hidden suite",
+    "results": [
+      {
+        "run": "agent-hq-0243-final-sonnet-1124-072434",
+        "version": "0.24.3",
+        "model": "claude-sonnet-5-5",
+        "hiddenPassed": 141,
+        "hiddenTotal": 141,
+        "visibleTestsPassed": 222,
+        "visibleTestsTotal": 222,
+        "existingTestsUntouched": true,
+        "wallSeconds": 615.907,
+        "outcome": "completed",
+        "verificationExitCode": 0,
+        "qaRejectCount": 1,
+        "hostCallsIncludingLearning": 16,
+        "observedRecovery": "Initial combined-file verification failed. One integration repair passed verification. QA then found an API requirement defect; task rework added a regression test and passed verification and QA."
+      }
+    ],
+    "limitations": [
+      "Validation samples, not a controlled speed or cost comparison against a different model.",
+      "Browser and desktop control-flow checks overlapped parts of validation; do not use the timings or memory samples for a performance ranking.",
+      "No hidden tests or independent grader failures were passed to the agents."
+    ]
+  },
   "limitations": [
     "One task on Linux; one completed Codex attempt per setup.",
     "Different tool environments and workflow assistance; Agent HQ has attached specifications and three task slots.",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, checkpointProposals, evidencedQaIssues, markConflicts, selectAutoApply, blameTasks, reworkClosure, verificationCouldNotRun } from '../../src/engine/approval';
+import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, checkpointProposals, evidencedQaIssues, markConflicts, replaceMergedProposals, selectAutoApply, blameTasks, reworkClosure, verificationCouldNotRun } from '../../src/engine/approval';
 import type { ProposedFileChange } from '../../src/types';
 
 const change = (id: string, path: string, status: ProposedFileChange['status'] = 'pending', extra: Partial<ProposedFileChange> = {}): ProposedFileChange => ({
@@ -36,6 +36,19 @@ describe('verified candidate review', () => {
     expect(evidencedQaIssues({ verdict: 'reject', summary: 'unwritten defect', issues: [issue] }, [
       { ...files[0], status: 'pending' },
     ])).toEqual([]);
+  });
+
+  it('accepts a citation for either contributor to a merged file', () => {
+    const merged = [{ ...files[0], sourceTaskIds: ['t1', 't2'] }];
+    expect(evidencedQaIssues({ verdict: 'reject', summary: 'bug', issues: [{ ...issue, taskId: 't2' }] }, merged)).toHaveLength(1);
+    expect(evidencedQaIssues({ verdict: 'reject', summary: 'bug', issues: [{ ...issue, taskId: 'invented' }] }, merged)).toHaveLength(0);
+  });
+
+  it('accepts a concrete defect in an unchanged file only after inspecting its current contents', () => {
+    const verdict = { verdict: 'reject' as const, summary: 'entry point missed', issues: [issue] };
+    expect(evidencedQaIssues(verdict, [])).toEqual([]);
+    expect(evidencedQaIssues(verdict, [], [{ path: 'money.py', content: 'return int(amount) / rate\n' }])).toEqual([issue]);
+    expect(evidencedQaIssues(verdict, [], [{ path: 'money.py', content: 'return safe_divide(amount, rate)\n' }])).toEqual([]);
   });
 
   it('restores only the latest passing revision per file without mutating the checkpoint', () => {
@@ -98,6 +111,30 @@ describe('selectAutoApply', () => {
 
   it('returns nothing when no change is pending', () => {
     expect(selectAutoApply([change('x', 'x.ts', 'applied')])).toEqual({ apply: [], superseded: [], conflicted: [] });
+  });
+});
+
+describe('merging independent proposals', () => {
+  const originals = [change('a', 'shared.py'), change('b', 'shared.py')];
+  const merged = change('merged', 'shared.py', 'pending', { taskId: 'a', content: 'combined', sourceTaskIds: ['a', 'b'] });
+
+  it('retains both originals and makes only the merged file eligible to apply', () => {
+    const result = replaceMergedProposals(originals, originals, merged);
+    expect(result.map((entry) => entry.status)).toEqual(['discarded', 'discarded', 'pending']);
+    expect(result.slice(0, 2).map((entry) => entry.content)).toEqual(['a', 'b']);
+    expect(selectAutoApply(result, [{ id: 'a' }, { id: 'b' }]).apply).toEqual([merged]);
+    expect(originals.every((entry) => entry.status === 'pending')).toBe(true);
+  });
+
+  it('preserves unrelated files', () => {
+    const unrelated = change('c', 'other.py');
+    expect(replaceMergedProposals([...originals, unrelated], originals, merged)).toContain(unrelated);
+  });
+
+  it('rejects stale proposals and empty or unrelated merged files', () => {
+    expect(() => replaceMergedProposals([{ ...originals[0], content: 'new' }, originals[1]], originals, merged)).toThrow('changed during integration');
+    expect(() => replaceMergedProposals(originals, originals, { ...merged, content: '' })).toThrow('nonempty');
+    expect(() => replaceMergedProposals(originals, originals, { ...merged, path: 'different.py' })).toThrow('matching every original');
   });
 });
 

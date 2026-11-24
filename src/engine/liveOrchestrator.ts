@@ -28,7 +28,7 @@ import {
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
 import { parallelLimit, planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
-import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, evidencedQaIssues, markConflicts, reworkClosure, selectAutoApply, verificationCouldNotRun } from './approval';
+import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, evidencedQaIssues, markConflicts, replaceMergedProposals, reworkClosure, selectAutoApply, verificationCouldNotRun } from './approval';
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
@@ -412,7 +412,7 @@ function planInstructions(strategy: TeamStrategy, byComplexity: boolean): string
   return `Mode: PLAN. Produce an execution plan. Respond with ONLY a JSON object (no prose outside it) of the form:
 {"summary": "one paragraph", "newAgents": [{"key": "mobile", "name": "Orion", "role": "frontend", "title": "Mobile Engineer", "specialty": "<any project domain, such as IoT & Embedded>", "focus": "<domain instructions and verification requirements>", "systemPrompt": "...", "model": "<exact model ref>", "reason": "...", "junior": false, "mentor": "<for juniors: roster agent id or new senior key>"}], "tasks": [{"id": "t1", "title": "...", "description": "concrete instructions", "stage": "briefing|architecture|implementation", "agentId": "<roster agent id or new agent key>", "complexity": "simple|standard|complex", "model": "<optional model ref for this task>", "modelReason": "<one line, only when you set model>", "priority": "critical|high|medium|low", "dependsOn": ["t0"]}]}
 The role field is a workflow routing category only. Specialty is unrestricted: choose the expertise required by the project, including IoT, embedded firmware, electronics, robotics or any other domain.
-Rules: as many tasks as the work needs, each one concrete and independently checkable. Split work so tasks that depend on each other say so in dependsOn (outputs of dependencies are handed to the dependent task). Juniors only get small, well-scoped tasks; their mentor reviews them automatically. Do not add a QA task: QA review by Sentinel runs automatically. Dependencies must reference earlier task ids.
+Rules: as many tasks as the work needs, each one concrete and independently checkable. Account for every numbered issue, explicit requirement and affected entry point in the request and attached files. Before returning the plan, check that each requirement has an implementing task and a regression check; include the requirement reference and expected behavior in that task's description. Shared library changes alone do not complete requested CLI, API, import or export behavior. Split work so tasks that depend on each other say so in dependsOn (outputs of dependencies are handed to the dependent task). Juniors only get small, well-scoped tasks; their mentor reviews them automatically. Do not add a QA task: QA review by Sentinel runs automatically. Dependencies must reference earlier task ids.
 ${
   byComplexity
     ? 'Model choice: rate EVERY task\'s "complexity" honestly (simple, standard or complex). By default leave "model" out: the task then runs on the best model for its complexity across all connected providers, so simple work does not spend the strongest model. Set "model" yourself when another provider\'s model clearly fits a task better (for example a model known to be strong at that language or domain, a long context window for large files, or spreading parallel work over providers to avoid rate limits), and only with a ref from the available models list, and say why in "modelReason".'
@@ -918,7 +918,8 @@ When you change an existing file, start from its current contents (provided belo
     for (const c of marked) {
       if (c.taskId !== task.id || !c.conflictsWith?.length) continue;
       const names = c.conflictsWith.map((id) => `"${taskById(id)?.title ?? id}"`).join(', ');
-      agentsState().logActivity({ kind: 'info', level: 'warn', runId: mission.id, agentId: agent.id, taskId: task.id, text: `Conflict: ${agent.name} and ${names} both changed ${c.path} independently. Pick one in the Changes tab; it will not be written automatically.` });
+      const next = autoAppliesChanges(store.approvalMode) ? 'The integrator will combine these proposals before QA.' : 'Review both proposals in the Changes tab before applying a version.';
+      agentsState().logActivity({ kind: 'info', level: 'warn', runId: mission.id, agentId: agent.id, taskId: task.id, text: `Conflict: ${agent.name} and ${names} both changed ${c.path} independently. ${next}` });
     }
     agentsState().updateTask(task.id, {
       status: 'completed',
@@ -994,6 +995,79 @@ async function verifyNow(command: string) {
 
 type Verified = Awaited<ReturnType<typeof verifyNow>>;
 
+const MAX_MERGE_ROUNDS = 2;
+
+async function mergeConflictingChanges(signal: AbortSignal): Promise<{ merged: string[]; unresolved: string[] }> {
+  const store = agentsState();
+  const mission = currentMission();
+  const merged: string[] = [];
+  const unresolved: string[] = [];
+  if (!mission) return { merged, unresolved };
+  const clashing = new Map<string, ProposedFileChange[]>();
+  for (const change of selectAutoApply(mission.proposedChanges ?? [], mission.tasks).conflicted) {
+    clashing.set(change.path, [...(clashing.get(change.path) ?? []), change]);
+  }
+  if (!clashing.size) return { merged, unresolved };
+  const integrator = store.agents['agent-architect'] ?? store.agents['agent-manager'];
+  if (!integrator) return { merged, unresolved: [...clashing.keys()] };
+  const workTasks = mission.tasks.filter((t) => t.id !== QA_TASK_ID);
+  const modelOverride = workTasks.find((t) => t.complexity === 'complex' && t.model)?.model ?? workTasks.find((t) => t.model)?.model;
+  store.setAgentStatus(integrator.id, 'coding', 'Merging files changed by several tasks');
+  try {
+    for (const [path, versions] of clashing) {
+      signal.throwIfAborted();
+      const base = await api.readFileIfExists(path);
+      const titleOf = (taskId: string) => mission.tasks.find((t) => t.id === taskId)?.title ?? taskId;
+      store.logActivity({ kind: 'info', level: 'info', runId: mission.id, agentId: integrator.id, text: `${integrator.name} is merging ${versions.length} versions of ${path} written by separate tasks` });
+      let content: string | undefined;
+      if (versions.some((version) => version.content.length > 60_000) || (base?.content?.length ?? 0) > 60_000) {
+        unresolved.push(path);
+        continue;
+      }
+      const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [{
+        role: 'user',
+        content: `Request:\n${mission.prompt}${await attachmentContext(mission.contextFiles)}\n\nCurrent file on disk:\n${base?.content ?? '(does not exist yet)'}\n\n${versions.map((v, index) => `VERSION ${index + 1} — from task "${titleOf(v.taskId)}":\n${v.content}`).join('\n\n')}`,
+      }];
+      for (let round = 1; round <= MAX_MERGE_ROUNDS && content === undefined; round++) {
+        const result = await callAgent(integrator, {
+          system: `${integrator.systemPrompt}\n\nYou are the integrator. Several engineers changed the same file independently, each without seeing the others' work. Produce ONE version of the file that contains every change from every version: all new functions, flags, options, fields and fixes. Where two versions changed the same lines, combine them so both behaviours still hold. Keep unrelated existing code as it is. Do not drop a change because another version looks similar.\nOutput the complete merged file in one fenced block whose info string contains path=${path}, and nothing else of substance.`,
+          messages,
+          signal,
+          note: `Merge ${path}, round ${round}`,
+          countInRun: true,
+          modelOverride,
+        });
+        const blocks = extractFileBlocks(result.text);
+        if (blocks.length === 1 && blocks[0].path === path && blocks[0].content.trim()) {
+          content = blocks[0].content;
+        } else {
+          messages.push({ role: 'assistant', content: result.text }, { role: 'user', content: `The merge was not accepted: return exactly one complete, nonempty file block with path=${path}. Both original proposals remain unchanged.` });
+        }
+      }
+      if (content === undefined) {
+        unresolved.push(path);
+        store.logActivity({ kind: 'info', level: 'warn', runId: mission.id, agentId: integrator.id, text: `${integrator.name} could not produce a merged ${path}` });
+        continue;
+      }
+      const keep = versions[0];
+      const mergedChange: ProposedFileChange = {
+        id: `merge:${path}:${crypto.randomUUID()}`, path, content, taskId: keep.taskId, agentId: integrator.id,
+        sourceTaskIds: [...new Set(versions.flatMap((version) => [version.taskId, ...(version.sourceTaskIds ?? [])]))],
+        status: 'pending',
+      };
+      await api.stageWorker(mission.id, `merge-${crypto.randomUUID()}`, 1, [{ path, content }]);
+      store.updateMission({
+        proposedChanges: replaceMergedProposals(currentMission()?.proposedChanges ?? [], versions, mergedChange),
+      });
+      merged.push(path);
+      store.logActivity({ kind: 'info', level: 'success', runId: mission.id, agentId: integrator.id, text: `Merged ${versions.length} versions of ${path} into one` });
+    }
+  } finally {
+    store.setAgentStatus(integrator.id, 'idle');
+  }
+  return { merged, unresolved };
+}
+
 /** Project files a failure output names, read from disk, that are not already among the written changes. */
 async function filesNamedIn(output: string, skip: Set<string>, limit = 10): Promise<Array<{ path: string; content: string }>> {
   const tree = useWorkspaceStore.getState().tree.filter((entry) => entry.type === 'file' && !skip.has(entry.path)).map((entry) => entry.path);
@@ -1029,11 +1103,11 @@ async function repairIntegration(command: string, failure: Verified, signal: Abo
       store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, agentId: integrator.id, text: `${integrator.name} is fixing the combined changes against the verification output (round ${round} of ${MAX_REPAIR_ROUNDS})` });
       const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [{
         role: 'user',
-        content: `Request:\n${mission.prompt}\n\nVerification command: ${command} (exit ${last.exitCode})\nOutput (end):\n${last.raw.slice(-12_000)}\n\nFiles the team wrote:\n${truncate(written, 140_000)}${
+        content: `Request:\n${mission.prompt}${await attachmentContext(mission.contextFiles)}\n\nVerification command: ${command} (exit ${last.exitCode})\nOutput (end):\n${last.raw.slice(-12_000)}\n\nFiles the team wrote:\n${truncate(written, 140_000)}${
           related.length ? `\n\nOther project files named in the output:\n${truncate(related.map((file) => `FILE ${file.path}\n${file.content}`).join('\n\n'), 40_000)}` : ''}\n\n${projectContext()}`,
       }];
       const ask = () => callAgent(integrator, {
-        system: `${integrator.systemPrompt}\n\nYou are the integrator. Several engineers each wrote part of the change below, and their files are now in the project together. The verification command fails. Find why from the real output and fix the code so it passes while still meeting the request. Usually the cause is a mismatch between files (signatures, names, data formats) or one missing piece.\nRules: never delete, skip or weaken existing tests to make them pass; fix the code. Keep every behaviour the request asks for. Output each file you change in full in a fenced block whose info string contains path=<relative path>, and only the files you change. Keep explanations to a few lines.`,
+        system: `${integrator.systemPrompt}\n\nYou are the integrator. Several engineers each wrote part of the change below, and their files are now in the project together. The verification command fails. Find why from the real output and fix the code so it passes while still meeting the request. Usually the cause is a mismatch between files (signatures, names, data formats) or one missing piece.\nRules: never delete, skip or weaken existing tests to make them pass; fix the code. Keep every behaviour the request asks for. Add a focused regression test for any defect that is not already covered by the failing tests. Output each file you change in full in a fenced block whose info string contains path=<relative path>, and only the files you change. Keep explanations to a few lines.`,
         messages,
         signal,
         note: `Integration repair, round ${round}`,
@@ -1104,6 +1178,8 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
   store.logActivity({ kind: 'qa', level: 'info', runId: mission.id, agentId: qa.id, text: 'Sentinel started QA review' });
 
   const command = store.verificationCommand.trim();
+  const mergeOutcome = autoAppliesChanges(store.approvalMode) ? await mergeConflictingChanges(signal) : { unresolved: [] };
+  if (mergeOutcome.unresolved.length) throw new Error(`Cannot review the candidate: could not merge ${mergeOutcome.unresolved.join(', ')}. The original proposals are preserved.`);
   let candidateApplied: string[] = [];
   let verificationNote = '';
   let verified = false;
@@ -1114,7 +1190,8 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     const pendingBefore = new Set((currentMission()?.proposedChanges ?? []).filter((c) => c.status === 'pending').map((c) => c.id));
     const written = await autoApplyChanges();
     if (written.failed || currentMission()?.proposedChanges?.some((change) => change.status === 'pending')) {
-      throw new Error('Verification cannot certify this candidate: some proposed files could not be written or have unresolved conflicts.');
+      const left = mergeOutcome.unresolved.length ? ` Could not merge: ${mergeOutcome.unresolved.join(', ')}.` : '';
+      throw new Error(`Verification cannot certify this candidate: some proposed files could not be written or have unresolved conflicts.${left}`);
     }
     candidateApplied = (currentMission()?.proposedChanges ?? []).filter((c) => c.status === 'applied' && pendingBefore.has(c.id)).map((c) => c.id);
     store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, text: `Running verification on the proposed changes: ${command}` });
@@ -1126,6 +1203,11 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
       runId: mission.id,
       text: check.unrunnable ? `Verification could not run, so it says nothing about the code: ${check.why}` : `Verification ${check.passed ? 'passed' : `failed (exit ${check.exitCode})`}`,
     });
+    if (check.unrunnable) {
+      store.setAgentStatus(qa.id, 'idle');
+      store.updateTask(QA_TASK_ID, { status: 'pending', progress: 0 });
+      throw new Error(`Verification "${command}" could not run: ${check.why}. Install or configure the test runner in this project's environment, then Resume. The candidate files are preserved; no QA approval was issued.`);
+    }
     if (!check.passed && !check.unrunnable) {
       try {
         const repaired = await repairIntegration(command, check, signal);
@@ -1138,8 +1220,9 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
         throw error;
       }
     }
-    const { passed, unrunnable, raw, why, verification } = check;
-    if (!passed && !unrunnable) {
+    if (check.unrunnable) throw new Error(`Verification "${command}" became unavailable during repair: ${check.why}. Fix the environment and Resume; no QA approval was issued.`);
+    const { passed, raw, verification } = check;
+    if (!passed) {
       await withdrawCandidate(candidateApplied);
       const tail = firstFailure.raw.slice(-4000);
       noteFeedback(mission.id, { agentId: 'team', source: 'verification', text: `"${command}" failed (exit ${firstFailure.exitCode}): ${tail.slice(-500)}` });
@@ -1147,7 +1230,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
       store.updateMission({ qaRejectCount: rejectCount, status: 'qa_loopback' });
       store.setAgentStatus(qa.id, 'idle');
       if (rejectCount > MAX_QA_LOOPS) {
-        if (await restorePassingCandidate(`Verification failed after ${MAX_QA_LOOPS} rework rounds.`)) return 'retained';
+        await restorePassingCandidate(`Verification failed after ${MAX_QA_LOOPS} rework rounds.`);
         store.updateTask(QA_TASK_ID, { status: 'rejected', progress: 100, qaFeedback: `Verification "${command}" still failed after ${MAX_QA_LOOPS} rework rounds.` });
         return 'rejected';
       }
@@ -1161,9 +1244,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
       store.updateTask(QA_TASK_ID, { status: 'pending', progress: 0 });
       return 'retry';
     }
-    verificationNote = unrunnable
-      ? `\n\nVerification "${command}" could not be run (${why}). Nothing was tested, so review the code carefully.`
-      : `\n\nVerification: "${command}" passed (exit 0) when run on the proposed changes. Output (end):\n${raw.slice(-1500)}`;
+    verificationNote = `\n\nVerification: "${command}" passed (exit 0) when run on the proposed changes. Output (end):\n${raw.slice(-1500)}`;
     verified = passed;
     if (passed) {
       const current = currentMission()!;
@@ -1174,13 +1255,27 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
   const deliverables = workTasks
     .map((t) => `## [${t.id}] ${t.title} — ${store.agents[t.assignedAgentId]?.name}\n${truncate(stripThinking(t.output ?? ''), 10_000)}`)
     .join('\n\n');
-  const result = await callAgent(qa, {
+  const qaMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [{
+    role: 'user',
+    content: `Request:\n${mission.prompt}${await attachmentContext(mission.contextFiles)}\n\nDeliverables:\n${deliverables}${verificationNote}${verified ? `\n\nVerified file contents:\n${truncate((currentMission()?.proposedChanges ?? []).filter((change) => change.status === 'applied').map((change) => `FILE ${change.path} (task ${change.taskId})\n${change.content}`).join('\n\n'), 80_000)}` : ''}\n\n${projectContext()}\n\nCompare each requested behavior with the current code, including entry points and shared files. Read the attached requirements and any file clipped or absent above using project-call before deciding. Passing tests cover only their assertions; concrete unmet requirements still need repair.`,
+  }];
+  const review = async () => callAgent(qa, {
     system: `${qa.systemPrompt}${await memoryBrief(qa.id, mission.prompt)}\n\nRespond with ONLY a JSON object: {"verdict": "approve" | "reject", "summary": "...", "issues": [{"taskId": "<task id>", "problem": "<concrete defect and failing input or unmet requirement>", "path": "<exact proposed file path>", "evidence": "<exact code excerpt of at least 12 characters causing the defect>"}]}. Reject only for real defects, security problems or unmet requirements. Passing verification is direct execution evidence. Missing hidden tests, hypothetical failures, lack of visibility and requests for more test coverage are advisory concerns, not grounds for rejection. For a rejection after passing verification, cite the exact offending code from the supplied file contents and explain its incorrect behavior.`,
-    messages: [{ role: 'user', content: `Request:\n${mission.prompt}\n\nDeliverables:\n${deliverables}${verificationNote}${verified ? `\n\nVerified file contents:\n${truncate((currentMission()?.proposedChanges ?? []).filter((change) => change.status === 'applied').map((change) => `FILE ${change.path} (task ${change.taskId})\n${change.content}`).join('\n\n'), 80_000)}` : ''}` }],
+    messages: qaMessages,
     signal,
     note: 'QA review',
     countInRun: true,
+    toolNotice: PROJECT_TOOL_INSTRUCTIONS,
   });
+  let result = await review();
+  for (let turn = 0; ; turn++) {
+    const parsed = parseProjectRequest(result.text);
+    if (!parsed) break;
+    if (turn >= MAX_PROJECT_TURNS) throw new Error('QA exhausted its project read turns without producing a verdict.');
+    qaMessages.push({ role: 'assistant', content: result.text }, { role: 'user', content: await projectToolReply(parsed) });
+    compactToolHistory(qaMessages, 6);
+    result = await review();
+  }
   const tokens = usageTokens(result.usage);
   let verdict;
   try {
@@ -1201,7 +1296,10 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
 
   if (verdict.verdict === 'reject') {
     if (verified) {
-      const issues = evidencedQaIssues(verdict, currentMission()?.proposedChanges ?? []);
+      const available = new Set(useWorkspaceStore.getState().tree.filter((entry) => entry.type === 'file').map((entry) => entry.path));
+      const paths = [...new Set(verdict.issues.map((issue) => issue.path).filter((path): path is string => !!path && available.has(path)))];
+      const inspected = await Promise.all(paths.map(async (path) => ({ path, content: (await api.readFileIfExists(path))?.content })));
+      const issues = evidencedQaIssues(verdict, currentMission()?.proposedChanges ?? [], inspected.filter((file): file is { path: string; content: string } => typeof file.content === 'string'));
       if (!issues.length) {
         store.updateMission({ qaConcerns: `Verification passed; QA raised advisory concerns without a concrete code citation: ${verdict.summary}` });
         store.updateTask(QA_TASK_ID, { status: 'completed', progress: 100, completedAt: Date.now(), qaFeedback: verdict.summary });
@@ -1218,13 +1316,14 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     const targets = flagged.size ? reworkClosure(workTasks.filter((t) => flagged.has(t.id)), workTasks) : workTasks;
     store.logActivity({ kind: 'qa', level: 'warn', runId: mission.id, agentId: qa.id, text: `Sentinel rejected ${targets.length} task(s): ${verdict.summary}` });
     if (rejectCount > MAX_QA_LOOPS) {
-      if (await restorePassingCandidate(verdict.summary)) return 'retained';
+      await restorePassingCandidate(verdict.summary);
       store.updateTask(QA_TASK_ID, { status: 'rejected', progress: 100, qaFeedback: verdict.summary });
       return 'rejected';
     }
     for (const t of targets) {
       recordModelResult(servedByTask.get(t.id) ?? t.model, false);
-      const feedback = verdict.issues.filter((i) => i.taskId === t.id || !i.taskId).map((i) => `- ${i.problem}`).join('\n') || verdict.summary;
+      const evidence = verdict.issues.filter((i) => i.taskId === t.id || !i.taskId).map((i) => `- ${i.problem}${i.path ? `\nFile: ${i.path}` : ''}${i.evidence ? `\nOffending code: ${i.evidence}` : ''}`).join('\n') || verdict.summary;
+      const feedback = `${evidence}\nAdd a focused regression test that reproduces the reported defect. Preserve the existing tests and all other requested behavior.`;
       store.updateTask(t.id, { status: 'rejected', qaFeedback: feedback, stage: 'implementation' });
       noteFeedback(mission.id, { agentId: t.assignedAgentId, source: 'qa', text: `${t.title}: ${feedback}`, taskId: t.id });
     }
@@ -1352,7 +1451,7 @@ export async function executeRun() {
   runTotals.costUSD = previous?.costUSD ?? 0;
   runTotals.unpricedTokens = previous?.unpricedTokens ?? 0;
   store.setLiveRunning(true);
-  store.updateMission({ status: 'running', error: undefined, interrupted: undefined });
+  store.updateMission({ status: 'running', error: undefined, interrupted: undefined, qaCertificate: undefined });
   const guard: RunGuard = { startedAt: Date.now(), callsByAgent: {}, costByAgent: {}, warned: new Set(), stopReason: null, timers: [] };
   runGuard = guard;
   const minutes = store.runLimits.maxMinutes;
@@ -1363,16 +1462,22 @@ export async function executeRun() {
   }
 
   try {
+    const command = store.verificationCommand.trim();
+    if (command && autoAppliesChanges(store.approvalMode)) {
+      const result = await useWorkspaceStore.getState().runCommand(command);
+      const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim();
+      if (result.rejected || verificationCouldNotRun(result.exitCode ?? null, output)) {
+        throw new Error(`Verification "${command}" is unavailable: ${output.slice(-2000)}. Install or configure the test runner in this project's environment, then Resume. No implementation calls were made.`);
+      }
+      store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, text: `Verification preflight finished (exit ${result.exitCode ?? 'unknown'}). Its result is a baseline, not acceptance of the changes.` });
+    }
     let retained = false;
     for (;;) {
       await runWorkTasks(controller.signal);
       if (guard.stopReason) throw limitStopError(guard.stopReason);
       const failed = currentMission()!.tasks.filter((t) => t.id !== QA_TASK_ID && t.status === 'failed');
       if (failed.length) {
-        if (await restorePassingCandidate(`${failed.length} rework task(s) failed.`)) {
-          retained = true;
-          break;
-        }
+        await restorePassingCandidate(`${failed.length} rework task(s) failed.`);
         finalize('failed', `${failed.length} task(s) failed. Fix the cause and use Retry.`);
         return;
       }
@@ -1387,8 +1492,22 @@ export async function executeRun() {
       break;
     }
 
+    if (autoAppliesChanges(store.approvalMode)) {
+      if (command && currentMission()?.proposedChanges?.some((change) => change.status === 'pending')) {
+        throw new Error('Cannot complete this run: file proposals changed after verification. Resume to verify the complete candidate again.');
+      }
+      const outcome = await autoApplyChanges();
+      if (outcome.failed || currentMission()?.proposedChanges?.some((change) => change.status === 'pending')) {
+        throw new Error('Cannot complete this run: some proposed files were not written. Resolve the remaining changes and Resume.');
+      }
+    }
     const m = currentMission()!;
-    const payload = m.tasks.map((t) => `${t.id}\n${t.output ?? ''}`).join('\n\n');
+    const finalFiles = new Map<string, string>();
+    for (const change of m.proposedChanges ?? []) if (change.status === 'applied' || change.status === 'pending') finalFiles.set(change.path, change.content);
+    const payload = [
+      ...m.tasks.map((t) => `${t.id}\n${t.output ?? ''}`),
+      ...[...finalFiles].sort(([first], [second]) => first.localeCompare(second)).map(([path, content]) => `FILE ${path}\n${content}`),
+    ].join('\n\n');
     const hash = await sha256(payload);
     const qa = agentsState().agents['agent-qa'];
     agentsState().updateMission({
@@ -1403,7 +1522,7 @@ export async function executeRun() {
         signedByName: qa.name,
         signedByModel: resolveAgentModel(qa, agentsState().roleDefaults),
         sha256Hash: hash,
-        hashScope: `Outputs of ${m.tasks.length} tasks`,
+        hashScope: `Outputs of ${m.tasks.length} tasks and ${finalFiles.size} final file proposals`,
         timestamp: new Date().toISOString(),
         source: 'live',
         qaVerdict: 'approve',
@@ -1412,7 +1531,9 @@ export async function executeRun() {
         summaryNotes: m.qaNotes ?? '',
       },
     });
-    const autoApplied = autoAppliesChanges(agentsState().approvalMode) ? await autoApplyChanges() : undefined;
+    const autoApplied = autoAppliesChanges(agentsState().approvalMode)
+      ? { applied: (m.proposedChanges ?? []).filter((change) => change.status === 'applied').length, failed: 0 }
+      : undefined;
     finalize('completed', undefined, autoApplied);
   } catch (err) {
     if (guard.stopReason) finalize('failed', `Stopped by run limit: ${guard.stopReason}. Raise the limit in Settings → Run limits, then Resume.`);

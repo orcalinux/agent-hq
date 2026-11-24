@@ -238,6 +238,7 @@ export interface ProposedFileChange {
   content: string;
   taskId: string;
   agentId: string;
+  sourceTaskIds?: string[];
   status: 'pending' | 'applied' | 'discarded' | 'reverted';
   appliedAt?: number;
   /** File contents before the change was applied; `null` when the change created the file. Enables undo. */

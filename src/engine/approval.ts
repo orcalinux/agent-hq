@@ -1,14 +1,16 @@
 import type { ApprovalMode, OrchestratorMode, ProposedFileChange } from '@/types';
 import type { QaVerdict } from './orchestratorParsing';
 
-export function evidencedQaIssues(verdict: QaVerdict, changes: ProposedFileChange[]): QaVerdict['issues'] {
+export function evidencedQaIssues(verdict: QaVerdict, changes: ProposedFileChange[], inspected: Array<{ path: string; content: string }> = []): QaVerdict['issues'] {
   const latest = new Map<string, ProposedFileChange>();
   for (const change of changes) if (change.status === 'applied') latest.set(change.path, change);
+  const current = new Map(inspected.map((file) => [file.path, file.content]));
   return verdict.issues.filter((issue) => {
     const change = issue.path ? latest.get(issue.path) : undefined;
-    return !!change && !!issue.taskId && change.taskId === issue.taskId
+    const content = issue.path ? current.get(issue.path) ?? change?.content : undefined;
+    return content !== undefined && !!issue.taskId && (current.has(issue.path!) || change?.taskId === issue.taskId || change?.sourceTaskIds?.includes(issue.taskId))
       && !!issue.evidence?.trim() && issue.evidence.trim().length >= 12
-      && change.content.includes(issue.evidence.trim());
+      && content.includes(issue.evidence.trim());
   });
 }
 
@@ -18,6 +20,20 @@ export function checkpointProposals(changes: ProposedFileChange[]): ProposedFile
   return changes.map((change) => change.status === 'applied'
     ? { ...change, status: latest.get(change.path) === change.id ? 'pending' : 'discarded', appliedAt: undefined }
     : { ...change });
+}
+
+export function replaceMergedProposals(changes: ProposedFileChange[], originals: ProposedFileChange[], merged: ProposedFileChange): ProposedFileChange[] {
+  if (!originals.length || !merged.content.trim() || merged.status !== 'pending' || originals.some((original) => original.path !== merged.path)) {
+    throw new Error('A merge must contain one nonempty pending file matching every original proposal.');
+  }
+  for (const original of originals) {
+    const current = changes.find((change) => change.id === original.id);
+    if (!current || current.status !== 'pending' || current.content !== original.content) {
+      throw new Error('A proposal changed during integration. Original proposals were preserved; retry the merge.');
+    }
+  }
+  const replaced = new Set(originals.map((original) => original.id));
+  return [...changes.map((change) => replaced.has(change.id) ? { ...change, status: 'discarded' as const } : change), merged];
 }
 
 export interface ApprovalModeInfo {

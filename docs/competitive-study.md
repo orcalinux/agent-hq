@@ -354,3 +354,51 @@ They do not establish that Agent HQ is better than the competitors: on this
 Codex sample it took longer and used more API-rate value and sampled memory
 than bare Codex and Maestro. Repeated context and engine startup, review cost,
 recovery and harder independent tasks remain areas to measure and improve.
+
+### Reliability follow-up: November 24
+
+The successful samples above are measurements of those runs, not a guarantee
+that every run succeeds. Three subsequent Haiku 5.5 samples exposed additional
+failures, with the same starter and unchanged hidden suite:
+
+| Run | Hidden checks | Desktop outcome | Diagnosis |
+| --- | --- | --- | --- |
+| `agent-hq-0243-haiku-1124-055714` | 138/141 | Failed, 695 s | Independent edits to `tabsplit/cli.py` remained unresolved. The three missing checks covered CSV physical line reporting and a CLI currency field. |
+| `agent-hq-0243c-haiku-1124-064323` | 103/141 | Completed, 810 s | The configured Python interpreter had no pytest. QA approved the code despite no executable verification; 52 of 59 visible tests passed under the independent grader. |
+| `agent-hq-feedback-haiku-1124-070354` | 137/141 | Completed, 1,158 s | The integrator combined competing money proposals and local verification passed. QA identified incomplete CLI/API and CSV behavior, but a repair timed out. The old completion path restored the last locally passing files and incorrectly completed despite unresolved QA defects. |
+
+These were development builds carrying version 0.24.2, not published 0.24.3
+installers. Their names are evidence labels. Original tests were untouched;
+the graders ran in separate scratch copies. Neither result is excluded from
+the study because it performed poorly.
+
+The 0.24.3 changes address orchestration failures rather than patching the
+benchmark solution: verifier preflight and a completion gate, automatic
+integration of conflicting file proposals, access to attached requirements
+and current project files during QA, exact citations in rework feedback,
+and preservation of the last passing files without certifying known defects.
+Python verification can use a project's local virtual environment. Failed
+verification already feeds into three integration attempts per QA cycle;
+concrete QA defects can trigger two task-rework cycles. These loops remain
+bounded by the run's time, token, call and cost settings.
+
+Hidden acceptance tests stay outside the agent workspaces. They assess the
+finished output and are never supplied as model feedback. A passing local
+suite alone is insufficient evidence of complete requirement coverage, and
+an unresolved run must remain visibly failed.
+
+The final 0.24.3 Sonnet 5.5 validation
+(`agent-hq-0243-final-sonnet-1124-072434`) completed in 615.907 s and scored
+**141/141 hidden checks and 222/222 visible checks**, with the original
+tests untouched. The full loop was exercised: combined-file verification
+failed, the integrator fixed one file and reran it successfully, then QA
+cited an actual API contract defect and triggered task rework with a
+regression test. Verification and QA passed on the resulting files.
+The agents received only the user request, attached project requirements,
+project files and locally executed test output; the independent grader ran
+after the desktop finished.
+
+This is a quality validation sample using Sonnet, not a speed or cost
+comparison against the earlier Haiku or Codex controls. Browser and desktop
+regression tests overlapped parts of this validation. Their resource use
+prevents treating these timings or memory samples as a performance ranking.

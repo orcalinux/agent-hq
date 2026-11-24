@@ -13,6 +13,7 @@ import {
   updateConfig,
 } from './config';
 import { ALLOWED_COMMANDS, executionTimeoutMs, isLoopbackRequest, parseAllowedCommand, resolveInside } from './security';
+import { projectCommand } from './execution';
 import { endpointFromHost, providerFetch, validateEndpoint } from './network';
 import { TerminalError, closeTerminal, createTerminal, listTerminals, resizeTerminal, streamTerminal, writeTerminal } from './pty';
 import {
@@ -830,7 +831,9 @@ const routes: Record<string, Handler> = {
       return;
     }
     const start = Date.now();
-    const child = spawn(parsed.program!, parsed.args!, { cwd: getWorkspaceRoot(), env: { ...process.env, FORCE_COLOR: '0', CI: '1' }, shell: false });
+    const root = getWorkspaceRoot();
+    const execution = projectCommand(parsed.program!, root, { ...process.env, FORCE_COLOR: '0', CI: '1' });
+    const child = spawn(execution.program, parsed.args!, { cwd: root, env: execution.env, shell: false });
     let stdout = '';
     let stderr = '';
     const limit = 512 * 1024;

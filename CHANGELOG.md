@@ -11,6 +11,16 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.24.3] — 2026-11-24
+
+### Fixed
+- A configured verification command now runs a baseline check before implementation. Missing test runners and disallowed commands stop the run with instructions to fix the environment and Resume. QA cannot approve a candidate whose verification could not run.
+- Allowed Python test commands use a project's `.venv` or `venv` interpreter when available, including environments created after the desktop was launched. Dependencies are not installed globally or silently.
+- In automatic modes, an integrator combines independent proposals for the same file before QA instead of stopping at a conflict or selecting one version and dropping the other. Original proposals and a recovery copy are retained. Invalid merge responses are retried; unresolved merges block completion.
+- QA and integration repairs receive attached requirements. QA can read the current project and check exact code citations in shared or unchanged files, so passing a narrow test suite does not hide a concrete unmet requirement.
+- Completion and certificates are blocked when proposed files remain unwritten.
+- Exhausted repairs retain the last passing files without marking unresolved defects as a successful run. QA rework includes the offending file and code citation and requests a regression test. Certificates include final merged and repaired file contents.
+
 ## [0.24.2] — 2026-11-24
 
 ### Fixed
