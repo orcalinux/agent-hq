@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('agent graph cards never overlap with a large team, at any window size', async ({ page }, testInfo) => {
   await page.goto('/');
   await page.waitForFunction(() => !!localStorage.getItem('agent-hq.state'));
-  await page.evaluate(() => {
+  const largeTeam = await page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem('agent-hq.state')!);
     const agents = saved.state.agents as Record<string, { id: string; name: string; role: string }>;
     const templates = Object.values(agents).filter((a) => a.role === 'frontend' || a.role === 'backend');
@@ -12,11 +12,15 @@ test('agent graph cards never overlap with a large team, at any window size', as
       const id = `${t.id}-clone-${i}`;
       agents[id] = { ...t, id, name: `${t.name} ${i + 2}` };
     }
-    localStorage.setItem('agent-hq.state', JSON.stringify(saved));
+    return saved;
   });
+  await page.addInitScript((saved) => {
+    localStorage.setItem('agent-hq.state', JSON.stringify(saved));
+  }, largeTeam);
   await page.reload();
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Agents', exact: true }).click();
   await page.getByRole('tab', { name: 'Graph', exact: true }).click();
+  await expect(page.locator('button[aria-pressed][data-no-pan]')).toHaveCount(Object.keys(largeTeam.state.agents).length);
 
   for (const viewport of [{ width: 1440, height: 900 }, { width: 800, height: 700 }]) {
     await page.setViewportSize(viewport);
