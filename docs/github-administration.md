@@ -107,8 +107,8 @@ Workflow files may declare their own permissions. The checked-in workflows are:
 | Release | [release.yml](../.github/workflows/release.yml) | `v*` tags, or manual dispatch; builds desktop installers |
 | CodeQL | Managed by GitHub default setup | Security analysis; configuration is stored in GitHub |
 
-The Website workflow explicitly requests `contents: read`, `pages: write` and
-`id-token: write`. Release requests `contents: write`.
+The Website workflow explicitly requests `contents: read`, `actions: read`,
+`pages: write` and `id-token: write`. Release requests `contents: write`.
 
 For failed checks, open **Actions → failed run → failed job** and read the failing
 step. A green unrelated workflow does not establish that CI passed. Check the
@@ -132,6 +132,12 @@ npm run build:site
 
 The generated `site-dist/` is a deployment artifact. The Website workflow uploads
 and deploys it; do not add generated output or a separate Jekyll workflow.
+Each attempt uses `github-pages-<run attempt>` for both upload and deployment.
+A bounded metadata check waits for that artifact to become visible. This avoids
+deploying before metadata is available and avoids duplicate-name failures when
+a failed run is retried. If GitHub creates the deployment but returns
+`deployment_failed`, inspect the failing step and retry the failed job; do not
+delete the site or change its Pages source to work around that response.
 
 To redeploy without changing files, use **Actions → Website → Run workflow** on
 `main`. Verify that deployment succeeds and that the public page loads. Check that
