@@ -16,6 +16,7 @@ import {
   type TeamStrategy,
 } from '@/types';
 import {
+  adoptMentorRevision,
   extractFileBlocks,
   parseMentorVerdict,
   parsePlan,
@@ -27,21 +28,27 @@ import {
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
 import { parallelLimit, planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
-import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, evidencedQaIssues, markConflicts, selectAutoApply, verificationCouldNotRun } from './approval';
+import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, evidencedQaIssues, markConflicts, reworkClosure, selectAutoApply, verificationCouldNotRun } from './approval';
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
 import { COMPLEXITIES, COMPLEXITY_HINT, assignAgentModels, assignPlanModels, fallbackForTier, isGroupRef, rankModels, routingFor, taskComplexity, type RoutingPolicy } from './modelRouting';
 import { BALANCES, activeMagpieGroups, isLowQuota, useMagpieStore } from '@/store/useMagpieStore';
 import { useModelWatchStore } from '@/store/useModelWatchStore';
-import { shouldAutoResume } from './runRecovery';
+import { DESKTOP_INTERRUPTED, shouldAutoResume } from './runRecovery';
 import { interpretChatCommand, parseChatCommand } from './chatCommands';
 import { abortableSleep, isTransientError, MAX_TRANSIENT_RETRIES, retryDelayMs } from './retry';
 import type { ViewMode } from '@/types';
 import { checkLimits, describeLimit, WARN_RATIO, type LimitKind, type LimitReading } from './runLimits';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
+import { compactToolHistory, computerInstructions, describeComputerAction, formatComputerResult, isComputerAction, MAX_COMPUTER_STEPS, parseComputerRequest } from './computerPolicy';
+import type { ComputerTool } from '@/types/computerUse';
+import { MAX_PROJECT_TURNS, PROJECT_TOOL_INSTRUCTIONS, missingImplementation, parseProjectRequest, readProjectRequest } from './projectTools';
+import { usageCounts } from '@/utils/usage';
 
 const MAX_QA_LOOPS = 2;
+/** Rounds in which one integrator fixes the team's combined files against the real verification output. */
+const MAX_REPAIR_ROUNDS = 3;
 const QA_TASK_ID = 'qa-review';
 const TASK_FILE_CONTEXT_CHARS = 60_000;
 
@@ -130,7 +137,7 @@ interface CallResult {
 
 async function callAgent(
   agent: AgentProfile,
-  args: { system: string; messages: Array<{ role: 'user' | 'assistant'; content: string }>; signal: AbortSignal; onDelta?: (full: string) => void; note: string; countInRun?: boolean; modelOverride?: string }
+  args: { system: string; messages: Array<{ role: 'user' | 'assistant'; content: string }>; signal: AbortSignal; onDelta?: (full: string) => void; note: string; countInRun?: boolean; modelOverride?: string; toolNotice?: string }
 ): Promise<CallResult> {
   const { roleDefaults } = agentsState();
   let model = args.modelOverride || resolveAgentModel(agent, roleDefaults);
@@ -168,7 +175,7 @@ async function callAgent(
     try {
       result = await streamChat({
         model,
-        system: `${args.system}\n\n${TEXT_ONLY_NOTICE}`,
+        system: `${args.system}\n\n${args.toolNotice ? 'Environment: reply as plain text. You have no built-in provider tools, shell or browser. Use only the host-mediated requests described below.' + args.toolNotice : TEXT_ONLY_NOTICE}`,
         messages: args.messages,
         signal: args.signal,
         onDelta: (t) => {
@@ -215,10 +222,10 @@ async function callAgent(
     : null;
   agentsState().recordAgentCall(agent.id, { model: served, usage, costUSD: usage ? cost : null, referenceCost: pricing?.source === 'account', note: args.note });
   if (args.countInRun) {
-    runTotals.promptTokens += usage?.inputTokens ?? 0;
-    runTotals.completionTokens += usage?.outputTokens ?? 0;
-    const total = usage?.totalTokens ?? (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0);
-    if (usage?.inputTokens === undefined && usage?.outputTokens === undefined) runTotals.otherTokens += usage?.totalTokens ?? 0;
+    const { prompt, completion, total } = usageCounts(usage);
+    runTotals.promptTokens += prompt;
+    runTotals.completionTokens += completion;
+    runTotals.otherTokens += total - prompt - completion;
     if (cost === null || !usage) runTotals.unpricedTokens += total;
     else runTotals.costUSD += cost;
     if (guard && usage && cost !== null) guard.costByAgent[agent.id] = (guard.costByAgent[agent.id] ?? 0) + cost;
@@ -293,16 +300,32 @@ async function fileContents(paths: string[], budget: number, overrides?: Map<str
 async function taskFileContext(task: KanbanTaskCard, mission: MissionState): Promise<string> {
   const ws = useWorkspaceStore.getState();
   const files = new Set(ws.tree.filter((e) => e.type === 'file').map((e) => e.path));
-  const mentioned = selectRelevantFiles(`${task.title}\n${task.description}\n${task.qaFeedback ?? ''}\n${mission.prompt}`, [...files]);
-  const paths = [...new Set([...(mission.contextFiles ?? []).filter((p) => files.has(p)), ...mentioned])];
+  const changes = currentMission()?.proposedChanges ?? [];
+  for (const change of changes) if (change.status === 'pending' || change.status === 'applied') files.add(change.path);
+  const references = await fileContents((mission.contextFiles ?? []).filter((path) => files.has(path)), 30_000);
+  const dependencyOutputs = mission.tasks.filter((other) => task.dependsOn?.includes(other.id)).map((other) => stripThinking(other.output ?? '')).join('\n');
+  const mentioned = selectRelevantFiles(`${task.title}\n${task.description}\n${task.qaFeedback ?? ''}\n${mission.prompt}\n${dependencyOutputs}\n${references.join('\n')}`, [...files], 16);
+  const previous = changes.filter((change) => change.taskId === task.id && change.status !== 'discarded').map((change) => change.path);
+  const paths = [...new Set([...previous, ...mentioned, ...(mission.contextFiles ?? []).filter((p) => files.has(p))])];
   if (!paths.length) return '';
   const proposed = new Map<string, string>();
-  for (const change of currentMission()?.proposedChanges ?? []) {
-    if (change.taskId !== task.id && (change.status === 'pending' || change.status === 'applied') && paths.includes(change.path)) proposed.set(change.path, change.content);
+  for (const change of [...changes.filter((change) => change.status === 'applied'), ...selectAutoApply(changes, currentMission()?.tasks ?? []).apply]) {
+    if (paths.includes(change.path)) proposed.set(change.path, change.content);
   }
   const parts = await fileContents(paths, TASK_FILE_CONTEXT_CHARS, proposed);
   const earlier = proposed.size ? `\n\nThese files already include edits proposed by earlier tasks, so keep those edits: ${[...proposed.keys()].join(', ')}.` : '';
   return `\n\nCurrent contents of relevant files (edit these rather than rewriting from scratch; keep everything you do not intend to change):\n${parts.join('\n\n')}${earlier}`;
+}
+
+async function projectToolReply(parsed: NonNullable<ReturnType<typeof parseProjectRequest>>): Promise<string> {
+  if ('error' in parsed) return parsed.error;
+  const current = currentMission()!;
+  const changes = current.proposedChanges ?? [];
+  const overrides = new Map<string, string>();
+  for (const change of [...changes.filter((change) => change.status === 'applied'), ...selectAutoApply(changes, current.tasks).apply]) overrides.set(change.path, change.content);
+  const workspace = useWorkspaceStore.getState();
+  const files = [...new Set([...workspace.tree.filter((entry) => entry.type === 'file').map((entry) => entry.path), ...overrides.keys()])].filter((path) => !isMemoryPath(path));
+  return readProjectRequest(parsed.request, files, async (path) => overrides.get(path) ?? workspace.buffers[path]?.content ?? (await api.readFile(path)).content);
 }
 
 function rosterDescription(): string {
@@ -698,6 +721,20 @@ function taskById(id: string) {
   return currentMission()?.tasks.find((t) => t.id === id);
 }
 
+async function desktopTools(runId: string): Promise<ComputerTool[]> {
+  try {
+    const tools = (await api.computerTools())?.tools;
+    return Array.isArray(tools) ? tools : [];
+  } catch (err) {
+    agentsState().logActivity({ kind: 'info', level: 'warn', runId, text: `Desktop tools are unavailable for this task: ${truncate((err as Error).message, 160)}` });
+    return [];
+  }
+}
+
+function usageTokens(usage?: ChatUsage): number {
+  return usageCounts(usage).total;
+}
+
 async function runTask(task: KanbanTaskCard, signal: AbortSignal) {
   const store = agentsState();
   const mission = currentMission()!;
@@ -738,11 +775,70 @@ When you change an existing file, start from its current contents (provided belo
 
   const update = throttle((full) => agentsState().updateTask(task.id, { output: full, progress: Math.min(90, 10 + Math.floor(full.length / 80)) }), 250);
   try {
-    let result = await callAgent(agent, { system, messages: [{ role: 'user', content: user }], signal, onDelta: update, note: `Task: ${task.title}`, countInRun: true, modelOverride: task.model });
+    const tools = await desktopTools(mission.id);
+    const toolNotice = PROJECT_TOOL_INSTRUCTIONS + (tools.length ? computerInstructions(tools, task.computerLog) : '');
+    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [{ role: 'user', content: user }];
+    const ask = (note: string) => callAgent(agent, { system, messages, signal, onDelta: update, note, countInRun: true, modelOverride: task.model, toolNotice });
+    let result = await ask(`Task: ${task.title}`);
+    let tokens = usageTokens(result.usage);
+    let projectTurns = 0;
+    let desktopTurns = 0;
+    let desktopReads = 0;
+    let requestedDeliverable = false;
+    for (;;) {
+      const project = parseProjectRequest(result.text);
+      if (project) {
+        if (++projectTurns > MAX_PROJECT_TURNS) throw new Error(`Used all ${MAX_PROJECT_TURNS} project read turns without finishing.`);
+        const reply = await projectToolReply(project);
+        if ('request' in project) {
+          store.logActivity({ kind: 'info', level: 'info', runId: mission.id, taskId: task.id, agentId: agent.id, text: `${agent.name} requested project context: ${project.request.name}${project.request.name === 'read_files' ? ` (${project.request.paths.join(', ')})` : ''}` });
+        }
+        messages.push({ role: 'assistant', content: result.text }, { role: 'user', content: reply });
+        compactToolHistory(messages, 6);
+        result = await ask(`Task: ${task.title} (project read ${projectTurns})`);
+        tokens += usageTokens(result.usage);
+        continue;
+      }
+      const parsed = parseComputerRequest(result.text);
+      if (!parsed) {
+        const fileCount = extractFileBlocks(result.text).filter((file) => !isMemoryPath(file.path)).length;
+        if (!missingImplementation(task.stage, fileCount, desktopReads)) break;
+        if (requestedDeliverable) throw new Error('Implementation returned no file changes. The task is blocked, not completed. Read the needed source with project-call and retry.');
+        requestedDeliverable = true;
+        messages.push({ role: 'assistant', content: result.text }, { role: 'user', content: 'No implementation was delivered. Read missing source with project-call, then return complete path= file blocks. A description, request for context, or claim of completion does not change the project.' });
+        result = await ask(`Task: ${task.title} (missing deliverable)`);
+        tokens += usageTokens(result.usage);
+        continue;
+      }
+      if (!tools.length) throw new Error('Desktop tools are not enabled. Use project-call to read project files.');
+      if (++desktopTurns > MAX_COMPUTER_STEPS) throw new Error(`Used all ${MAX_COMPUTER_STEPS} desktop tool turns without finishing.`);
+      let reply: string;
+      if ('error' in parsed) {
+        reply = parsed.error;
+      } else {
+        const { request } = parsed;
+        if (isComputerAction(request.name)) {
+          const done = taskById(task.id);
+          const entry = describeComputerAction(request);
+          agentsState().updateTask(task.id, { computerActions: (done?.computerActions ?? 0) + 1, computerLog: [...(done?.computerLog ?? []), entry].slice(-40) });
+          agentsState().logActivity({ kind: 'info', level: 'info', runId: mission.id, agentId: agent.id, taskId: task.id, text: `${agent.name} used the desktop: ${entry}` });
+        }
+        try {
+          reply = formatComputerResult(request.name, (await api.computerCall(request.name, request.arguments, signal)).result);
+          desktopReads++;
+        } catch (err) {
+          if (isAbort(err)) throw err;
+          reply = `Error from ${request.name}: ${(err as Error).message}`;
+        }
+      }
+      messages.push({ role: 'assistant', content: result.text }, { role: 'user', content: reply });
+      compactToolHistory(messages);
+      result = await ask(`Task: ${task.title} (desktop step ${desktopTurns})`);
+      tokens += usageTokens(result.usage);
+    }
     servedByTask.set(task.id, result.model);
     update.flush();
     let output = result.text;
-    let tokens = (result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0) || result.usage?.totalTokens || 0;
 
     // N+1 senior review for junior agents
     const mentorId = agent.internship?.isIntern ? agent.internship.mentorId : undefined;
@@ -756,16 +852,16 @@ When you change an existing file, start from its current contents (provided belo
         messages: [
           {
             role: 'user',
-            content: `Task: ${task.title}\n${task.description}\n\nJunior output from ${agent.name}:\n${truncate(stripThinking(output), 16000)}\n\nReply in this exact format:\nVERDICT: APPROVE or REVISE\nNOTES: <short review notes>\nREVISED OUTPUT:\n<only if REVISE: the full corrected output, including complete file blocks>`,
+            content: `Task: ${task.title}\n${task.description}\n\nJunior output from ${agent.name}:\n${truncate(stripThinking(output), 16000)}\n\nYou cannot run commands or open other files in this review. Do not choose REVISE only because something is unverified; REVISE only for a defect you can see in the output above, and then include the complete corrected file blocks.\n\nReply in this exact format:\nVERDICT: APPROVE or REVISE\nNOTES: <short review notes>\nREVISED OUTPUT:\n<only if REVISE: the full corrected output, including complete file blocks>`,
           },
         ],
         signal,
         note: `N+1 review of ${agent.name}: ${task.title}`,
         countInRun: true,
       });
-      tokens += (review.usage?.inputTokens ?? 0) + (review.usage?.outputTokens ?? 0) || review.usage?.totalTokens || 0;
+      tokens += usageTokens(review.usage);
       const verdict = parseMentorVerdict(review.text);
-      if (verdict.verdict === 'revise' && verdict.revised) output = verdict.revised;
+      if (verdict.verdict === 'revise') output = adoptMentorRevision(output, verdict.revised);
       if (verdict.verdict === 'revise') recordModelResult(result.model, false);
       if (verdict.verdict === 'revise' && verdict.notes) noteFeedback(mission.id, { agentId: agent.id, source: 'mentor', text: verdict.notes, taskId: task.id });
       agentsState().updateTask(task.id, {
@@ -797,6 +893,7 @@ When you change an existing file, start from its current contents (provided belo
     if (files.length < blocks.length) {
       agentsState().logActivity({ kind: 'learning', level: 'warn', runId: mission.id, agentId: agent.id, taskId: task.id, text: `${agent.name} tried to edit the project memory folder; those file changes were dropped` });
     }
+    if (missingImplementation(task.stage, files.length, desktopReads)) throw new Error('The reviewed implementation contains no file deliverable.');
     const changes: ProposedFileChange[] = files.map((f) => ({
       id: `${task.id}:${f.path}:${crypto.randomUUID()}`,
       path: f.path,
@@ -850,9 +947,11 @@ When you change an existing file, start from its current contents (provided belo
     update.flush();
     const durationMs = Date.now() - started;
     const aborted = isAbort(err);
+    const desktopInterrupted = !!taskById(task.id)?.computerActions;
     agentsState().updateTask(task.id, {
-      status: aborted ? 'pending' : 'failed',
-      error: aborted ? 'Stopped before completion.' : (err as Error).message,
+      status: aborted && !desktopInterrupted ? 'pending' : 'failed',
+      error: desktopInterrupted ? DESKTOP_INTERRUPTED : aborted ? 'Stopped before completion.' : (err as Error).message,
+      computerNeedsReview: desktopInterrupted || undefined,
       progress: 0,
       durationMs,
     });
@@ -882,6 +981,117 @@ When you change an existing file, start from its current contents (provided belo
   }
 }
 
+async function verifyNow(command: string) {
+  const res = await useWorkspaceStore.getState().runCommand(command);
+  const raw = `${res.stdout ?? ''}\n${res.stderr ?? ''}`.trim();
+  const verification = { command, exitCode: res.exitCode ?? null, output: truncate(raw, 20_000), durationMs: res.durationMs ?? 0, ranAt: Date.now() };
+  agentsState().updateMission({ verification });
+  const passed = res.exitCode === 0;
+  const unrunnable = !passed && (!!res.rejected || verificationCouldNotRun(res.exitCode ?? null, raw));
+  const why = res.rejected ? String(res.stderr) : raw.split('\n').find((line) => line.trim()) ?? `exit ${res.exitCode}`;
+  return { passed, unrunnable, raw, why, verification, exitCode: res.exitCode };
+}
+
+type Verified = Awaited<ReturnType<typeof verifyNow>>;
+
+/** Project files a failure output names, read from disk, that are not already among the written changes. */
+async function filesNamedIn(output: string, skip: Set<string>, limit = 10): Promise<Array<{ path: string; content: string }>> {
+  const tree = useWorkspaceStore.getState().tree.filter((entry) => entry.type === 'file' && !skip.has(entry.path)).map((entry) => entry.path);
+  const named = tree.filter((path) => output.includes(path)).slice(0, limit);
+  const files = await Promise.all(named.map(async (path) => ({ path, content: (await api.readFileIfExists(path))?.content ?? null })));
+  return files.filter((file): file is { path: string; content: string } => typeof file.content === 'string');
+}
+
+/**
+ * When the team's combined files fail verification, one integrator sees all of them with the real output and returns
+ * corrected files, which are written and verified again. This is the edit-and-test loop a single coding agent runs,
+ * and it fixes the cross-task mismatches that per-task rework cannot see. Returns the repairs that made it pass, or
+ * undoes them and returns null.
+ */
+async function repairIntegration(command: string, failure: Verified, signal: AbortSignal): Promise<{ result: Verified; added: string[] } | null> {
+  const store = agentsState();
+  const mission = currentMission()!;
+  const integrator = store.agents['agent-architect'] ?? store.agents['agent-manager'];
+  if (!integrator) return null;
+  const workTasks = mission.tasks.filter((t) => t.id !== QA_TASK_ID);
+  const modelOverride = workTasks.find((t) => t.complexity === 'complex' && t.model)?.model ?? workTasks.find((t) => t.model)?.model;
+  const added: string[] = [];
+  const repairIds: string[] = [];
+  let keepRepairs = false;
+  let last = failure;
+  store.setAgentStatus(integrator.id, 'coding', 'Integrating the team\'s changes');
+  try {
+    for (let round = 1; round <= MAX_REPAIR_ROUNDS; round++) {
+      const applied = new Map<string, ProposedFileChange>();
+      for (const change of currentMission()?.proposedChanges ?? []) if (change.status === 'applied') applied.set(change.path, change);
+      const related = await filesNamedIn(last.raw, new Set(applied.keys()));
+      const written = [...applied.values()].map((c) => `FILE ${c.path} (written by ${c.taskId})\n${c.content}`).join('\n\n');
+      store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, agentId: integrator.id, text: `${integrator.name} is fixing the combined changes against the verification output (round ${round} of ${MAX_REPAIR_ROUNDS})` });
+      const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [{
+        role: 'user',
+        content: `Request:\n${mission.prompt}\n\nVerification command: ${command} (exit ${last.exitCode})\nOutput (end):\n${last.raw.slice(-12_000)}\n\nFiles the team wrote:\n${truncate(written, 140_000)}${
+          related.length ? `\n\nOther project files named in the output:\n${truncate(related.map((file) => `FILE ${file.path}\n${file.content}`).join('\n\n'), 40_000)}` : ''}\n\n${projectContext()}`,
+      }];
+      const ask = () => callAgent(integrator, {
+        system: `${integrator.systemPrompt}\n\nYou are the integrator. Several engineers each wrote part of the change below, and their files are now in the project together. The verification command fails. Find why from the real output and fix the code so it passes while still meeting the request. Usually the cause is a mismatch between files (signatures, names, data formats) or one missing piece.\nRules: never delete, skip or weaken existing tests to make them pass; fix the code. Keep every behaviour the request asks for. Output each file you change in full in a fenced block whose info string contains path=<relative path>, and only the files you change. Keep explanations to a few lines.`,
+        messages,
+        signal,
+        note: `Integration repair, round ${round}`,
+        countInRun: true,
+        modelOverride,
+        toolNotice: PROJECT_TOOL_INSTRUCTIONS,
+      });
+      let result = await ask();
+      for (let turn = 0; ; turn++) {
+        const parsed = parseProjectRequest(result.text);
+        if (!parsed) break;
+        if (turn >= MAX_PROJECT_TURNS) throw new Error('Integration exhausted its project read turns.');
+        messages.push({ role: 'assistant', content: result.text }, { role: 'user', content: await projectToolReply(parsed) });
+        compactToolHistory(messages, 6);
+        result = await ask();
+      }
+      const blocks = extractFileBlocks(result.text).filter((file) => !isMemoryPath(file.path));
+      if (!blocks.length) break;
+      const fallbackTask = blameTasks(last.raw, currentMission()?.proposedChanges ?? [], workTasks)[0]?.id ?? workTasks[0].id;
+      const repairs: ProposedFileChange[] = blocks.map((file) => ({
+        id: `integration:${file.path}:${crypto.randomUUID()}`,
+        path: file.path,
+        content: file.content,
+        taskId: applied.get(file.path)?.taskId ?? fallbackTask,
+        agentId: integrator.id,
+        status: 'pending',
+      }));
+      const preserved = await api.stageWorker(mission.id, `integration-${mission.qaRejectCount ?? 0}`, round, [
+        ...[...applied.values()].map(({ path, content }) => ({ path, content })),
+        ...blocks,
+      ]);
+      store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, text: preserved.path ? `Integration round ${round} recovery copy: ${preserved.path}` : preserved.reason ?? 'Integration changes are retained as proposals.' });
+      store.updateMission({ proposedChanges: [...(currentMission()?.proposedChanges ?? []), ...repairs] });
+      repairIds.push(...repairs.map((repair) => repair.id));
+      const outcome = await autoApplyChanges();
+      const ids = new Set(repairs.map((r) => r.id));
+      added.push(...(currentMission()?.proposedChanges ?? []).filter((c) => ids.has(c.id) && c.status === 'applied').map((c) => c.id));
+      if (outcome.failed) break;
+      last = await verifyNow(command);
+      store.logActivity({ kind: 'verification', level: last.passed ? 'success' : 'error', runId: mission.id, agentId: integrator.id, text: `Verification ${last.passed ? 'passed' : `failed (exit ${last.exitCode})`} after ${integrator.name}'s round ${round} (${repairs.length} file${repairs.length === 1 ? '' : 's'})` });
+      if (last.passed) {
+        keepRepairs = true;
+        return { result: last, added };
+      }
+      if (last.unrunnable) break;
+    }
+    return null;
+  } finally {
+    if (!keepRepairs) {
+      for (const id of [...repairIds].reverse()) {
+        await revertProposedChange(id);
+        store.setProposedChangeStatus(id, 'discarded');
+      }
+    }
+    store.setAgentStatus(integrator.id, 'idle');
+  }
+}
+
 async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 'retry' | 'retained'> {
   const store = agentsState();
   const mission = currentMission()!;
@@ -908,29 +1118,31 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     }
     candidateApplied = (currentMission()?.proposedChanges ?? []).filter((c) => c.status === 'applied' && pendingBefore.has(c.id)).map((c) => c.id);
     store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, text: `Running verification on the proposed changes: ${command}` });
-    const res = await useWorkspaceStore.getState().runCommand(command);
-    const raw = `${res.stdout ?? ''}\n${res.stderr ?? ''}`.trim();
-    const verification = {
-      command,
-      exitCode: res.exitCode ?? null,
-      output: truncate(raw, 20_000),
-      durationMs: res.durationMs ?? 0,
-      ranAt: Date.now(),
-    };
-    store.updateMission({ verification });
-    const passed = res.exitCode === 0;
-    const unrunnable = !passed && (!!res.rejected || verificationCouldNotRun(res.exitCode ?? null, raw));
-    const why = res.rejected ? String(res.stderr) : raw.split('\n').find((line) => line.trim()) ?? `exit ${res.exitCode}`;
+    let check = await verifyNow(command);
+    const firstFailure = check;
     store.logActivity({
       kind: 'verification',
-      level: unrunnable ? 'warn' : passed ? 'success' : 'error',
+      level: check.unrunnable ? 'warn' : check.passed ? 'success' : 'error',
       runId: mission.id,
-      text: unrunnable ? `Verification could not run, so it says nothing about the code: ${why}` : `Verification ${passed ? 'passed' : `failed (exit ${res.exitCode})`}`,
+      text: check.unrunnable ? `Verification could not run, so it says nothing about the code: ${check.why}` : `Verification ${check.passed ? 'passed' : `failed (exit ${check.exitCode})`}`,
     });
+    if (!check.passed && !check.unrunnable) {
+      try {
+        const repaired = await repairIntegration(command, check, signal);
+        if (repaired) {
+          check = repaired.result;
+          candidateApplied = [...candidateApplied, ...repaired.added];
+        }
+      } catch (error) {
+        await withdrawCandidate(candidateApplied);
+        throw error;
+      }
+    }
+    const { passed, unrunnable, raw, why, verification } = check;
     if (!passed && !unrunnable) {
       await withdrawCandidate(candidateApplied);
-      const tail = raw.slice(-4000);
-      noteFeedback(mission.id, { agentId: 'team', source: 'verification', text: `"${command}" failed (exit ${res.exitCode}): ${tail.slice(-500)}` });
+      const tail = firstFailure.raw.slice(-4000);
+      noteFeedback(mission.id, { agentId: 'team', source: 'verification', text: `"${command}" failed (exit ${firstFailure.exitCode}): ${tail.slice(-500)}` });
       const rejectCount = (currentMission()?.qaRejectCount ?? 0) + 1;
       store.updateMission({ qaRejectCount: rejectCount, status: 'qa_loopback' });
       store.setAgentStatus(qa.id, 'idle');
@@ -940,9 +1152,9 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
         return 'rejected';
       }
       const current = currentMission()!;
-      for (const task of blameTasks(tail, current.proposedChanges ?? [], workTasks)) {
+      for (const task of reworkClosure(blameTasks(tail, current.proposedChanges ?? [], workTasks), workTasks)) {
         recordModelResult(servedByTask.get(task.id) ?? task.model, false);
-        const feedback = `Verification "${command}" failed (exit ${res.exitCode}) on the changes the team proposed. Fix the cause. Output (end):\n${tail}`;
+        const feedback = `Verification "${command}" failed (exit ${firstFailure.exitCode}) on the changes the team proposed. Fix the cause. Output (end):\n${tail}`;
         store.updateTask(task.id, { status: 'rejected', qaFeedback: feedback, stage: 'implementation' });
         noteFeedback(mission.id, { agentId: task.assignedAgentId, source: 'verification', text: `${task.title}: ${tail.slice(-300)}`, taskId: task.id });
       }
@@ -969,7 +1181,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     note: 'QA review',
     countInRun: true,
   });
-  const tokens = (result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0) || result.usage?.totalTokens || 0;
+  const tokens = usageTokens(result.usage);
   let verdict;
   try {
     verdict = parseQaVerdict(result.text, workTasks.map((t) => t.id));
@@ -1003,7 +1215,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     const rejectCount = (currentMission()?.qaRejectCount ?? 0) + 1;
     store.updateMission({ qaRejectCount: rejectCount, status: 'qa_loopback' });
     const flagged = new Set(verdict.issues.map((i) => i.taskId).filter(Boolean));
-    const targets = flagged.size ? workTasks.filter((t) => flagged.has(t.id)) : workTasks;
+    const targets = flagged.size ? reworkClosure(workTasks.filter((t) => flagged.has(t.id)), workTasks) : workTasks;
     store.logActivity({ kind: 'qa', level: 'warn', runId: mission.id, agentId: qa.id, text: `Sentinel rejected ${targets.length} task(s): ${verdict.summary}` });
     if (rejectCount > MAX_QA_LOOPS) {
       if (await restorePassingCandidate(verdict.summary)) return 'retained';
@@ -1265,6 +1477,7 @@ export function stopRun() {
 
 /** Runs pending work tasks in dependency waves, several at once, never two for the same agent. */
 async function runWorkTasks(signal: AbortSignal) {
+  const desktopEnabled = (await desktopTools(currentMission()!.id)).length > 0;
   const running = new Map<string, Promise<void>>();
   let fatal: unknown = null;
   for (;;) {
@@ -1274,7 +1487,7 @@ async function runWorkTasks(signal: AbortSignal) {
       const reference = new Set(currentMission()?.contextFiles ?? []);
       const workspaceFiles = useWorkspaceStore.getState().tree.filter((e) => e.type === 'file' && !reference.has(e.path) && !/\.(md|txt)$/i.test(e.path)).map((e) => e.path);
       const filesOf = (t: { title: string; description?: string }) => selectRelevantFiles(`${t.title}\n${t.description ?? ''}`, workspaceFiles, 12);
-      const { start, blocked } = planNextWave(work, new Set(running.keys()), parallelLimit(agentsState().maxParallel), filesOf);
+      const { start, blocked } = planNextWave(work, new Set(running.keys()), desktopEnabled ? 1 : parallelLimit(agentsState().maxParallel), filesOf);
       for (const { task, dependency } of blocked) {
         agentsState().updateTask(task.id, { status: 'failed', error: `Blocked: dependency "${dependency.title}" did not complete.` });
       }
@@ -1310,6 +1523,10 @@ export async function resumeInterruptedRun() {
 export async function resumeRun() {
   const m = currentMission();
   if (!m || agentsState().isLiveRunning) return;
+  if (m.tasks.some((task) => task.computerNeedsReview || task.error === DESKTOP_INTERRUPTED)) {
+    agentsState().logActivity({ kind: 'run', level: 'warn', runId: m.id, text: 'Inspect the desktop app, then Retry the interrupted desktop task before resuming. Its actions may already have taken effect.' });
+    return;
+  }
   for (const t of m.tasks) {
     if (t.status === 'failed' || t.status === 'cancelled' || t.status === 'in_progress' || t.status === 'review') {
       agentsState().updateTask(t.id, { status: 'pending', error: undefined });
@@ -1322,7 +1539,7 @@ export async function resumeRun() {
 export async function retryTask(taskId: string) {
   const m = currentMission();
   if (!m || agentsState().isLiveRunning) return;
-  agentsState().updateTask(taskId, { status: 'pending', error: undefined, output: undefined });
+  agentsState().updateTask(taskId, { status: 'pending', error: undefined, output: undefined, computerNeedsReview: undefined });
   await resumeRun();
 }
 

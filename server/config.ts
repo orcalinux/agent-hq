@@ -19,6 +19,7 @@ export interface StoredConnection {
 }
 
 export interface StoredConfig {
+  computerAccess?: 'off' | 'read' | 'control';
   workerIsolation?: 'worktree' | 'proposals';
   workspaceRoot?: string;
   recentWorkspaces?: string[];

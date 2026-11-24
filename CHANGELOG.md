@@ -11,6 +11,23 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.24.0] — 2026-11-23
+
+### Fixed
+- Failed verification now sends the team's combined files and real command output to one integration agent for up to three edit-and-test rounds. Every model call counts toward run limits and usage. Repairs retain local recovery snapshots and are rolled back when verification still fails; a passing result still goes through QA. This addresses cross-file interface mismatches that individual task rework could miss.
+- Rework uses the current proposal rather than silently restarting from the original file. It invalidates dependent tasks, and dependency order decides which proposal owns a shared file instead of whichever task happened to finish last.
+- Task context follows file references in attached specifications and dependency outputs. Workers and integration repair can request project file listings and bounded, line-numbered reads, including pending dependency edits. Implementation answers without files receive one correction turn and then fail rather than allowing QA to certify an unchanged starter.
+- A senior mentor's review no longer deletes a junior's files. When the mentor answered REVISE with prose and no file blocks, that reply replaced a correct implementation and the task failed with "no file deliverable", blocking every dependent task. The junior's files are now kept unless the revision supplies replacement files, and the reviewer is told it cannot run commands, so it revises only visible defects. On the real Tier 2 task with Haiku 5.5, Agent HQ went from failing (86/141) to 141/141 on the independent hidden suite, with the original tests untouched, in 586 s.
+- Cached prompt tokens count toward run token limits and task totals. Prompt reports include cache reads and writes once; pricing still uses the separate cached and uncached rates.
+
+### Added
+- Optional local desktop access in Settings → Agent permissions, off by default. An installed Cua Driver can offer read-only window access or accessibility-based control after confirmation. The host uses a private driver session, serializes desktop tasks and tool calls, logs action names without typed text, and stops the driver when access is disabled or the server closes. Desktop APIs are restricted to loopback clients.
+- Agents can request desktop tools through a bounded text protocol. Every model turn is included in normal usage accounting. Interrupted tasks that already attempted desktop actions require inspection and explicit Retry rather than automatic replay. This integration supports accessibility trees, not screenshots or pixel clicks; apps without accessible controls remain unsupported.
+- The real desktop benchmark runner supports pinned Codex models as well as Claude, with a separate bare-Codex control runner. Codex usage now comes from structured CLI events, including cache reads counted once, instead of a text-log token estimate.
+
+### Verification
+- Real isolated-display checks cover Cua Driver reads, typing, clicking, access restrictions, shutdown and Settings layouts at 768, 1000 and 1440 pixels in both themes. They do not call a model. Coding quality is measured separately with the retained independent Tier 2 benchmark; unit tests and desktop checks are not a benchmark pass.
+
 ## [0.23.0] — 2026-11-23
 
 ### Added

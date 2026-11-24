@@ -15,6 +15,7 @@ import { RunLimitSettings } from './RunLimitSettings';
 import { IconTile } from '@/components/ui/Card';
 import { useUpdateStore } from '@/desktop/useUpdate';
 import { WorkerIsolationSettings } from './WorkerIsolationSettings';
+import { ComputerAccessSettings } from './ComputerAccessSettings';
 
 const SECTIONS: Array<{ id: string; title: string; hint: string; icon: LucideIcon; tint: string }> = [
   { id: 'project', title: 'Project', hint: 'The folder agents work in', icon: FolderOpen, tint: '#2563EB' },
@@ -205,6 +206,7 @@ export default function SettingsView() {
 
           <Section id="permissions">
             <WorkerIsolationSettings />
+            <ComputerAccessSettings />
             <p className="text-[12.5px] text-fg-muted">Choose how much the agents may do without asking. Changes are always reviewed by QA first, stay inside the project folder, and can be undone from the Changes panel.</p>
             <ApprovalModeCards />
           </Section>

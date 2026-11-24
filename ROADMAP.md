@@ -22,7 +22,7 @@ Runs are owned by the server, not the window.
 
 ## 3. Isolated workers
 
-Status: **done differently (0.15.0).** Agents do not write to disk; they propose changes. Git worktrees would add nothing, so conflicts between proposals are detected, flagged and never applied silently. Worktrees return if agents ever run commands in parallel.
+Status: **proposal conflict protection plus real recovery worktrees (0.23.0).** Every coding task attempt keeps a detached Git worktree containing dirty project files and the combined proposals. The original project is still changed through the proposal/apply/verify flow; workers do not execute commands inside these copies. Real temporary-repository tests verify that parallel same-file edits have separate retained copies and leave the original unchanged. Non-Git or unborn repositories use proposals. Recovery copies are not a security sandbox. Version 0.24.0 also preserves integration-repair rounds.
 
 Parallel agents must not overwrite each other.
 
@@ -49,6 +49,8 @@ Status: **done (0.15.0).** Diff preview in the Changes tab and an explicit Full 
 ## 6. Evidence, not claims
 
 Status: **started (0.15.0).** `scripts/benchmark.mjs` and [docs/benchmark.md](docs/benchmark.md) run ten real coding tasks (four of them harder) across Claude and Codex models. All 80 attempts passed, so the suite still cannot rank models; a harder suite and a second operating system are still needed.
+
+The harder Tier 2 study now includes real CLI, Maestro, Orchestrator and Agent HQ runs. Agent HQ 0.23.0 still left the starter unchanged and independently scored 86/141; passing unit tests did not establish coding reliability. The resulting integration repair and dependency fixes are under fresh-clone evaluation in 0.24.0. Claude and Codex comparisons are kept separate. See [the method](docs/desktop-comparison-protocol.md) and [retained results](docs/competitive-study.md).
 
 - A small public benchmark of real tasks across at least two providers and two operating systems, with the method and raw results published.
 - Until it exists, the README makes no "best" or "fastest" claims.

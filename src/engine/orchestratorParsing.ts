@@ -238,3 +238,10 @@ export function parseMentorVerdict(text: string): { verdict: 'approve' | 'revise
 export function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}\n…[truncated ${text.length - max} chars]`;
 }
+
+/** A mentor's revision replaces the junior's output only if it does not drop the files the junior delivered. */
+export function adoptMentorRevision(original: string, revised: string | undefined): string {
+  if (!revised) return original;
+  const hadFiles = extractFileBlocks(original).length > 0;
+  return hadFiles && extractFileBlocks(revised).length === 0 ? original : revised;
+}

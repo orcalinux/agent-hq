@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { checkLimits, DEFAULT_RUN_LIMITS, normalizeLimits, type RunLimits } from '@/engine/runLimits';
 
 const calls: string[] = [];
+let callUsage = { inputTokens: 600, outputTokens: 500, totalTokens: 1100, cacheReadTokens: 0 };
 
 vi.mock('@/api/client', () => ({
   streamChat: vi.fn(async (req: { model: string; signal: AbortSignal }) => {
     if (req.signal.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
     calls.push(req.model);
-    return { text: 'Done.', usage: { inputTokens: 600, outputTokens: 500, totalTokens: 1100 } };
+    return { text: 'Done.', usage: callUsage };
   }),
   api: new Proxy({}, { get: () => async () => ({ content: '' }) }),
   ApiError: class ApiError extends Error {},
@@ -66,15 +67,17 @@ describe('run limit checks', () => {
 describe('run limits in a live run', () => {
   beforeEach(() => {
     calls.length = 0;
+    callUsage = { inputTokens: 600, outputTokens: 500, totalTokens: 1100, cacheReadTokens: 0 };
     const roleDefaults = Object.fromEntries(Object.keys(useAgentStore.getState().roleDefaults).map((r) => [r, 'test:model'])) as never;
     const task = (id: string, agentId: string, dependsOn: string[] = []) => ({
-      id, title: `Task ${id}`, description: 'Do it.', stage: 'implementation', assignedAgentId: agentId, status: 'pending', priority: 'medium', progress: 0, tags: [], dependsOn,
+      id, title: `Task ${id}`, description: 'Analyze it.', stage: 'architecture', assignedAgentId: agentId, status: 'pending', priority: 'medium', progress: 0, tags: [], dependsOn,
     });
     useAgentStore.setState({
       roleDefaults,
       maxParallel: 1,
       runLimits: { maxCostUSD: null, maxTokens: 2000, maxMinutes: null, maxCallsPerAgent: null, maxCostPerAgentUSD: null },
       activity: [],
+      runHistory: [],
       activeMission: {
         id: 'run-limit-test', title: 'Limit test', source: 'live', status: 'running', startedAt: Date.now(), currentStage: 'implementation', stageIndex: 2,
         tasks: [task('a', 'agent-frontend'), task('b', 'agent-backend', ['a']), task('c', 'agent-frontend', ['b']), { ...task('qa-review', 'agent-qa', ['a', 'b', 'c']), stage: 'qa_review' }],
@@ -92,6 +95,13 @@ describe('run limits in a live run', () => {
     const texts = useAgentStore.getState().activity.map((a) => a.text);
     expect(texts.some((t) => t.startsWith('Run limit at 55%'))).toBe(false);
     expect(texts.some((t) => t.startsWith('Run stopped: 2,200 of the 2,000 token limit'))).toBe(true);
+  });
+
+  it('counts cached prompt tokens toward the run limit', async () => {
+    callUsage = { inputTokens: 100, cacheReadTokens: 1900, outputTokens: 10, totalTokens: 2010 };
+    await executeRun();
+    expect(calls).toHaveLength(1);
+    expect(useAgentStore.getState().activeMission!.error).toContain('2,010 of the 2,000 token limit');
   });
 
   it('stops the run when one agent reaches its cost limit, even though the whole-run cost is not reached', async () => {
@@ -112,5 +122,18 @@ describe('run limits in a live run', () => {
     await executeRun();
     expect(calls.length).toBeGreaterThanOrEqual(4);
     expect(useAgentStore.getState().activeMission!.error ?? '').not.toMatch(/run limit/);
+  });
+
+  it('fails an implementation with no files and blocks downstream tasks instead of certifying old tests', async () => {
+    useAgentStore.getState().setRunLimits({ maxTokens: null });
+    const mission = useAgentStore.getState().activeMission!;
+    useAgentStore.setState({ activeMission: { ...mission, tasks: mission.tasks.map((task) => task.id === 'a' ? { ...task, stage: 'implementation' } : task) } });
+    await executeRun();
+    const result = useAgentStore.getState().activeMission!;
+    expect(result.status).toBe('failed');
+    expect(result.tasks.find((task) => task.id === 'a')).toMatchObject({ status: 'failed', error: expect.stringContaining('no file changes') });
+    expect(result.tasks.find((task) => task.id === 'b')?.status).toBe('failed');
+    expect(result.tasks.find((task) => task.id === 'qa-review')?.status).not.toBe('completed');
+    expect(calls).toHaveLength(2);
   });
 });

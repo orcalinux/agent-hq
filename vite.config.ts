@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import { readFileSync } from 'fs';
 import { createApiMiddleware } from './server/api';
+import { stopComputerDriver } from './server/computerUse';
 
 function agentHqApiPlugin(): Plugin {
   const middleware = createApiMiddleware();
@@ -11,9 +12,11 @@ function agentHqApiPlugin(): Plugin {
     name: 'agent-hq-api',
     configureServer(server) {
       server.middlewares.use(middleware);
+      server.httpServer?.once('close', stopComputerDriver);
     },
     configurePreviewServer(server) {
       server.middlewares.use(middleware);
+      server.httpServer.once('close', stopComputerDriver);
     },
   };
 }

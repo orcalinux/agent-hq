@@ -40,6 +40,7 @@ import { currentEmbedder, embeddingStatus, forgetEmbedder, pullModel } from './e
 import { clearJournal, loadJournal, saveJournal } from './runJournal';
 import { checkAgentUpdates } from './agentUpdates';
 import { stageTaskWorkspace } from './taskWorkspaces';
+import { callComputer, computerStatus, computerTools, setComputerAccess } from './computerUse';
 
 const MAX_BODY = 8 * 1024 * 1024;
 
@@ -258,6 +259,32 @@ const routes: Record<string, Handler> = {
 
   'GET /api/agents/updates': async (_req, res) => {
     send(res, 200, await checkAgentUpdates());
+  },
+
+  'GET /api/computer/status': async (req, res) => {
+    if (!isLoopbackRequest(req)) throw new HttpError(403, 'Desktop access is available only on this computer.');
+    send(res, 200, await computerStatus());
+  },
+
+  'PUT /api/computer/access': async (req, res) => {
+    if (!isLoopbackRequest(req)) throw new HttpError(403, 'Desktop access is available only on this computer.');
+    const body = await readJson(req);
+    if (body.access !== 'off' && body.access !== 'read' && body.access !== 'control') throw new HttpError(400, 'Choose off, read or control.');
+    send(res, 200, await setComputerAccess(body.access));
+  },
+
+  'GET /api/computer/tools': async (req, res) => {
+    if (!isLoopbackRequest(req)) throw new HttpError(403, 'Desktop access is available only on this computer.');
+    send(res, 200, { tools: await computerTools() });
+  },
+
+  'POST /api/computer/call': async (req, res) => {
+    if (!isLoopbackRequest(req)) throw new HttpError(403, 'Desktop access is available only on this computer.');
+    const body = await readJson(req);
+    if (typeof body.name !== 'string') throw new HttpError(400, 'Choose a computer tool.');
+    const controller = new AbortController();
+    res.on('close', () => { if (!res.writableEnded) controller.abort(); });
+    send(res, 200, { result: await callComputer(body.name, body.arguments, controller.signal) });
   },
 
   'GET /api/workers/settings': async (_req, res) => {

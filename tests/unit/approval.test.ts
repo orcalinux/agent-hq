@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, checkpointProposals, evidencedQaIssues, markConflicts, selectAutoApply, blameTasks, verificationCouldNotRun } from '../../src/engine/approval';
+import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, checkpointProposals, evidencedQaIssues, markConflicts, selectAutoApply, blameTasks, reworkClosure, verificationCouldNotRun } from '../../src/engine/approval';
 import type { ProposedFileChange } from '../../src/types';
 
 const change = (id: string, path: string, status: ProposedFileChange['status'] = 'pending', extra: Partial<ProposedFileChange> = {}): ProposedFileChange => ({
@@ -169,5 +169,32 @@ describe('verificationCouldNotRun', () => {
     expect(verificationCouldNotRun(1, '3 failed, 10 passed')).toBe(false);
     expect(verificationCouldNotRun(1, "ModuleNotFoundError: No module named 'tabsplit.migrations'")).toBe(false);
     expect(verificationCouldNotRun(2, 'SyntaxError: invalid syntax')).toBe(false);
+  });
+});
+
+describe('reworked dependency chains', () => {
+  const chain = [{ id: 't5', dependsOn: [] }, { id: 't6', dependsOn: ['t5'] }, { id: 't7', dependsOn: ['t6'] }, { id: 't9', dependsOn: [] }];
+
+  it('keep the version of the task that built on the file, even when an upstream task was reworked later', () => {
+    const proposals = [
+      change('t7-old', 'storage.py', 'pending', { taskId: 't7' }),
+      change('t5-new', 'storage.py', 'pending', { taskId: 't5' }),
+      change('t6-new', 'storage.py', 'pending', { taskId: 't6' }),
+    ];
+    const picked = selectAutoApply(proposals, chain);
+    expect(picked.apply.map((c) => c.id)).toEqual(['t7-old']);
+    expect(picked.superseded.map((c) => c.id).sort()).toEqual(['t5-new', 't6-new']);
+    expect(selectAutoApply([change('a', 'x.py', 'pending', { taskId: 't5' }), change('b', 'x.py', 'pending', { taskId: 't5' })], chain).apply.map((c) => c.id)).toEqual(['b']);
+  });
+
+  it('redo dependent tasks that changed the same files as a task sent back', () => {
+    const proposals = [
+      change('a', 'storage.py', 'pending', { taskId: 't5' }),
+      change('b', 'storage.py', 'pending', { taskId: 't6' }),
+      change('c', 'storage.py', 'discarded', { taskId: 't7' }),
+      change('d', 'cli.py', 'pending', { taskId: 't9' }),
+    ];
+    expect(reworkClosure([chain[0]], chain).map((t) => t.id)).toEqual(['t5', 't6', 't7']);
+    expect(reworkClosure([chain[3]], chain).map((t) => t.id)).toEqual(['t9']);
   });
 });

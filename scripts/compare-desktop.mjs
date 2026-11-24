@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -15,11 +16,13 @@ if (args.help || !args.workspace || !args.output) {
 Build first: npm run build && npm run build:electron
 Usage: node scripts/compare-desktop.mjs --workspace FRESH_CLONE --output NEW_EVIDENCE_DIR
   --model anthropic:cli:claude-haiku-5-5
+          openai:cli:gpt-6-sol
   --attach SPEC.md,ISSUES.md
   --strategy adaptive|fixed
   --timeout-minutes 30
   --verify "python -m pytest -q"   Verification command Agent HQ runs on the proposed changes (default: none).
-  --wait-quota          Wait for the local Magpie Claude quota to show headroom.
+  --wait-quota          Wait for the selected provider's local Magpie quota to show headroom.
+  --unlimited          Disable token, cost and per-agent call caps; keep the runner's wall-time limit.
   --run                Actually submit the task; otherwise only prepare the UI.
 Uses TASK.md from the clone, a separate desktop profile, and your existing CLI login.
 Evidence includes local paths and prompts; review before sharing.`);
@@ -33,7 +36,10 @@ const verify = typeof args.verify === 'string' ? args.verify : '';
 const attachments = String(args.attach || 'SPEC.md,ISSUES.md').split(',').filter(Boolean);
 const strategy = String(args.strategy || 'adaptive');
 const timeoutMinutes = Number(args['timeout-minutes'] || 30);
-if (!model.startsWith('anthropic:cli:')) throw new Error('This comparison runner currently supports the Claude Code CLI connection only.');
+const providerId = model.startsWith('anthropic:cli:') ? 'anthropic' : model.startsWith('openai:cli:') ? 'openai' : null;
+if (!providerId) throw new Error('Choose an exact anthropic:cli: or openai:cli: model.');
+if (model.endsWith(':default') || /:cli:(?:group\/|sonnet$|haiku$|opus$)/.test(model)) throw new Error('Benchmarks require a pinned model, not an alias or routing group.');
+const quotaProvider = providerId === 'openai' ? 'codex' : 'claude';
 if (!['adaptive', 'fixed'].includes(strategy)) throw new Error('Unknown team strategy.');
 if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) throw new Error('Invalid timeout.');
 if (fs.existsSync(output)) throw new Error('Use a new evidence directory to preserve previous results.');
@@ -52,7 +58,7 @@ const config = path.join(output, 'config');
 fs.mkdirSync(config, { mode: 0o700 });
 fs.writeFileSync(path.join(config, 'config.json'), JSON.stringify({
   workspaceRoot: workspace,
-  connections: { anthropic: { providerId: 'anthropic', method: 'cli', connectedAt: new Date().toISOString() } },
+  connections: { [providerId]: { providerId, method: 'cli', connectedAt: new Date().toISOString() } },
   memory: { embeddingModel: 'off' },
 }), { mode: 0o600 });
 const write = (name, data) => fs.writeFileSync(path.join(output, name), JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
@@ -60,10 +66,14 @@ const log = (text) => console.log(`${new Date().toISOString()} ${text}`);
 const metadata = {
   version: JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version,
   appCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+  appDirty: !!execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim(),
+  serverBuildSha256: crypto.createHash('sha256').update(fs.readFileSync(path.join(root, 'dist-electron/server.cjs'))).digest('hex'),
+  rendererBuildSha256: crypto.createHash('sha256').update(fs.readdirSync(path.join(root, 'dist/assets')).filter((file) => file.endsWith('.js')).sort().map((file) => `${file}\n${fs.readFileSync(path.join(root, 'dist/assets', file), 'utf8')}`).join('\n')).digest('hex'),
   workspace, initialTaskCommit, model, strategy, attachments, task,
   startedAt: null, endedAt: null, wallMs: null, outcome: 'preparing',
   approval: 'auto', maxParallel: 3, modelPinned: true,
   verificationCommand: verify, learning: 'every-run', errors: [],
+  limits: args.unlimited ? { maxCostUSD: null, maxTokens: null, maxMinutes: timeoutMinutes, maxCallsPerAgent: null, maxCostPerAgentUSD: null } : 'application defaults',
 };
 write('metadata.json', metadata);
 
@@ -71,12 +81,12 @@ async function waitForQuota() {
   let announced = 0;
   for (;;) {
     const all = JSON.parse(execFileSync('magpie', ['quota', '--json'], { encoding: 'utf8', timeout: 15_000 }));
-    const windows = all.filter((entry) => entry.provider === 'claude').flatMap((entry) => entry.windows ?? []);
+    const windows = all.filter((entry) => entry.provider === quotaProvider).flatMap((entry) => entry.windows ?? []).filter((entry) => !entry.text && entry.lane !== 'images');
     write('quota.json', { at: new Date().toISOString(), windows: windows.map(({ name, used, remaining, resetsAt }) => ({ name, used, remaining, resetsAt })) });
-    if (!windows.length) throw new Error('No Claude quota reading; refusing to assume a reset.');
+    if (!windows.length) throw new Error(`No ${quotaProvider} quota reading; refusing to assume a reset.`);
     if (windows.every((entry) => entry.remaining > 0 && (!entry.resetsAt || Date.parse(entry.resetsAt) > Date.now()))) return;
     if (Date.now() - announced > 55_000) {
-      log('Waiting for Claude quota headroom.');
+      log(`Waiting for ${quotaProvider} quota headroom.`);
       announced = Date.now();
     }
     await delay(30_000);
@@ -132,7 +142,7 @@ try {
   });
   await page.waitForLoadState('domcontentloaded');
   await page.waitForFunction(() => localStorage.getItem('agent-hq.state'));
-  await page.evaluate(({ model, strategy, verify }) => {
+  await page.evaluate(({ model, strategy, verify, limits }) => {
     const saved = JSON.parse(localStorage.getItem('agent-hq.state'));
     const state = saved.state;
     state.agents = Object.fromEntries(Object.entries(state.agents).map(([id, agent]) =>
@@ -146,11 +156,12 @@ try {
       modelScope: 'sovereign', modelScopeChosen: true, managerChatMessages: [],
       verificationCommand: verify, learningMode: 'every-run', activeMission: null, runHistory: [],
     });
+    if (limits !== 'application defaults') state.runLimits = limits;
     localStorage.setItem('agent-hq.state', JSON.stringify(saved));
-  }, { model, strategy, verify });
+  }, { model, strategy, verify, limits: metadata.limits });
   await page.reload();
   const connection = await page.evaluate(async () => (await fetch('/api/connections')).json());
-  const offered = connection.providers.find((entry) => entry.id === 'anthropic')?.models ?? [];
+  const offered = connection.providers.find((entry) => entry.id === providerId)?.models ?? [];
   if (!offered.some((entry) => entry.ref === model)) throw new Error(`Pinned model not offered: ${model}`);
   const composer = page.getByRole('textbox', { name: 'Message Sovereign', exact: true });
   if (!await composer.isVisible()) await page.keyboard.press('Control+l');

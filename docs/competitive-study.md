@@ -223,3 +223,63 @@ The first real 0.22.2 rerun reached verification with files written. Its verific
 Agent HQ 0.23.0 also adds local project onboarding, CLI version checks and a detached worktree recovery snapshot for each coding task attempt. Worktree tests use real temporary Git repositories and confirm that parallel same-file edits produce separate recoverable copies while leaving the original alone. These snapshots preserve proposed files; agents still use the text proposal protocol, and collective verification still runs through the existing apply/undo flow. Git-ignored dependencies and submodule contents are not copied. Worktrees are not a security sandbox.
 
 Local onboarding verification opens the real built application, clones a public repository through its dialog, stages a real detached worktree, reopens a recent project and checks the layouts at 768, 1000 and 1440 pixels in both themes. It does not submit model calls. This validates those UI flows, not coding quality.
+
+### Context and false-completion follow-up
+
+Two further real runs exposed additional failures. The 0.23.0 Claude attempt
+finished failed after 825.0 seconds and 17 calls including learning. It graded
+86/141, with no project change retained and the four original tests untouched.
+The combined files initially disagreed about storage interfaces; task rework
+did not reliably preserve the complete downstream changes.
+
+An initial 0.24.0 Codex attempt, pinned to `gpt-6-sol`, reported completed after
+242.9 seconds and made 12 calls including learning. Independent grading was
+again **86/141 with no implementation on disk**. This was a false completion:
+workers requested source files instead of delivering changes, those answers
+were marked completed, and QA accepted the four passing starter tests.
+The worker context selector matched paths named in task descriptions, but did
+not follow source references inside attached specifications or requests in
+dependency output. It could therefore provide the requirements without the
+source needed to implement them.
+
+Source inspection of Maestro's
+`src/main/process-manager/spawners/ChildProcessSpawner.ts` and Orchestrator's
+`backend/internal/adapters/agent/codex/codex.go` confirms that their native
+engines launch in the actual task workspace. Their agents can discover files
+and run an edit/test loop, rather than depending on a single initial context
+selection. Agent HQ keeps its proposal approval boundary, but now exposes
+bounded project reads to workers and integration repair, follows specification
+and dependency file references, and fails empty implementation answers.
+Dependency invalidation, descendant proposal ownership and combined-file
+verification repair address the separate integration failure. These are
+independent implementations of observed design lessons; no competitor source
+was copied.
+
+The Codex group uses fresh clones, the unchanged 141-check hidden suite, pinned
+`gpt-6-sol`, medium effort, sequential runs and process-tree memory samples.
+Claude and Codex outcomes belong to separate groups; changing engines cannot
+establish that an app became better.
+
+### Mentor-revision fix and Agent HQ result (Haiku 5.5)
+
+A fresh 0.24.0 run on `anthropic:cli:claude-haiku-5-5` first ended **failed**
+after 232 seconds, not falsely completed. The call log showed the cause: a
+junior's correct `format_cents` change and tests were reviewed by a mentor that
+cannot run commands or read files. The mentor answered REVISE because the work
+was "unverified", and its prose reply replaced the junior's output. That left no
+file deliverable, and five dependent tasks were blocked. The fix keeps the
+junior's files unless the revision supplies replacement files, and tells the
+reviewer what it cannot do.
+
+On a fresh clone of the same starter, the rebuilt app completed in **586 s**
+and graded **141/141** on the unchanged hidden suite, with the original tests
+untouched. This joins the Haiku group (Claude alone, Orchestrator and Maestro,
+all 141/141). Cost and memory for this run are saved in the evidence folder and
+are not yet compared here. It is one run on one task, so it shows that the
+failure is fixed, not that Agent HQ is faster or cheaper.
+
+The Codex group is incomplete. The Orchestrator Codex run ended when the Codex
+account hit its usage limit at 22:38 UTC (its transcript shows the provider
+error); its worktree was unchanged, so it is not a quality result. Agent HQ on
+`gpt-6-sol` has not been re-run since the fix because the limit was still active
+at 00:01 UTC.

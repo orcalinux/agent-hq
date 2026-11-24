@@ -106,7 +106,8 @@ export function markConflicts<T extends ProposedFileChange>(changes: T[], tasks:
 
 /**
  * Picks the pending changes auto mode should write: one per path, the latest proposal wins when each later task
- * built on the earlier one. Earlier proposals for that path are returned as superseded. Paths where independent
+ * built on the earlier one. A task that depends on another keeps its version even when the other was reworked later,
+ * because it built on that file. Earlier proposals for that path are returned as superseded. Paths where independent
  * tasks clash are returned as conflicted and left for the user.
  */
 export function selectAutoApply(changes: ProposedFileChange[], tasks: TaskLink[] = []): { apply: ProposedFileChange[]; superseded: ProposedFileChange[]; conflicted: ProposedFileChange[] } {
@@ -114,14 +115,29 @@ export function selectAutoApply(changes: ProposedFileChange[], tasks: TaskLink[]
   const clashing = new Set(pending.filter((c) => c.conflictsWith?.length).map((c) => c.path));
   const conflicted = pending.filter((c) => clashing.has(c.path));
   const clean = pending.filter((c) => !clashing.has(c.path));
+  const ancestors = ancestorsOf(tasks);
+  const buildsOn = (a: ProposedFileChange, b: ProposedFileChange) => a.taskId !== b.taskId && !!ancestors.get(a.taskId)?.has(b.taskId);
   const latest = new Map<string, ProposedFileChange>();
-  for (const change of clean) latest.set(change.path, change);
+  for (const change of clean) {
+    const best = latest.get(change.path);
+    if (!best || !buildsOn(best, change)) latest.set(change.path, change);
+  }
   const keep = new Set([...latest.values()].map((c) => c.id));
   return {
     apply: clean.filter((c) => keep.has(c.id)),
     superseded: clean.filter((c) => !keep.has(c.id)),
     conflicted,
   };
+}
+
+/**
+ * Tasks built on an invalidated result must run again, including consumers in different files.
+ */
+export function reworkClosure<T extends TaskLink>(targets: T[], tasks: T[]): T[] {
+  const ancestors = ancestorsOf(tasks);
+  const chosen = new Map(targets.map((t) => [t.id, t]));
+  for (const task of tasks) if (targets.some((target) => ancestors.get(task.id)?.has(target.id))) chosen.set(task.id, task);
+  return tasks.filter((t) => chosen.has(t.id));
 }
 
 /** A change can be undone when it was applied and its previous state is known. */

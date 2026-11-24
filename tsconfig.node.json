@@ -10,5 +10,5 @@
     "strict": true,
     "noEmit": true
   },
-  "include": ["vite.config.ts", "server", "electron", "src/desktop/types.ts", "src/desktop/changelog.ts", "src/types", "playwright.desktop.config.ts"]
+  "include": ["vite.config.ts", "server", "electron", "src/desktop/types.ts", "src/desktop/changelog.ts", "src/engine/computerPolicy.ts", "src/engine/toolBlocks.ts", "src/types", "playwright.desktop.config.ts"]
 }

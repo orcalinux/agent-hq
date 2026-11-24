@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractFileBlocks, extractJson, parseQaVerdict, topoOrder } from '../../src/engine/orchestratorParsing';
+import { adoptMentorRevision, extractFileBlocks, extractJson, parseQaVerdict, topoOrder } from '../../src/engine/orchestratorParsing';
 
 describe('orchestrator parsing', () => {
   it('extracts JSON from fenced, bare and reasoning-prefixed responses', () => {
@@ -30,5 +30,14 @@ describe('orchestrator parsing', () => {
   it('normalizes QA verdicts and unknown task ids', () => {
     const verdict = parseQaVerdict('{"verdict":"Reject","summary":"s","issues":[{"taskId":"t9","problem":"p"}]}', ['t1']);
     expect(verdict).toEqual({ verdict: 'reject', summary: 's', issues: [{ taskId: '', problem: 'p' }] });
+  });
+
+  it('keeps the junior files when a mentor revision drops them', () => {
+    const junior = '```py path=a.py\nx = 1\n```';
+    expect(adoptMentorRevision(junior, 'Looks fine but unverified.')).toBe(junior);
+    expect(adoptMentorRevision(junior, undefined)).toBe(junior);
+    const fixed = '```py path=a.py\nx = 2\n```';
+    expect(adoptMentorRevision(junior, fixed)).toBe(fixed);
+    expect(adoptMentorRevision('no files here', 'prose')).toBe('prose');
   });
 });

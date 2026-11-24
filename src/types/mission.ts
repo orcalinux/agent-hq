@@ -97,6 +97,10 @@ export interface KanbanTaskCard {
   completedAt?: number;
   attempts?: number;
   worktreePath?: string;
+  /** Desktop actions this task started (recorded before each runs), and what they were, without typed text. */
+  computerActions?: number;
+  computerLog?: string[];
+  computerNeedsReview?: boolean;
   progress: number;
   commitHash?: string;
   tags: string[];

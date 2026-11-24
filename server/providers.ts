@@ -6,6 +6,7 @@ import type { ConnectionMethod, ProviderId, StoredConnection } from './config';
 import { claudeCliUsage, claudeModelChoices, observeCliModels, reportedClaudeModels, type ClaudeCliUsage } from './cliModelIdentity';
 import type { ClaudePricing } from './claudeCatalog';
 import { endpointFromHost, providerFetch, validateEndpoint } from './network';
+import { parseCodexEvents } from './codexEvents';
 
 export interface ModelInfo {
   ref: string;
@@ -676,24 +677,17 @@ async function chatViaCli(req: ChatRequest): Promise<ChatResult> {
   }
 
   if (connection.providerId === 'openai') {
-    const lastFile = path.join(os.tmpdir(), `agent-hq-codex-${process.pid}-${Date.now()}.txt`);
-    const args = ['exec', '--skip-git-repo-check', '--sandbox', 'read-only', '--output-last-message', lastFile];
+    const args = ['exec', '--json', '--skip-git-repo-check', '--sandbox', 'read-only'];
     if (alias && alias !== 'default') args.push('-m', alias);
     args.push('-');
     const out = await runCliStreaming(binary, args, prompt, req.cwd, req.signal);
-    let text = '';
-    try {
-      text = fs.readFileSync(lastFile, 'utf8');
-      fs.unlinkSync(lastFile);
-    } catch {
-      text = out.stdout;
-    }
-    if (out.code !== 0) throw new Error(out.stderr.trim().split('\n').slice(-3).join(' ').slice(0, 400) || `codex exited with code ${out.code}`);
-    const used = (out.stderr + out.stdout).match(/tokens used:?\s*([\d,]+)/i)?.[1];
-    req.onDelta(text);
+    const parsed = parseCodexEvents(out.stdout);
+    if (out.code !== 0 || parsed.error) throw new Error(parsed.error || out.stderr.trim().split('\n').slice(-3).join(' ').slice(0, 400) || `codex exited with code ${out.code}`);
+    if (!parsed.text) throw new Error('Codex returned no final message.');
+    req.onDelta(parsed.text);
     return {
-      text,
-      usage: used ? { totalTokens: Number(used.replace(/,/g, '')) } : undefined,
+      text: parsed.text,
+      usage: parsed.usage,
       latencyMs: Date.now() - start,
     };
   }

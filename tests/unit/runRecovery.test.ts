@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INTERRUPTED_MESSAGE, reconcileInterrupted, shouldAutoResume } from '@/engine/runRecovery';
+import { DESKTOP_INTERRUPTED, INTERRUPTED_MESSAGE, reconcileInterrupted, shouldAutoResume } from '@/engine/runRecovery';
 import { useAgentStore } from '@/store/useAgentStore';
 import type { MissionState } from '@/types';
 
@@ -22,6 +22,15 @@ describe('interrupted runs', () => {
   it('leave runs that already ended untouched', () => {
     const done = { ...running(), status: 'completed' } as MissionState;
     expect(reconcileInterrupted(done)).toBe(done);
+  });
+
+  it('fail a task that already acted on the desktop and stop Full access from resuming', () => {
+    const mission = running();
+    mission.tasks[1] = { ...mission.tasks[1], computerActions: 2, computerLog: ['click s00000001:1', 'type_text s00000001:0 (5 characters)'] };
+    const saved = reconcileInterrupted(mission);
+    expect(saved.tasks[1]).toMatchObject({ status: 'failed', error: DESKTOP_INTERRUPTED, computerActions: 2 });
+    expect(saved.tasks[2].status).toBe('pending');
+    expect(shouldAutoResume(saved, 'full', false)).toBe(false);
   });
 
   it('are reconciled by the store when it saves', () => {

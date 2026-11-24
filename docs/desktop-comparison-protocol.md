@@ -10,7 +10,7 @@ Use a fresh clone of the same starter commit for every app. The Tier 2
 tabsplit backlog contains database upgrades with rollback, CSV error locations,
 performance requirements, foreign-currency accounting and two arithmetic bugs.
 Its independent grader checks 54 new acceptance cases and 87 regression cases.
-The reference solution passes all 141; the unchanged starter passes 87.
+The reference solution passes all 141; the unchanged starter passes 86.
 
 Keep the hidden tests and reference implementation outside the task workspace.
 Run the grader only after the app finishes. Do not repair its output by hand
@@ -25,10 +25,16 @@ not just a success message.
 
 ## Pin the engine and describe the workflow
 
-Use the same exact model identifier and subscription-backed Claude Code engine
-as the existing CLI, Maestro and Orchestrator runs. Do not silently substitute
-another model or provider when quota is exhausted. Wait for the quota reset
-and record the reading.
+Use the same exact model identifier, reasoning effort and subscription-backed
+engine for every app in a comparison group. Historical Claude Code results and
+new Codex results are separate groups; do not attribute a model change to an app
+improvement. Do not silently substitute a model, provider or routing group when
+quota is exhausted. Record the reading, then wait or begin a separate group.
+The Codex runner accepts `openai:cli:<exact-model>`; its control runner is
+`scripts/compare-codex-cli.mjs`. Pin the same model in the competitor's own
+session settings. Record requested and observed model identities separately;
+when the CLI does not report the served model, audit its native session against
+the local gateway records rather than assuming the configured name proves it.
 
 For Agent HQ:
 
@@ -43,8 +49,9 @@ For Agent HQ:
   the chat UI. Automatically click the ordinary plan approval button.
 - Record attachments and configuration as operator assistance. The competitors'
   coding sessions can read files with their tools; Agent HQ uses supplied
-  context and complete-file proposals. These are different workflows using the
-  same engine, not equivalent tool environments.
+  context and complete-file proposals. From 0.24.0 workers can also request
+  project listings and line-numbered reads through the host. These are different
+  workflows using the same engine, not equivalent tool environments.
 - If the first run reveals a context problem, a separate fresh-clone run may
   attach the source files too. Label that run as assisted, retain both outcomes,
   and do not replace the first result with the better one.
@@ -52,6 +59,17 @@ For Agent HQ:
 No network responses or model answers are mocked. The comparison driver changes
 only initial settings in an isolated profile. It does not inject a plan,
 implementation, QA verdict or test results.
+
+Keep the existing independent hidden suite unchanged between apps, outside every
+working directory. Save the starter commit, task/spec hashes and hidden-suite
+hashes. Run the apps sequentially for comparable timings; record any overlap
+instead of presenting overlapping runs as a speed ranking. A failing case is
+fixed in the application, not removed from the grader.
+
+Use `--unlimited` for a group with no token, cost or per-agent call caps, matching
+the native control runners' lack of those caps. It preserves the same explicit
+wall-time deadline. Record this choice; do not silently compare it as an
+application-default configuration or change caps during a running attempt.
 
 ## Timing, usage and memory
 
@@ -117,6 +135,17 @@ The `claude` executable must be on `PATH` and already signed in. `--wait-quota`
 reads the local `magpie quota --json` output and refuses to infer headroom from
 missing readings. On a machine without a display, prefix the command with
 `xvfb-run -a`. Xvfb supplies a virtual display; the app and provider are real.
+
+For the Codex comparison group, use `--model openai:cli:gpt-6-sol` (or another
+exact model offered by the installed CLI), with the signed-in `codex` executable
+on `PATH`. Run the same clone independently with
+`scripts/compare-codex-cli.mjs --workspace ... --output ... --model gpt-6-sol`.
+The bare control uses medium reasoning effort; pin that effort in the apps too.
+`scripts/compare-maestro.mjs` dispatches the unchanged task to an existing
+Maestro research agent and saves its native tab transcript and process-tree
+samples. It requires the CLI path, profile, agent, workspace, output, process ID
+and pinned model as explicit arguments. Its terminal observation is “idle
+reported”, which must still be checked against the native events and grader.
 
 Use `--attach` with a comma-separated list for a separately labelled assisted
 run. Use `--strategy fixed` to study the existing-team workflow separately.

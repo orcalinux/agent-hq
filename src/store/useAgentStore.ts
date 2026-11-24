@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { usageCounts } from '@/utils/usage';
 import type {
   ApprovalMode,
   LearningMode,
@@ -551,9 +552,7 @@ export const useAgentStore = create<AgentStoreState>()(
           set((s) => {
             const a = s.agents[agentId];
             if (!a) return s;
-            const inT = usage?.inputTokens ?? 0;
-            const outT = usage?.outputTokens ?? 0;
-            const total = usage?.totalTokens ?? inT + outT;
+            const { prompt: inT, completion: outT, total } = usageCounts(usage);
             const u = a.tokenUsage;
             return {
               agents: {

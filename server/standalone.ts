@@ -4,6 +4,7 @@ import type { AddressInfo } from 'net';
 import path from 'path';
 import { createApiMiddleware } from './api';
 import { closeAllTerminals } from './pty';
+import { stopComputerDriver } from './computerUse';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -117,6 +118,7 @@ export async function startStandaloneServer(opts: StandaloneOptions): Promise<St
         url: `http://${host}:${port}`,
         close: () => {
           closeAllTerminals();
+          stopComputerDriver();
           return new Promise((resolve) => {
             server.close(() => resolve());
             server.closeAllConnections();
