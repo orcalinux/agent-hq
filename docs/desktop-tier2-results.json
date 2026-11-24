@@ -185,6 +185,67 @@
       "No hidden tests or independent grader failures were passed to the agents."
     ]
   },
+  "agentHqFeedbackFollowup": {
+    "date": "2026-11-24",
+    "results": [
+      {
+        "run": "agent-hq-0243-final-haiku-1124-073540",
+        "version": "0.24.3",
+        "models": ["claude-haiku-5-5", "claude-opus-5-5"],
+        "matchesPinned": false,
+        "opusCalls": 7,
+        "hiddenPassed": 141,
+        "hiddenTotal": 141,
+        "visibleTestsPassed": 145,
+        "visibleTestsTotal": 145,
+        "existingTestsUntouched": true,
+        "wallSeconds": 1339.837,
+        "outcome": "failed",
+        "issue": "Stale QA context and an exhausted shared rework counter. New specialist bypassed forced Haiku setup."
+      },
+      {
+        "run": "agent-hq-0245-haiku-1124-080556",
+        "version": "0.24.4 with development QA fixes",
+        "models": ["claude-haiku-5-5"],
+        "hiddenPassed": 141,
+        "hiddenTotal": 141,
+        "visibleTestsPassed": 293,
+        "visibleTestsTotal": 293,
+        "existingTestsUntouched": true,
+        "wallSeconds": 1438.8,
+        "outcome": "failed",
+        "issue": "The integrator refused to correct a run-created test that expected an in-range SQLite integer to overflow."
+      },
+      {
+        "run": "agent-hq-0245b-haiku-1124-083345",
+        "version": "0.24.4 with further development loop fixes",
+        "models": ["claude-haiku-5-5"],
+        "hiddenPassed": 141,
+        "hiddenTotal": 141,
+        "visibleTestsPassed": 92,
+        "visibleTestsTotal": 93,
+        "visibleTestsExpectedFailures": 1,
+        "existingTestsUntouched": true,
+        "wallSeconds": 1318.7,
+        "outcome": "failed",
+        "issue": "QA and task rework still treated a newly generated contradictory CSV test as a protected original test."
+      },
+      {
+        "run": "agent-hq-0245c-haiku-1124-085748",
+        "version": "0.24.5",
+        "models": ["claude-haiku-5-5"],
+        "wallSeconds": 117,
+        "outcome": "provider-blocked",
+        "issue": "Five-hour subscription limit reached before implementation; no quality conclusion."
+      }
+    ],
+    "limitations": [
+      "Passing retained code does not turn a failed desktop workflow into a successful run.",
+      "Development builds are identified by their actual reported version and changes, not by the evidence directory label.",
+      "The first run used a mixed model team and is excluded from same-model cost and speed comparisons.",
+      "Hidden grader results were not supplied to the agents."
+    ]
+  },
   "limitations": [
     "One task on Linux; one completed Codex attempt per setup.",
     "Different tool environments and workflow assistance; Agent HQ has attached specifications and three task slots.",

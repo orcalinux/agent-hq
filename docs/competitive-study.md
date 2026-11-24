@@ -402,3 +402,47 @@ This is a quality validation sample using Sonnet, not a speed or cost
 comparison against the earlier Haiku or Codex controls. Browser and desktop
 regression tests overlapped parts of this validation. Their resource use
 prevents treating these timings or memory samples as a performance ranking.
+
+### Feedback-loop follow-up: November 24
+
+Independent grading of three further completed attempts found **141/141**
+hidden checks passing in every retained candidate. However, all three
+desktop runs ended **failed**. Passing code and a reliable workflow are
+separate requirements; these runs count as workflow failures.
+
+| Run | Build | Hidden checks | Visible checks | Desktop outcome |
+| --- | --- | --- | --- | --- |
+| `agent-hq-0243-final-haiku-1124-073540` | 0.24.3 | 141/141 | 145/145 | Failed, 1,339.8 s |
+| `agent-hq-0245-haiku-1124-080556` | 0.24.4 plus first QA digest changes | 141/141 | 293/293 | Failed, 1,438.8 s |
+| `agent-hq-0245b-haiku-1124-083345` | 0.24.4 plus further loop changes | 141/141 | 92/93, one expected failure | Failed, 1,318.7 s |
+
+The first run was **not an all-Haiku comparison**: the planner hired a
+specialist on Opus, and seven calls used Opus despite the existing roster
+and levels being pinned to Haiku. Its API-rate valuation cannot be compared
+with the all-Haiku controls. The served-model audit exposed a forced-setup
+bypass for new specialists when complexity routing was off. Version 0.24.6
+applies the model policy to hires too, and the benchmark runner checks both
+requested and reported models before accepting a pinned comparison.
+
+The failures exposed two other workflow defects. QA received superseded
+versions of files in task reports and a digest that could truncate the
+latest repairs. It also treated tests written during the run as protected
+original tests, preventing correction of a newly written test whose
+expectation contradicted the requirements. Verification failures and QA
+rejections shared a retry counter, so a new defect could exhaust the
+budget before the team had an opportunity to repair it.
+
+Version 0.24.5 sends QA one final version per path, prioritizes recent
+changes, names omitted files for project reads, and distinguishes tests
+created during the run from original project tests. Verification rework
+and QA rework have separate bounded budgets. New evidenced defects can
+receive additional rework; repeated findings are identified in feedback.
+An integration answer with no file changes receives another repair
+attempt rather than silently ending repair.
+
+The next Haiku attempt, `agent-hq-0245c-haiku-1124-085748`, stopped after
+117 seconds because the subscription reached its five-hour limit before
+implementation. It is a provider-blocked attempt, not evidence about
+implementation quality. Follow-up validation uses Codex while Claude is
+unavailable. Original tests remain untouched and hidden graders remain
+outside the agents' workspaces.
