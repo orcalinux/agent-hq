@@ -11,6 +11,14 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.24.5] — 2026-11-24
+
+### Fixed
+- QA now reviews one final version of each changed file, with the most recently changed files first. Previously every task's version of a file was listed in order, and the size limit cut off the end of that list, which is where rework lands. QA could then review pre-fix code and re-report a defect that had already been fixed. Files left out for space are now named, so QA reads them with project-call. Task reports are marked as possibly superseded.
+- Tests created by the team during a run are no longer treated as protected project tests. The integrator, QA and rework feedback are told which tests the run created. A wrong new test can be corrected; tests that existed before the run stay protected. Integrators used to refuse to touch a test written minutes earlier, which blocked runs whose only defect was that test.
+- An integrator answer that changes no files gets another repair round with that answer as context, instead of ending integration repair at once. Asking the user is not possible during a run.
+- Verification-failure rework and QA-rejection rework now have separate budgets: 3 and 2 rounds. A defect QA has not reported before earns up to two extra rework rounds before the run can fail, and a claim QA repeats is marked as repeated in the rework feedback. Previously one shared counter could fail a run on a defect the team was never asked to fix.
+
 ## [0.24.4] — 2026-11-24
 
 ### Fixed

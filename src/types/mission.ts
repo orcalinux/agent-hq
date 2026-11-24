@@ -298,6 +298,12 @@ export interface MissionState {
   qaConcerns?: string;
   qaNotes?: string;
   qaRejectCount?: number;
+  /** Rework rounds caused by QA rejecting a candidate. */
+  qaReviewRejectCount?: number;
+  /** Rework rounds caused by a verification failure the integrator could not repair. */
+  verifyLoopCount?: number;
+  /** Keys of QA findings already sent back for rework in this run. */
+  qaRaisedIssues?: string[];
   startedAt: number;
   completedAt?: number;
   stepIndex: number;

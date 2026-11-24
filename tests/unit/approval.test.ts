@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, checkpointProposals, evidencedQaIssues, markConflicts, replaceMergedProposals, selectAutoApply, blameTasks, reworkClosure, verificationCouldNotRun } from '../../src/engine/approval';
+import { APPROVAL_MODES, approvalModeInfo, autoAppliesChanges, autoStartsRuns, canRevert, checkpointProposals, evidencedQaIssues, finalFileDigest, markConflicts, qaIssueKey, replaceMergedProposals, runCreatedTests, selectAutoApply, blameTasks, reworkClosure, verificationCouldNotRun } from '../../src/engine/approval';
 import type { ProposedFileChange } from '../../src/types';
 
 const change = (id: string, path: string, status: ProposedFileChange['status'] = 'pending', extra: Partial<ProposedFileChange> = {}): ProposedFileChange => ({
@@ -61,6 +61,48 @@ describe('verified candidate review', () => {
     expect(proposals.map((entry) => entry.status)).toEqual(['discarded', 'pending', 'pending']);
     expect(selectAutoApply(proposals).apply.map((entry) => entry.id)).toEqual(['new', 'tests']);
     expect(checkpoint.every((entry) => entry.status === 'applied')).toBe(true);
+  });
+});
+
+describe('final file digest for QA', () => {
+  it('shows only the final version of each file, reworked files first', () => {
+    const digest = finalFileDigest([
+      change('t3', 'money.py', 'applied', { content: 'OLD \\d' }),
+      change('t7', 'migration.py', 'applied', { content: 'migration v1' }),
+      change('t8', 'money.py', 'applied', { content: 'NEW [0-9]' }),
+      change('t9', 'skip.py', 'discarded', { content: 'never written' }),
+    ], 10_000);
+    expect(digest.text).toContain('NEW [0-9]');
+    expect(digest.text).not.toContain('OLD');
+    expect(digest.text).not.toContain('never written');
+    expect(digest.text.indexOf('FILE money.py')).toBeLessThan(digest.text.indexOf('FILE migration.py'));
+    expect(digest.omitted).toEqual([]);
+  });
+
+  it('names every file left out for space instead of silently cutting rework', () => {
+    const digest = finalFileDigest([
+      change('t1', 'big.py', 'applied', { content: 'x'.repeat(500) }),
+      change('t2', 'fix.py', 'applied', { content: 'the rework' }),
+    ], 200);
+    expect(digest.text).toContain('the rework');
+    expect(digest.omitted).toEqual(['big.py']);
+  });
+
+  it('identifies a repeated QA claim regardless of whitespace in the excerpt', () => {
+    const issue = { taskId: 't7', problem: 'dup', path: 'migration.py', evidence: 'if mid in roster[gid]:' };
+    expect(qaIssueKey({ ...issue, problem: 'reworded', evidence: '  if mid in\n roster[gid]:' })).toBe(qaIssueKey(issue));
+    expect(qaIssueKey({ ...issue, path: 'cli.py' })).not.toBe(qaIssueKey(issue));
+  });
+
+  it('treats only tests created during the run as correctable, never pre-existing tests', () => {
+    expect(runCreatedTests([
+      change('t1', 'tests/test_api_currency.py', 'applied', { previousContent: null }),
+      change('t2', 'tests/test_api_currency.py', 'applied', { previousContent: 'earlier run version' }),
+      change('t3', 'tests/test_existing.py', 'applied', { previousContent: 'original contract' }),
+      change('t4', 'src/money.test.ts', 'pending', { previousContent: null }),
+      change('t5', 'tabsplit/migration.py', 'applied', { previousContent: null }),
+      change('t6', 'pkg/parse_test.go', 'applied'),
+    ])).toEqual(['src/money.test.ts', 'tests/test_api_currency.py']);
   });
 });
 

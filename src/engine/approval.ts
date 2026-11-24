@@ -14,6 +14,51 @@ export function evidencedQaIssues(verdict: QaVerdict, changes: ProposedFileChang
   });
 }
 
+/**
+ * One entry per path with its final applied content, most recently changed first, so a reviewer
+ * never sees a superseded version and rework is never the part cut off by the size budget.
+ */
+export function finalFileDigest(changes: ProposedFileChange[], budget: number): { text: string; omitted: string[] } {
+  const latest = new Map<string, ProposedFileChange>();
+  for (const change of changes) {
+    if (change.status !== 'applied') continue;
+    latest.delete(change.path);
+    latest.set(change.path, change);
+  }
+  const ordered = [...latest.values()].reverse();
+  const parts: string[] = [];
+  const omitted: string[] = [];
+  let used = 0;
+  for (const change of ordered) {
+    const tasks = [...new Set([change.taskId, ...(change.sourceTaskIds ?? [])].filter(Boolean))].join(', ');
+    const entry = `FILE ${change.path} (final version, last written by ${tasks || 'the team'})\n${change.content}`;
+    if (used + entry.length > budget) {
+      omitted.push(change.path);
+      continue;
+    }
+    parts.push(entry);
+    used += entry.length + 2;
+  }
+  return { text: parts.join('\n\n'), omitted };
+}
+
+/** Stable identity of a QA finding, so a repeated claim can be told apart from a newly found defect. */
+export function qaIssueKey(issue: QaVerdict['issues'][number]): string {
+  return `${issue.path ?? ''}\u0000${(issue.evidence ?? '').replace(/\s+/g, ' ').trim()}`;
+}
+
+const TEST_PATH = /(^|\/)(tests?|__tests__|spec)\/|(^|\/)test_[^/]*\.py$|_test\.(py|go)$|\.(test|spec)\.[cm]?[jt]sx?$/i;
+
+/**
+ * Test files that did not exist before this run. They are part of the candidate, not the project's
+ * contract, so a repair may correct one that contradicts the requirements. Pre-existing tests stay protected.
+ */
+export function runCreatedTests(changes: ProposedFileChange[]): string[] {
+  const created = new Set<string>();
+  for (const change of changes) if (change.previousContent === null && TEST_PATH.test(change.path)) created.add(change.path);
+  return [...created].sort();
+}
+
 export function checkpointProposals(changes: ProposedFileChange[]): ProposedFileChange[] {
   const latest = new Map<string, string>();
   for (const change of changes) if (change.status === 'applied') latest.set(change.path, change.id);

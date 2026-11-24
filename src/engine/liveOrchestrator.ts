@@ -28,7 +28,7 @@ import {
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel } from './failover';
 import { parallelLimit, planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
-import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, evidencedQaIssues, markConflicts, replaceMergedProposals, reworkClosure, selectAutoApply, verificationCouldNotRun } from './approval';
+import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, evidencedQaIssues, finalFileDigest, markConflicts, qaIssueKey, replaceMergedProposals, reworkClosure, runCreatedTests, selectAutoApply, verificationCouldNotRun } from './approval';
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
@@ -47,6 +47,10 @@ import { MAX_PROJECT_TURNS, PROJECT_TOOL_INSTRUCTIONS, missingImplementation, pa
 import { usageCounts } from '@/utils/usage';
 
 const MAX_QA_LOOPS = 2;
+/** Task-rework rounds caused by a failing verification that the integrator could not repair. Counted apart from QA rejections. */
+const MAX_VERIFY_LOOPS = 3;
+/** Extra rework rounds granted only when QA finds an evidenced defect the team has never been asked to fix. */
+const MAX_NEW_DEFECT_ROUNDS = 2;
 /** Rounds in which one integrator fixes the team's combined files against the real verification output. */
 const MAX_REPAIR_ROUNDS = 3;
 const QA_TASK_ID = 'qa-review';
@@ -1100,14 +1104,18 @@ async function repairIntegration(command: string, failure: Verified, signal: Abo
       for (const change of currentMission()?.proposedChanges ?? []) if (change.status === 'applied') applied.set(change.path, change);
       const related = await filesNamedIn(last.raw, new Set(applied.keys()));
       const written = [...applied.values()].map((c) => `FILE ${c.path} (written by ${c.taskId})\n${c.content}`).join('\n\n');
+      const ownTests = runCreatedTests(currentMission()?.proposedChanges ?? []);
+      const testNote = ownTests.length
+        ? `\n\nTests created by the team during this run (not part of the original project): ${ownTests.join(', ')}. These are part of the candidate and may be wrong. If one contradicts the request or the attached requirements, correct that test and state the requirement it contradicted. Tests that existed before this run are the project's contract and stay protected.`
+        : '';
       store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, agentId: integrator.id, text: `${integrator.name} is fixing the combined changes against the verification output (round ${round} of ${MAX_REPAIR_ROUNDS})` });
       const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [{
         role: 'user',
         content: `Request:\n${mission.prompt}${await attachmentContext(mission.contextFiles)}\n\nVerification command: ${command} (exit ${last.exitCode})\nOutput (end):\n${last.raw.slice(-12_000)}\n\nFiles the team wrote:\n${truncate(written, 140_000)}${
-          related.length ? `\n\nOther project files named in the output:\n${truncate(related.map((file) => `FILE ${file.path}\n${file.content}`).join('\n\n'), 40_000)}` : ''}\n\n${projectContext()}`,
+          related.length ? `\n\nOther project files named in the output:\n${truncate(related.map((file) => `FILE ${file.path}\n${file.content}`).join('\n\n'), 40_000)}` : ''}${testNote}\n\n${projectContext()}`,
       }];
       const ask = () => callAgent(integrator, {
-        system: `${integrator.systemPrompt}\n\nYou are the integrator. Several engineers each wrote part of the change below, and their files are now in the project together. The verification command fails. Find why from the real output and fix the code so it passes while still meeting the request. Usually the cause is a mismatch between files (signatures, names, data formats) or one missing piece.\nRules: never delete, skip or weaken existing tests to make them pass; fix the code. Keep every behaviour the request asks for. Add a focused regression test for any defect that is not already covered by the failing tests. Output each file you change in full in a fenced block whose info string contains path=<relative path>, and only the files you change. Keep explanations to a few lines.`,
+        system: `${integrator.systemPrompt}\n\nYou are the integrator. Several engineers each wrote part of the change below, and their files are now in the project together. The verification command fails. Find why from the real output and fix the code so it passes while still meeting the request. Usually the cause is a mismatch between files (signatures, names, data formats) or one missing piece.\nRules: never delete, skip or weaken tests that existed before this run to make them pass; fix the code. A test the team created during this run is held to the requirements, not the other way round: when it asserts behaviour the requirements contradict, correct the test. Keep every behaviour the request asks for. Add a focused regression test for any defect that is not already covered by the failing tests. Output each file you change in full in a fenced block whose info string contains path=<relative path>, and only the files you change. You must output at least one file; asking the user is not possible during a run. Keep explanations to a few lines.`,
         messages,
         signal,
         note: `Integration repair, round ${round}`,
@@ -1125,7 +1133,13 @@ async function repairIntegration(command: string, failure: Verified, signal: Abo
         result = await ask();
       }
       const blocks = extractFileBlocks(result.text).filter((file) => !isMemoryPath(file.path));
-      if (!blocks.length) break;
+      if (!blocks.length) {
+        if (round < MAX_REPAIR_ROUNDS) {
+          last = { ...last, raw: `${last.raw}\n\nYour previous answer changed no files:\n${truncate(stripThinking(result.text), 3_000)}\nNo one can answer questions during the run. Decide from the request and the attached requirements, and output the corrected files.` };
+          continue;
+        }
+        break;
+      }
       const fallbackTask = blameTasks(last.raw, currentMission()?.proposedChanges ?? [], workTasks)[0]?.id ?? workTasks[0].id;
       const repairs: ProposedFileChange[] = blocks.map((file) => ({
         id: `integration:${file.path}:${crypto.randomUUID()}`,
@@ -1227,11 +1241,12 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
       const tail = firstFailure.raw.slice(-4000);
       noteFeedback(mission.id, { agentId: 'team', source: 'verification', text: `"${command}" failed (exit ${firstFailure.exitCode}): ${tail.slice(-500)}` });
       const rejectCount = (currentMission()?.qaRejectCount ?? 0) + 1;
-      store.updateMission({ qaRejectCount: rejectCount, status: 'qa_loopback' });
+      const verifyLoops = (currentMission()?.verifyLoopCount ?? 0) + 1;
+      store.updateMission({ qaRejectCount: rejectCount, verifyLoopCount: verifyLoops, status: 'qa_loopback' });
       store.setAgentStatus(qa.id, 'idle');
-      if (rejectCount > MAX_QA_LOOPS) {
-        await restorePassingCandidate(`Verification failed after ${MAX_QA_LOOPS} rework rounds.`);
-        store.updateTask(QA_TASK_ID, { status: 'rejected', progress: 100, qaFeedback: `Verification "${command}" still failed after ${MAX_QA_LOOPS} rework rounds.` });
+      if (verifyLoops > MAX_VERIFY_LOOPS) {
+        await restorePassingCandidate(`Verification failed after ${MAX_VERIFY_LOOPS} rework rounds.`);
+        store.updateTask(QA_TASK_ID, { status: 'rejected', progress: 100, qaFeedback: `Verification "${command}" still failed after ${MAX_VERIFY_LOOPS} rework rounds.` });
         return 'rejected';
       }
       const current = currentMission()!;
@@ -1255,9 +1270,17 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
   const deliverables = workTasks
     .map((t) => `## [${t.id}] ${t.title} — ${store.agents[t.assignedAgentId]?.name}\n${truncate(stripThinking(t.output ?? ''), 10_000)}`)
     .join('\n\n');
+  const digest = verified ? finalFileDigest(currentMission()?.proposedChanges ?? [], 80_000) : undefined;
+  const ownTests = runCreatedTests(currentMission()?.proposedChanges ?? []);
+  const ownTestsNote = ownTests.length
+    ? `\n\nTests created by the team during this run (not part of the original project, so the user's rule about existing tests does not protect them): ${ownTests.join(', ')}. Hold them to the requirements like any other new code. If one pins behaviour the requirements contradict, report it as a defect in that test file; the team can correct it.`
+    : '';
+  const finalFiles = digest
+    ? `\n\nFinal file contents (authoritative; this is the code on disk that verification ran against, one version per file, most recently changed first):\n${digest.text}${digest.omitted.length ? `\n\nNot shown above for space, read with project-call before judging them: ${digest.omitted.join(', ')}` : ''}`
+    : '';
   const qaMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [{
     role: 'user',
-    content: `Request:\n${mission.prompt}${await attachmentContext(mission.contextFiles)}\n\nDeliverables:\n${deliverables}${verificationNote}${verified ? `\n\nVerified file contents:\n${truncate((currentMission()?.proposedChanges ?? []).filter((change) => change.status === 'applied').map((change) => `FILE ${change.path} (task ${change.taskId})\n${change.content}`).join('\n\n'), 80_000)}` : ''}\n\n${projectContext()}\n\nCompare each requested behavior with the current code, including entry points and shared files. Read the attached requirements and any file clipped or absent above using project-call before deciding. Passing tests cover only their assertions; concrete unmet requirements still need repair.`,
+    content: `Request:\n${mission.prompt}${await attachmentContext(mission.contextFiles)}\n\nDeliverables (task reports; code quoted in them may be superseded by later rework, so judge code only from the final file contents or project-call):\n${deliverables}${verificationNote}${verified ? '\nThe verification above was run by Agent HQ on the final files; you do not need to run it yourself.' : ''}${finalFiles}${ownTestsNote}\n\n${projectContext()}\n\nCompare each requested behavior with the current code, including entry points and shared files. Read the attached requirements and any file clipped or absent above using project-call before deciding. Before reporting a defect, check that the cited code path is the one the failing input actually reaches in the final files. Passing tests cover only their assertions; concrete unmet requirements still need repair.`,
   }];
   const review = async () => callAgent(qa, {
     system: `${qa.systemPrompt}${await memoryBrief(qa.id, mission.prompt)}\n\nRespond with ONLY a JSON object: {"verdict": "approve" | "reject", "summary": "...", "issues": [{"taskId": "<task id>", "problem": "<concrete defect and failing input or unmet requirement>", "path": "<exact proposed file path>", "evidence": "<exact code excerpt of at least 12 characters causing the defect>"}]}. Reject only for real defects, security problems or unmet requirements. Passing verification is direct execution evidence. Missing hidden tests, hypothetical failures, lack of visibility and requests for more test coverage are advisory concerns, not grounds for rejection. For a rejection after passing verification, cite the exact offending code from the supplied file contents and explain its incorrect behavior.`,
@@ -1311,19 +1334,27 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
       await withdrawCandidate(candidateApplied);
     }
     const rejectCount = (currentMission()?.qaRejectCount ?? 0) + 1;
-    store.updateMission({ qaRejectCount: rejectCount, status: 'qa_loopback' });
+    const reviewRejects = (currentMission()?.qaReviewRejectCount ?? 0) + 1;
+    const raised = new Set(currentMission()?.qaRaisedIssues ?? []);
+    const repeated = new Set(verdict.issues.filter((issue) => raised.has(qaIssueKey(issue))).map(qaIssueKey));
+    const fresh = verdict.issues.filter((issue) => !repeated.has(qaIssueKey(issue)));
+    const newDefectRound = verified && fresh.length > 0 && reviewRejects <= MAX_QA_LOOPS + MAX_NEW_DEFECT_ROUNDS;
+    store.updateMission({ qaRejectCount: rejectCount, qaReviewRejectCount: reviewRejects, status: 'qa_loopback', qaRaisedIssues: [...raised, ...fresh.map(qaIssueKey)] });
     const flagged = new Set(verdict.issues.map((i) => i.taskId).filter(Boolean));
     const targets = flagged.size ? reworkClosure(workTasks.filter((t) => flagged.has(t.id)), workTasks) : workTasks;
     store.logActivity({ kind: 'qa', level: 'warn', runId: mission.id, agentId: qa.id, text: `Sentinel rejected ${targets.length} task(s): ${verdict.summary}` });
-    if (rejectCount > MAX_QA_LOOPS) {
+    if (reviewRejects > MAX_QA_LOOPS && !newDefectRound) {
       await restorePassingCandidate(verdict.summary);
       store.updateTask(QA_TASK_ID, { status: 'rejected', progress: 100, qaFeedback: verdict.summary });
       return 'rejected';
     }
+    if (reviewRejects > MAX_QA_LOOPS) {
+      store.logActivity({ kind: 'qa', level: 'info', runId: mission.id, agentId: qa.id, text: `QA found ${fresh.length} defect(s) the team was never asked to fix, so one more rework round runs before the run can fail.` });
+    }
     for (const t of targets) {
       recordModelResult(servedByTask.get(t.id) ?? t.model, false);
-      const evidence = verdict.issues.filter((i) => i.taskId === t.id || !i.taskId).map((i) => `- ${i.problem}${i.path ? `\nFile: ${i.path}` : ''}${i.evidence ? `\nOffending code: ${i.evidence}` : ''}`).join('\n') || verdict.summary;
-      const feedback = `${evidence}\nAdd a focused regression test that reproduces the reported defect. Preserve the existing tests and all other requested behavior.`;
+      const evidence = verdict.issues.filter((i) => i.taskId === t.id || !i.taskId).map((i) => `- ${i.problem}${i.path ? `\nFile: ${i.path}` : ''}${i.evidence ? `\nOffending code: ${i.evidence}` : ''}${repeated.has(qaIssueKey(i)) ? '\nQA raised this before. If the final code already handles it, show that with a regression test for the exact failing input and say so; otherwise fix it.' : ''}`).join('\n') || verdict.summary;
+      const feedback = `${evidence}\nAdd a focused regression test that reproduces the reported defect. Preserve the tests that existed before this run and all other requested behavior.${ownTests.length ? ` Tests created by the team during this run (${ownTests.join(', ')}) are not protected: if one asserts behaviour the requirements contradict, correct it in the same change.` : ''}`;
       store.updateTask(t.id, { status: 'rejected', qaFeedback: feedback, stage: 'implementation' });
       noteFeedback(mission.id, { agentId: t.assignedAgentId, source: 'qa', text: `${t.title}: ${feedback}`, taskId: t.id });
     }
