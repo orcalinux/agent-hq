@@ -4,6 +4,10 @@ import type { DesktopApi, DesktopCommand, DesktopStatus, UpdatePrefs, UpdateStat
 const api: DesktopApi = {
   platform: process.platform,
   version: String(ipcRenderer.sendSync('desktop:version')),
+  stateStorage: {
+    read: (key) => ipcRenderer.sendSync('desktop:state-read', key),
+    write: (key, value) => ipcRenderer.sendSync('desktop:state-write', key, value),
+  },
   setStatus: (status: DesktopStatus) => ipcRenderer.send('desktop:status', status),
   setTraySnapshot: (snapshot) => ipcRenderer.send('desktop:tray-snapshot', snapshot),
   showTrayPanel: () => ipcRenderer.send('desktop:tray-show'),

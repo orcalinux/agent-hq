@@ -486,3 +486,23 @@ This is one successful full workflow after the fixes, not evidence of
 production reliability across projects or a new speed/cost ranking.
 The two earlier provider-blocked Codex attempts remain unsuccessful
 attempts and are not replaced by this result.
+
+### Tier 3 (tabsplit issues #21 to #26) on real Haiku 5.5
+
+Both runs used the same starter, the same issue text, the pinned model
+`claude-haiku-5-5`, and the same independent hidden suite (241 checks,
+kept outside every workspace and never given to the agents).
+
+| Setup | Hidden checks | Time | Notes |
+|---|---|---|---|
+| Agent HQ 0.24.7 (desktop) | 241/241 | 456 s | 121/121 visible checks, original tests untouched |
+| Claude Code alone | 224/241 | 191 s | $0.055; failed 16 of 23 `settle` checks and 1 of 5 `vague` checks |
+
+The bare control wrote `settle_min` so that it reached the minimum
+payment count but routed money through a third member, and it said so
+in its own summary. Agent HQ's review loop caught that case.
+
+Limits: one sample per setup, one project, one model. This shows the
+workflow can pass where a single bare call did not; it does not show
+Agent HQ is faster or cheaper (it was slower here), and it is not a
+ranking. Maestro has not yet been run on Tier 3.

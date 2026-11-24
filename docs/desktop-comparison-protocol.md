@@ -156,6 +156,41 @@ raw chat requests and response events, and process-tree memory samples. These
 files can contain local paths and project source. Review them before sharing;
 do not commit desktop profiles, authentication data or large recordings.
 
+### Resuming a stopped attempt
+
+Close the previous benchmark app first. Keep its task directory and evidence
+intact, then use a new evidence directory:
+
+```sh
+node scripts/compare-desktop.mjs \
+  --workspace /absolute/path/to/original-task-clone \
+  --output /absolute/path/to/new-recovery-evidence \
+  --resume-from /absolute/path/to/previous-evidence \
+  --run --wait-quota
+```
+
+The driver copies the stopped app's profile and server configuration, checks
+that its finished task outputs and pinned settings survived, and clicks the
+ordinary **Resume** action. It does not send the task again, inject an
+implementation, or override a provider cooldown. Use the original model,
+strategy, attachments and verification command. A prepared-only invocation
+omits `--run` and makes no model call.
+
+Recovery measurements are separate from fresh-clone comparisons. Their time
+and recorded calls cover only the resumed segment; the run's stored usage
+includes earlier work. Report both attempts together, retain the original
+failure, and grade the recovered files independently. The recovery driver
+must fail if the app does not restore the expected mission or settings.
+
+For a deliberate interruption test, run a fresh attempt with
+`--stop-after-tasks 1`. The driver clicks **Stop run** after the first completed
+task and marks the stop as intentional. Resume that evidence with the command
+above. This exercises real cancellation, persistence and continuation with real
+provider calls; it does not simulate a provider limit or prove quota-reset
+recovery. Old profiles created before desktop state backups may fail recovery
+when their original local port is unavailable. Preserve that failed preflight
+instead of injecting the expected state into the app.
+
 An individual process tree can also be sampled without launching anything:
 
 ```sh

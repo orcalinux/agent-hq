@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
+import { createServer } from 'node:net';
 import { fileURLToPath } from 'url';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 
@@ -46,6 +47,77 @@ async function launch(extraEnv: Record<string, string> = {}): Promise<{ app: Ele
 }
 
 test.beforeAll(freshDirs);
+
+test('settings and unfinished work survive a changed port and returning to an older port', async () => {
+  const userData = path.join(base, 'port-recovery-profile');
+  const extraEnv = { AGENT_HQ_USER_DATA: userData };
+  const first = await launch(extraEnv);
+  let originalPort = 0;
+  const savedPath = path.join(userData, 'desktop-state', 'agent-hq.state.json');
+  try {
+    await first.page.waitForFunction(() => localStorage.getItem('agent-hq.state'));
+    originalPort = Number(new URL(first.page.url()).port);
+    await first.page.evaluate(() => {
+      const saved = JSON.parse(localStorage.getItem('agent-hq.state')!);
+      saved.state.agents['agent-manager'].name = 'Preserved manager';
+      saved.state.approvalMode = 'ask';
+      saved.state.verificationCommand = 'python -m pytest -q';
+      saved.state.activeMission = {
+        id: 'port-recovery', presetId: 'live', title: 'Interrupted work', prompt: 'Keep this work.', source: 'live',
+        status: 'failed', startedAt: Date.now(), currentStage: 'implementation', stageIndex: 2, proposedChanges: [],
+        tasks: [{ id: 'done', title: 'Finished task', description: '', stage: 'implementation', assignedAgentId: 'agent-architect', status: 'completed', progress: 100, output: 'Preserved output', tags: [], dependsOn: [] }],
+      };
+      localStorage.setItem('agent-hq.state', JSON.stringify(saved));
+    });
+    await first.page.reload();
+    await expect.poll(() => {
+      try { return JSON.parse(JSON.parse(fs.readFileSync(savedPath, 'utf8')).value).state.activeMission?.id; } catch { return null; }
+    }).toBe('port-recovery');
+  } finally {
+    await first.app.close();
+  }
+  const blocker = createServer();
+  await new Promise<void>((resolve, reject) => {
+    blocker.once('error', reject);
+    blocker.listen(originalPort, '127.0.0.1', resolve);
+  });
+  try {
+    const second = await launch(extraEnv);
+    try {
+      expect(Number(new URL(second.page.url()).port)).not.toBe(originalPort);
+      await expect.poll(() => second.page.evaluate(() => {
+        const state = JSON.parse(localStorage.getItem('agent-hq.state') ?? '{}').state;
+        return { name: state?.agents?.['agent-manager']?.name, command: state?.verificationCommand, output: state?.activeMission?.tasks[0]?.output };
+      })).toEqual({ name: 'Preserved manager', command: 'python -m pytest -q', output: 'Preserved output' });
+      await second.page.evaluate(() => {
+        const saved = JSON.parse(localStorage.getItem('agent-hq.state')!);
+        saved.state.agents['agent-manager'].name = 'Latest manager';
+        localStorage.setItem('agent-hq.state', JSON.stringify(saved));
+      });
+      await second.page.reload();
+      await expect.poll(() => {
+        try { return JSON.parse(JSON.parse(fs.readFileSync(savedPath, 'utf8')).value).state.agents['agent-manager'].name; } catch { return null; }
+      }).toBe('Latest manager');
+    } finally {
+      await second.app.close();
+    }
+  } finally {
+    await new Promise<void>((resolve, reject) => blocker.close((error) => error ? reject(error) : resolve()));
+  }
+  const third = await launch(extraEnv);
+  try {
+    expect(Number(new URL(third.page.url()).port)).toBe(originalPort);
+    await expect.poll(() => third.page.evaluate(() => JSON.parse(localStorage.getItem('agent-hq.state') ?? '{}').state?.agents?.['agent-manager']?.name)).toBe('Latest manager');
+    await third.page.evaluate(() => {
+      localStorage.removeItem('agent-hq.state');
+    });
+    await third.page.reload();
+    await expect.poll(() => third.page.evaluate(() => JSON.parse(localStorage.getItem('agent-hq.state') ?? '{}').state?.agents?.['agent-manager']?.name)).toBe('Sovereign');
+    expect([...first.errors, ...third.errors]).toEqual([]);
+  } finally {
+    await third.app.close();
+  }
+});
 
 test('a provider limit pauses the run and survives reload without retrying the provider', async () => {
   const { app, page, errors } = await launch({ AGENT_HQ_USER_DATA: path.join(base, 'quota-user-data') });

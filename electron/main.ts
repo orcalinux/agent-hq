@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { createStateStorage } from './stateStorage';
 import {
   app,
   BrowserWindow,
@@ -41,6 +42,7 @@ if (process.platform === 'win32') app.setAppUserModelId('io.github.orcalinux.age
 const assets = path.join(__dirname, 'assets');
 const appIcon = () => nativeImage.createFromPath(path.join(assets, 'icon.png'));
 const stateFile = () => path.join(app.getPath('userData'), 'window-state.json');
+const desktopState = createStateStorage(path.join(app.getPath('userData'), 'desktop-state'));
 
 let mainWindow: BrowserWindow | null = null;
 let server: StandaloneServer | null = null;
@@ -391,6 +393,14 @@ function createWindow(): BrowserWindow {
 
 function registerIpc(): void {
   const fromApp = (event: Electron.IpcMainEvent) => event.sender === mainWindow?.webContents && isAppOrigin(event.senderFrame?.url ?? '');
+  ipcMain.on('desktop:state-read', (event, key: unknown) => {
+    event.returnValue = fromApp(event) && typeof key === 'string'
+      ? desktopState.read(key, new URL(event.senderFrame!.url).origin) : { restore: false, value: null };
+  });
+  ipcMain.on('desktop:state-write', (event, key: unknown, value: unknown) => {
+    event.returnValue = fromApp(event) && typeof key === 'string'
+      ? desktopState.write(key, new URL(event.senderFrame!.url).origin, value) : false;
+  });
   ipcMain.on('desktop:version', (event) => {
     event.returnValue = app.getVersion();
   });
@@ -539,6 +549,7 @@ async function start(): Promise<void> {
 }
 
 app.on('before-quit', () => {
+  desktopState.flush();
   quitting = true;
   quickPanel?.destroy();
   quickPanel = null;

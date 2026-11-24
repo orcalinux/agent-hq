@@ -48,24 +48,24 @@ Status: **done (0.15.0).** Diff preview in the Changes tab and an explicit Full 
 
 ## 6. Evidence, not claims
 
-Status: **started (0.15.0).** `scripts/benchmark.mjs` and [docs/benchmark.md](docs/benchmark.md) run ten real coding tasks (four of them harder) across Claude and Codex models. All 80 attempts passed, so the suite still cannot rank models; a harder suite and a second operating system are still needed.
+Status: **real comparisons available; broader repeated validation remains open.** `scripts/benchmark.mjs` and [docs/benchmark.md](docs/benchmark.md) run ten real coding tasks (four of them harder) across Claude and Codex models. All 80 attempts passed, so that suite cannot rank models.
 
-The harder Tier 2 study now includes real CLI, Maestro, Orchestrator and Agent HQ runs. Earlier Agent HQ versions left the starter unchanged and scored 86/141; passing unit tests did not establish coding reliability. After the integration, project-reading and mentor-output fixes, Agent HQ scored 141/141 in two fresh Haiku runs and a fresh Codex run on 0.24.2, preserving the original tests. The same Codex task also scored 141/141 through the CLI, Maestro and Orchestrator. Agent HQ's measured Codex workflow overhead remains higher than the CLI and Maestro, so quality parity on one task is not a best-product claim. Claude and Codex groups remain separate, and a second operating system and broader repeated tasks are still missing. See [the method](docs/desktop-comparison-protocol.md), [retained results](docs/competitive-study.md) and [sanitized run summaries](docs/desktop-tier2-results.json).
+The harder Tier 2 study now includes real CLI, Maestro, Orchestrator and Agent HQ runs. Earlier Agent HQ versions left the starter unchanged and scored 86/141; passing unit tests did not establish coding reliability. After the integration, project-reading and mentor-output fixes, Agent HQ scored 141/141 in two fresh Haiku runs and a fresh Codex run on 0.24.2, preserving the original tests. A fresh Haiku run on 0.24.7 also passed 141/141 hidden and 228/228 visible checks. The same Codex task scored 141/141 through the CLI, Maestro and Orchestrator. Agent HQ's measured Codex workflow overhead remains higher than the CLI and Maestro, so quality parity on one task is not a best-product claim. Claude and Codex groups remain separate, and a second operating system and broader repeated tasks are still missing. Real quota-reset recovery, memory learning across repeated tasks, and equivalent completed runs for the other studied projects remain unverified. See [the method](docs/desktop-comparison-protocol.md), [retained results](docs/competitive-study.md) and [sanitized run summaries](docs/desktop-tier2-results.json).
 
 - A small public benchmark of real tasks across at least two providers and two operating systems, with the method and raw results published.
 - Until it exists, the README makes no "best" or "fastest" claims.
 
 ## 7. Trust and distribution
 
-Status: **partly done (0.15.0).** `SECURITY.md` and a `SHA256SUMS.txt` release job exist (the job is untested until the next tag). API keys are now encrypted at rest (AES-256-GCM, key in a separate 0600 file; legacy plain-text configs upgrade on the next save). The key is now sealed with the OS keychain (Electron `safeStorage`) when one is available, with the fallback described in SECURITY.md; this is unit-tested with a stand-in keychain but not yet run against a real keyring (none works on the dev machine). Not done: code signing (needs a certificate) and enabling GitHub private reporting (needs the owner's go-ahead).
+Status: **checksums, private reporting and secret protection enabled; signing remains open.** Release 0.24.7 published installers and checksums; the Linux `.deb` checksum and local installation were verified. API keys are encrypted at rest with AES-256-GCM; the key is sealed with the OS keychain (Electron `safeStorage`) when one is available, with the fallback described in SECURITY.md. Real keyring validation and installer code signing remain open. Repository settings are recorded in [docs/github-administration.md](docs/github-administration.md); the security review is in [docs/security-review.md](docs/security-review.md).
 
 - Signed installers and published checksums.
-- A private way to report vulnerabilities (GitHub private reporting is currently off; enable and test it before advertising it).
+- A private way to report vulnerabilities (GitHub private reporting is enabled; validate the reporting flow without submitting a fabricated vulnerability).
 - Encrypted-at-rest option for stored API keys, using the OS keychain where available.
 
 ## Website
 
-Status: **built, not published (0.15.0).** `site/` holds a static page (`npm run build:site` writes `site-dist/`) with the version and download button resolved from the latest GitHub release, the quick start, a truthful limitations list and the privacy statement. It was checked in dark, light and mobile widths with no horizontal overflow. Not done: hosting (for example GitHub Pages, which needs the owner's go-ahead), a domain, and a short real demo video on the page. Original scope:
+Status: **published through GitHub Pages.** `site/` holds the product website (`npm run build:site` writes `site-dist/`) with the version and download button resolved from the latest GitHub release, the quick start, limitations and privacy information. Hosting and deployment are configured; this is no longer a hosting prerequisite. A custom domain and continued documentation/demo maintenance are separate follow-up work. See [docs/website.md](docs/website.md) for the implementation and checks.
 
 - One-line headline, current version and working download links generated from the latest release.
 - A short real demo and a five-step quick start.

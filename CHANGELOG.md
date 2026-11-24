@@ -11,6 +11,14 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.24.8] — 2026-11-24
+
+### Fixed
+- Desktop settings, chats, run history and unfinished work no longer appear missing when another local process occupies the app's usual port. The desktop keeps an atomic, profile-scoped backup of its saved stores and restores the latest values when the local origin changes, including when returning to an older port. Existing browser storage migrates when opened; intentional resets remain resets. Web browser storage is unchanged.
+
+### Added
+- Real desktop benchmark attempts can be deliberately stopped after a completed task and resumed from a copied profile into separate evidence. The driver checks preserved outputs and pinned settings before resuming; the original stopped attempt stays intact. A bare Claude Code runner records independent task output, wall time and sampled process-tree memory.
+
 ## [0.24.7] — 2026-11-24
 
 ### Fixed

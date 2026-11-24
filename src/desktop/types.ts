@@ -119,6 +119,10 @@ export interface DesktopMenuItem {
 export interface DesktopApi {
   platform: string;
   version: string;
+  stateStorage?: {
+    read: (key: string) => { restore: boolean; value: string | null };
+    write: (key: string, value: string | null) => boolean;
+  };
   setStatus: (status: DesktopStatus) => void;
   setTraySnapshot: (snapshot: TraySnapshot) => void;
   showTrayPanel: () => void;

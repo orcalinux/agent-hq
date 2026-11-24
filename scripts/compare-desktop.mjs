@@ -22,6 +22,8 @@ Usage: node scripts/compare-desktop.mjs --workspace FRESH_CLONE --output NEW_EVI
   --timeout-minutes 30
   --verify "python -m pytest -q"   Verification command Agent HQ runs on the proposed changes (default: none).
   --wait-quota          Wait for the selected provider's local Magpie quota to show headroom.
+  --resume-from DIR     Copy a stopped attempt's profile into NEW_EVIDENCE_DIR and resume its unfinished run.
+  --stop-after-tasks N  Use the ordinary Stop action after N finished tasks; retain the attempt for a recovery test.
   --unlimited          Disable token, cost and per-agent call caps; keep the runner's wall-time limit.
   --run                Actually submit the task; otherwise only prepare the UI.
 Uses TASK.md from the clone, a separate desktop profile, and your existing CLI login.
@@ -31,17 +33,22 @@ Evidence includes local paths and prompts; review before sharing.`);
 
 const workspace = fs.realpathSync(String(args.workspace));
 const output = path.resolve(String(args.output));
-const model = String(args.model || 'anthropic:cli:claude-haiku-5-5');
-const verify = typeof args.verify === 'string' ? args.verify : '';
-const attachments = String(args.attach || 'SPEC.md,ISSUES.md').split(',').filter(Boolean);
-const strategy = String(args.strategy || 'adaptive');
+const resumeFrom = typeof args['resume-from'] === 'string' ? fs.realpathSync(args['resume-from']) : null;
+const previous = resumeFrom ? JSON.parse(fs.readFileSync(path.join(resumeFrom, 'metadata.json'), 'utf8')) : null;
+const priorState = resumeFrom ? JSON.parse(fs.readFileSync(path.join(resumeFrom, 'state.json'), 'utf8')) : null;
+const model = String(args.model || previous?.model || 'anthropic:cli:claude-haiku-5-5');
+const verify = typeof args.verify === 'string' ? args.verify : previous?.verificationCommand ?? '';
+const attachments = args.attach ? String(args.attach).split(',').filter(Boolean) : previous?.attachments ?? ['SPEC.md', 'ISSUES.md'];
+const strategy = String(args.strategy || previous?.strategy || 'adaptive');
 const timeoutMinutes = Number(args['timeout-minutes'] || 30);
+const stopAfterTasks = args['stop-after-tasks'] === undefined ? null : Number(args['stop-after-tasks']);
 const providerId = model.startsWith('anthropic:cli:') ? 'anthropic' : model.startsWith('openai:cli:') ? 'openai' : null;
 if (!providerId) throw new Error('Choose an exact anthropic:cli: or openai:cli: model.');
 if (model.endsWith(':default') || /:cli:(?:group\/|sonnet$|haiku$|opus$)/.test(model)) throw new Error('Benchmarks require a pinned model, not an alias or routing group.');
 const quotaProvider = providerId === 'openai' ? 'codex' : 'claude';
 if (!['adaptive', 'fixed'].includes(strategy)) throw new Error('Unknown team strategy.');
 if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) throw new Error('Invalid timeout.');
+if (stopAfterTasks !== null && (!Number.isSafeInteger(stopAfterTasks) || stopAfterTasks < 1)) throw new Error('Invalid completed-task checkpoint.');
 if (fs.existsSync(output)) throw new Error('Use a new evidence directory to preserve previous results.');
 if (output === workspace || output.startsWith(workspace + path.sep)) throw new Error('Keep evidence outside the task workspace.');
 for (const attachment of attachments) {
@@ -50,17 +57,40 @@ for (const attachment of attachments) {
 }
 const task = fs.readFileSync(path.join(workspace, 'TASK.md'), 'utf8');
 const initialTaskCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim();
-if (execFileSync('git', ['status', '--porcelain'], { cwd: workspace, encoding: 'utf8' }).trim()) {
+if (!resumeFrom && execFileSync('git', ['status', '--porcelain'], { cwd: workspace, encoding: 'utf8' }).trim()) {
   throw new Error('The task clone must be clean before the run.');
+}
+if (resumeFrom) {
+  if (fs.existsSync(path.join(resumeFrom, 'desktop-profile', 'SingletonLock'))) {
+    throw new Error('Close the previous benchmark application before copying its profile.');
+  }
+  if (fs.realpathSync(previous.workspace) !== workspace || previous.initialTaskCommit !== initialTaskCommit || previous.task !== task) {
+    throw new Error('Resume requires the original workspace, starter commit and unchanged TASK.md.');
+  }
+  if (previous.model !== model || previous.strategy !== strategy || previous.verificationCommand !== verify
+    || JSON.stringify(previous.attachments) !== JSON.stringify(attachments)) {
+    throw new Error('Keep the original model, strategy, attachments and verification command when resuming.');
+  }
+  if (priorState.activeMission?.source !== 'live' || !['paused', 'failed', 'cancelled', 'running'].includes(priorState.activeMission.status)) {
+    throw new Error('The previous attempt has no unfinished live mission to resume.');
+  }
 }
 fs.mkdirSync(output, { recursive: true, mode: 0o700 });
 const config = path.join(output, 'config');
-fs.mkdirSync(config, { mode: 0o700 });
-fs.writeFileSync(path.join(config, 'config.json'), JSON.stringify({
-  workspaceRoot: workspace,
-  connections: { [providerId]: { providerId, method: 'cli', connectedAt: new Date().toISOString() } },
-  memory: { embeddingModel: 'off' },
-}), { mode: 0o600 });
+const profile = path.join(output, 'desktop-profile');
+if (resumeFrom) {
+  fs.cpSync(path.join(resumeFrom, 'config'), config, { recursive: true });
+  fs.cpSync(path.join(resumeFrom, 'desktop-profile'), profile, {
+    recursive: true, filter: (source) => !path.basename(source).startsWith('Singleton'),
+  });
+} else {
+  fs.mkdirSync(config, { mode: 0o700 });
+  fs.writeFileSync(path.join(config, 'config.json'), JSON.stringify({
+    workspaceRoot: workspace,
+    connections: { [providerId]: { providerId, method: 'cli', connectedAt: new Date().toISOString() } },
+    memory: { embeddingModel: 'off' },
+  }), { mode: 0o600 });
+}
 const write = (name, data) => fs.writeFileSync(path.join(output, name), JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
 const log = (text) => console.log(`${new Date().toISOString()} ${text}`);
 const metadata = {
@@ -73,7 +103,9 @@ const metadata = {
   startedAt: null, endedAt: null, wallMs: null, outcome: 'preparing',
   approval: 'auto', maxParallel: 3, modelPinned: true,
   verificationCommand: verify, learning: 'every-run', errors: [],
-  limits: args.unlimited ? { maxCostUSD: null, maxTokens: null, maxMinutes: timeoutMinutes, maxCallsPerAgent: null, maxCostPerAgentUSD: null } : 'application defaults',
+  limits: previous?.limits ?? (args.unlimited ? { maxCostUSD: null, maxTokens: null, maxMinutes: timeoutMinutes, maxCallsPerAgent: null, maxCostPerAgentUSD: null } : 'application defaults'),
+  ...(resumeFrom ? { resumedFrom: resumeFrom, resumedMissionId: priorState.activeMission.id, previousOutcome: previous.outcome } : {}),
+  ...(stopAfterTasks !== null ? { stopAfterTasks } : {}),
 };
 write('metadata.json', metadata);
 
@@ -100,7 +132,7 @@ const app = await _electron.launch({
     ...process.env,
     AGENT_HQ_WORKSPACE: workspace,
     AGENT_HQ_CONFIG_DIR: config,
-    AGENT_HQ_USER_DATA: path.join(output, 'desktop-profile'),
+    AGENT_HQ_USER_DATA: profile,
     AGENT_HQ_NO_UPDATES: '1',
     AGENT_HQ_HIDDEN: '1',
   },
@@ -142,7 +174,7 @@ try {
   });
   await page.waitForLoadState('domcontentloaded');
   await page.waitForFunction(() => localStorage.getItem('agent-hq.state'));
-  await page.evaluate(({ model, strategy, verify, limits }) => {
+  if (!resumeFrom) await page.evaluate(({ model, strategy, verify, limits }) => {
     const saved = JSON.parse(localStorage.getItem('agent-hq.state'));
     const state = saved.state;
     state.agents = Object.fromEntries(Object.entries(state.agents).map(([id, agent]) =>
@@ -163,15 +195,34 @@ try {
   const connection = await page.evaluate(async () => (await fetch('/api/connections')).json());
   const offered = connection.providers.find((entry) => entry.id === providerId)?.models ?? [];
   if (!offered.some((entry) => entry.ref === model)) throw new Error(`Pinned model not offered: ${model}`);
-  const composer = page.getByRole('textbox', { name: 'Message Sovereign', exact: true });
-  if (!await composer.isVisible()) await page.keyboard.press('Control+l');
-  await composer.waitFor({ state: 'visible' });
-  for (const file of attachments) {
-    await page.getByRole('button', { name: 'Attach a project file', exact: true }).click();
-    await page.getByRole('textbox', { name: 'Search files to attach', exact: true }).fill(file);
-    await page.getByRole('button', { name: file, exact: true }).click();
+  if (resumeFrom) {
+    await page.waitForFunction((id) => JSON.parse(localStorage.getItem('agent-hq.state') || '{"state":{}}').state.activeMission?.id === id, priorState.activeMission.id);
+    const state = await snapshot();
+    if (state.activeMission?.id !== priorState.activeMission.id) throw new Error('Restored mission does not match the previous attempt.');
+    if (state.approvalMode !== priorState.approvalMode || state.verificationCommand !== verify || state.teamStrategy !== strategy
+      || state.forceSetup !== true || state.complexityRouting !== false
+      || Object.values(state.roleDefaults).some((ref) => ref !== model)
+      || Object.values(state.agents).some((agent) => agent.model !== model || !agent.modelLocked)) {
+      throw new Error('The restored profile does not preserve the pinned benchmark settings.');
+    }
+    const completed = priorState.activeMission.tasks.filter((entry) => entry.status === 'completed');
+    for (const task of completed) {
+      const restored = state.activeMission.tasks.find((entry) => entry.id === task.id);
+      if (restored?.status !== 'completed' || restored.output !== task.output) throw new Error(`Finished task was not preserved: ${task.id}`);
+    }
+    write('recovery-check.json', { missionId: state.activeMission.id, completedTasksPreserved: completed.map((entry) => entry.id) });
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Tasks', exact: true }).click();
+  } else {
+    const composer = page.getByRole('textbox', { name: 'Message Sovereign', exact: true });
+    if (!await composer.isVisible()) await page.keyboard.press('Control+l');
+    await composer.waitFor({ state: 'visible' });
+    for (const file of attachments) {
+      await page.getByRole('button', { name: 'Attach a project file', exact: true }).click();
+      await page.getByRole('textbox', { name: 'Search files to attach', exact: true }).fill(file);
+      await page.getByRole('button', { name: file, exact: true }).click();
+    }
+    await composer.fill(task);
   }
-  await composer.fill(task);
   memory.push({ phase: 'idle', ...processMemory(app.process().pid) });
   write('memory.json', memory);
   await page.screenshot({ path: path.join(output, 'prepared.png') });
@@ -187,22 +238,39 @@ try {
       write('memory.json', memory);
     }, 2000);
     submitted = true;
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    const previousRecord = resumeFrom ? JSON.stringify((await snapshot()).runHistory.find((entry) => entry.id === priorState.activeMission.id)) : undefined;
+    await page.getByRole('button', { name: resumeFrom ? 'Resume' : 'Send', exact: true }).click();
     const deadline = Date.now() + timeoutMinutes * 60_000;
-    let approved = false;
+    let approved = Boolean(resumeFrom);
+    let checkpointStopped = false;
     let lastStatus = '';
     while (Date.now() < deadline) {
       const state = await snapshot();
       write('state.json', state);
       const history = state.runHistory ?? [];
-      if (history.length) {
-        const paused = history.at(-1).status === 'paused' && state.activeMission?.providerLimit;
-        metadata.outcome = paused ? 'provider-blocked' : history.at(-1).status;
+      const result = history.find((entry) => entry.id === state.activeMission?.id);
+      if (result && (!resumeFrom || JSON.stringify(result) !== previousRecord)) {
+        const paused = result.status === 'paused' && state.activeMission?.providerLimit;
+        metadata.outcome = paused ? 'provider-blocked' : result.status;
         if (paused) {
           metadata.providerLimit = state.activeMission.providerLimit;
           process.exitCode = 2;
         }
         break;
+      }
+      if (resumeFrom && !calls.length && state.activeMission?.providerLimit?.resetAt > Date.now()) {
+        metadata.outcome = 'provider-blocked';
+        metadata.providerLimit = state.activeMission.providerLimit;
+        process.exitCode = 2;
+        break;
+      }
+      if (approved && !checkpointStopped && stopAfterTasks !== null
+        && state.activeMission?.tasks.filter((entry) => entry.status === 'completed').length >= stopAfterTasks) {
+        write('stop-checkpoint.json', state);
+        await page.getByRole('button', { name: 'Stop run', exact: true }).click();
+        checkpointStopped = true;
+        metadata.intentionalStop = true;
+        log('Stopped through the application UI at the completed-task checkpoint.');
       }
       if (!approved) {
         const approve = page.getByRole('button', { name: 'Approve & run', exact: true });
