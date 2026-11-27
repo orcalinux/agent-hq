@@ -21,10 +21,16 @@ process.env.AGENT_HQ_WORKSPACE = stressWorkspace;
 const { createApiMiddleware } = await import('../../server/api');
 const { createTerminal, closeAllTerminals, streamTerminal } = await import('../../server/pty');
 
-afterAll(() => {
+afterAll(async () => {
   closeAllTerminals();
-  fs.rmSync(stressConfig, { recursive: true, force: true });
-  fs.rmSync(stressWorkspace, { recursive: true, force: true });
+  await new Promise((r) => setTimeout(r, 150));
+  for (const dir of [stressConfig, stressWorkspace]) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    } catch {
+      // Windows PowerShell PTY can hold its working directory handle briefly after kill.
+    }
+  }
 });
 
 describe('scheduler & DAG stress', () => {
@@ -279,5 +285,6 @@ describe('server API JSON & PTY SSE robustness', () => {
     ac.abort();
     await new Promise((r) => setTimeout(r, 30));
     closeAllTerminals();
+    await new Promise((r) => setTimeout(r, 100));
   });
 });

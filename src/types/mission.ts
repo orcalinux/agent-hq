@@ -484,3 +484,11 @@ export interface ActivityEvent {
   tokens?: number;
   durationMs?: number;
 }
+
+export interface CustomChatCommand {
+  id: string;
+  name: string;
+  description: string;
+  template: string;
+  mode?: OrchestratorMode;
+}

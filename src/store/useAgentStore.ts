@@ -14,6 +14,7 @@ import type {
   ModelInfo,
   AutonomyLevel,
   ChatUsage,
+  CustomChatCommand,
   EmailNotificationConfig,
   InternOnboardSpec,
   KanbanTaskCard,
@@ -55,6 +56,7 @@ import { safeStorage } from './storage';
 import { reconcileInterrupted } from '../engine/runRecovery';
 import { DEFAULT_RUN_LIMITS, normalizeLimits, type RunLimits } from '../engine/runLimits';
 import { DEFAULT_BUDGET_POLICY, normalizeBudgetPolicy, type BudgetPolicy } from '../engine/budgets';
+import { normalizeCustomCommands, validateCustomCommandInput } from '../engine/chatCommands';
 
 export function formatClock(ts: number): string {
   const d = new Date(ts);
@@ -115,6 +117,7 @@ export interface AgentStoreState {
   approvalMode: ApprovalMode;
   learningMode: LearningMode;
   managerChatMessages: ManagerChatMessage[];
+  customCommands: CustomChatCommand[];
   emailConfig: EmailNotificationConfig;
   sentEmails: SentEmailRecord[];
   verificationCommand: string;
@@ -181,6 +184,10 @@ export interface AgentStoreState {
   appendChatMessage: (msg: Omit<ManagerChatMessage, 'id' | 'timestamp'> & { id?: string }) => string;
   updateChatMessage: (id: string, patch: Partial<ManagerChatMessage> | ((m: ManagerChatMessage) => Partial<ManagerChatMessage>)) => void;
   clearChat: () => void;
+  upsertCustomCommand: (input: { id?: string; name: string; description?: string; template: string; mode?: OrchestratorMode }) =>
+    | { ok: true; command: CustomChatCommand }
+    | { ok: false; field: 'name' | 'template'; error: string };
+  removeCustomCommand: (id: string) => void;
 
   // Notifications (local outbox only)
   updateEmailConfig: (cfg: Partial<EmailNotificationConfig>) => void;
@@ -269,6 +276,7 @@ export const useAgentStore = create<AgentStoreState>()(
         approvalMode: 'ask',
         learningMode: 'every-run',
         managerChatMessages: DEFAULT_MANAGER_CHAT_MESSAGES,
+        customCommands: [],
         emailConfig: DEFAULT_EMAIL_CONFIG,
         sentEmails: [],
         verificationCommand: '',
@@ -495,6 +503,20 @@ export const useAgentStore = create<AgentStoreState>()(
             ),
           })),
         clearChat: () => set({ managerChatMessages: [] }),
+        upsertCustomCommand: (input) => {
+          const current = get().customCommands;
+          const res = validateCustomCommandInput(input, current, input.id);
+          if (!res.ok) return { ok: false as const, field: res.field, error: res.error };
+          const id = input.id && current.some((c) => c.id === input.id) ? input.id : uid('cmd');
+          const command: CustomChatCommand = { id, ...res.value };
+          set({
+            customCommands: current.some((c) => c.id === id)
+              ? current.map((c) => (c.id === id ? command : c))
+              : [...current, command],
+          });
+          return { ok: true as const, command };
+        },
+        removeCustomCommand: (id) => set((s) => ({ customCommands: s.customCommands.filter((c) => c.id !== id) })),
 
         // ---------------------------------------------------------- Notifications
         updateEmailConfig: (cfg) => set((s) => ({ emailConfig: { ...s.emailConfig, ...cfg } })),
@@ -946,6 +968,7 @@ export const useAgentStore = create<AgentStoreState>()(
         approvalMode: s.approvalMode,
         learningMode: s.learningMode,
         managerChatMessages: s.managerChatMessages.slice(-100).map((m) => (m.streaming ? { ...m, streaming: false, error: m.error ?? 'Interrupted' } : m)),
+        customCommands: s.customCommands,
         emailConfig: s.emailConfig,
         sentEmails: s.sentEmails,
         verificationCommand: s.verificationCommand,
@@ -960,6 +983,7 @@ export const useAgentStore = create<AgentStoreState>()(
         if (!state) return;
         state.runLimits = normalizeLimits(state.runLimits);
         state.budgetPolicy = normalizeBudgetPolicy(state.budgetPolicy);
+        state.customCommands = normalizeCustomCommands(state.customCommands);
         if (!state.modelScopeChosen && state.modelScope !== 'any') setTimeout(() => useAgentStore.setState({ modelScope: 'any' }), 0);
         const preference = state.themePreference ?? 'system';
         state.setThemePreference(preference);

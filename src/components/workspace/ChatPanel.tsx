@@ -5,7 +5,7 @@ import { useConnectionsStore, isModelAvailable } from '@/store/useConnectionsSto
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { approveAndRun, cancelQuotaAutoResume, enableQuotaAutoResumeForCurrentMission, resumeRun, routePlanModels, sendToOrchestrator, stopChat, stopRun, updatePlan } from '@/engine/liveOrchestrator';
 import { stripThinking } from '@/engine/orchestratorParsing';
-import type { Complexity, ManagerChatMessage, ModelSource, OrchestratorMode, OrchestratorPlan, PlanTask, TeamStrategy } from '@/types';
+import type { Complexity, CustomChatCommand, ManagerChatMessage, ModelSource, OrchestratorMode, OrchestratorPlan, PlanTask, TeamStrategy } from '@/types';
 import { Badge, Button, EmptyState, IconButton, Input, ProgressBar, Select, Tabs } from '@/components/ui/primitives';
 import { ModelSelect, fmtTokens, modelLabel } from '@/components/ui/helpers';
 import { ApprovalModeSelect } from '@/components/shell/ApprovalMode';
@@ -16,9 +16,11 @@ import { ChatInput } from './ChatInput';
 import { parseChatCommand } from '@/engine/chatCommands';
 
 /** Local commands such as /help, /stop or /model work without a current model; prompts sent to an agent do need one. */
-function draftNeedsModel(text: string): boolean {
-  const command = parseChatCommand(text);
-  return !command || (['ask', 'plan', 'build', 'btw', 'consult'].includes(command.name) && Boolean(command.rest));
+function draftNeedsModel(text: string, customCommands: CustomChatCommand[]): boolean {
+  const command = parseChatCommand(text, customCommands);
+  if (!command) return true;
+  if (customCommands.some((cmd) => cmd.name === command.name)) return true;
+  return ['ask', 'plan', 'build', 'btw', 'consult'].includes(command.name) && Boolean(command.rest);
 }
 
 const SOURCE_TONE: Record<ModelSource, 'neutral' | 'accent' | 'success' | 'warning'> = {
@@ -321,6 +323,7 @@ export function ChatPanel() {
   const mission = useAgentStore((s) => s.activeMission);
   const liveRunning = useAgentStore((s) => s.isLiveRunning);
   const quotaAutoResumeAt = useAgentStore((s) => s.quotaAutoResumeAt);
+  const customCommands = useAgentStore((s) => s.customCommands);
   const setView = useAgentStore((s) => s.setActiveView);
   const providers = useConnectionsStore((s) => s.providers);
   const loaded = useConnectionsStore((s) => s.loaded);
@@ -351,7 +354,7 @@ export function ChatPanel() {
 
   const send = () => {
     const text = draft.trim();
-    if (!text || (draftNeedsModel(text) && (streaming || !modelOk))) return;
+    if (!text || (draftNeedsModel(text, customCommands) && (streaming || !modelOk))) return;
     setDraft('');
     const files = attachments;
     setAttachments([]);
@@ -459,7 +462,7 @@ export function ChatPanel() {
               {streaming ? (
                 <Button size="sm" variant="danger" icon={Square} onClick={stopChat}>Stop</Button>
               ) : (
-                <Button size="sm" variant="primary" icon={ArrowUp} disabled={!draft.trim() || (draftNeedsModel(draft) && !modelOk)} onClick={send}>Send</Button>
+                <Button size="sm" variant="primary" icon={ArrowUp} disabled={!draft.trim() || (draftNeedsModel(draft, customCommands) && !modelOk)} onClick={send}>Send</Button>
               )}
             </div>
           </div>

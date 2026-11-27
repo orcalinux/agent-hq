@@ -72,9 +72,9 @@ Evidence kind for every row is **Source** (README or code in the research bundle
 | MetaGPT | Framework without a chat composer; nothing to compare | repository search |
 | Paperclip | Not in the local bundle; not re-checked | none |
 
-What Agent HQ took: commands that run real actions (new conversation, mode switch with an optional prompt, run control, navigation, `/model`, `/btw` side questions, `/consult @Agent`), argument/model/task completion (`/` at start, `@` for agents, `#task` mentions with context expansion), and chat safety (chat cannot loosen approvals; `/btw` stays out of Sovereign's main conversation history).
+What Agent HQ took: commands that run real actions (new conversation, mode switch with an optional prompt, run control, navigation, `/model`, `/btw` side questions, `/consult @Agent`), argument/model/task completion (`/` at start, `@` for agents, `#task` mentions with context expansion), user-defined custom slash commands in Settings (`{{input}}`, `$ARGUMENTS`, `$1`–`$9`, `{{file}}`, `{{project}}`, optional mode switch), and chat safety (chat cannot loosen approvals or override built-in commands; `/btw` stays out of Sovereign's main conversation history).
 
-Remaining in peers: user-defined custom slash command templates.
+No core composer gap from peers remains in chat commands or mentions.
 
 ## What Agent HQ has taken so far (verified 2026-11-23)
 
@@ -91,7 +91,7 @@ Checked against this repository's code and tests, not only the changelog.
 | Pending approval and finished work survive a crash | Agent Orchestrator | Built (0.15.0) | desktop test that SIGKILLs the app mid-run |
 | Terminal that survives the UI | Paradev | **Not built** | none |
 | One worktree per task + per-worker verify | Agent Orchestrator, Maestro | Built (0.23.0–0.25.0, isolated staging + `POST /api/workers/verify` + 1-turn self-repair) | `server/taskWorkspaces.ts`, `tests/unit/workerVerify.test.ts` |
-| Chat commands, mentions, `/` at message start | OpenHands, Maestro, Agent Orchestrator | Built (0.17.0–0.25.0, incl. `/model`, `/btw`, `/consult`, `#task`) | `src/engine/chatCommands.ts`, `src/utils/chatCompletion.ts` and tests |
+| Chat commands, mentions, `/` at message start | OpenHands, Maestro, Agent Orchestrator | Built (0.17.0–0.25.0+, incl. `/model`, `/btw`, `/consult`, `#task`, and user-defined custom slash command templates) | `src/engine/chatCommands.ts`, `src/utils/chatCompletion.ts`, `src/components/settings/CustomCommandSettings.tsx` and tests |
 
 No code from any studied project is in Agent HQ.
 

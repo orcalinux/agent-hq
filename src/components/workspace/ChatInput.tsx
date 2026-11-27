@@ -17,6 +17,7 @@ interface ChatInputProps {
 export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputProps) {
   const agents = useAgentStore((store) => store.agents);
   const mission = useAgentStore((store) => store.activeMission);
+  const customCommands = useAgentStore((store) => store.customCommands);
   const providers = useConnectionsStore((store) => store.providers);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -36,7 +37,8 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
   const completionOptions = useMemo(() => ({
     tasks: (mission?.tasks ?? []).map((t) => ({ id: t.id, title: t.title, status: t.status })),
     models: listAvailableModels(providers),
-  }), [mission?.tasks, providers]);
+    customCommands,
+  }), [mission?.tasks, providers, customCommands]);
   const suggestions = useMemo(() => token ? chatSuggestions(token, Object.values(agents), completionOptions) : [], [token, agents, completionOptions]);
   const open = focused && !composing && !dismissed && Boolean(token);
   const selected = Math.min(active, Math.max(0, suggestions.length - 1));

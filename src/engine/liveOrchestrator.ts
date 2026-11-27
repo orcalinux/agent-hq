@@ -578,13 +578,19 @@ async function runSideChat(args: {
   }
 }
 
-export async function sendToOrchestrator(text: string, attachments: string[] = []) {
+export async function sendToOrchestrator(
+  text: string,
+  attachments: string[] = [],
+  options?: { skipCommands?: boolean; suppressUserEcho?: boolean },
+) {
   const store = agentsState();
   const mode = store.orchestratorMode;
   const sovereign = store.agents['agent-manager'];
   if (!sovereign) return;
-  const command = parseChatCommand(text);
+  const command = options?.skipCommands ? null : parseChatCommand(text, store.customCommands);
   if (command) {
+    const workspace = useWorkspaceStore.getState();
+    const projectName = (workspace.root || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
     const result = interpretChatCommand(command, {
       mode,
       approval: store.approvalMode,
@@ -593,9 +599,14 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
       sovereignModel: resolveAgentModel(sovereign, store.roleDefaults) ?? '',
       agents: store.agents,
       availableModels: availableModels().map((m) => ({ ref: m.ref, label: m.name })),
+      customCommands: store.customCommands,
+      activeFile: workspace.activePath ?? '',
+      projectName,
     });
     const handledBySideChat = result.actions.some((a) => a.type === 'btw' || a.type === 'consult');
-    if (command.name !== 'clear' && command.name !== 'new' && !handledBySideChat) store.appendChatMessage({ sender: 'user', text, mode });
+    if (command.name !== 'clear' && command.name !== 'new' && !handledBySideChat) {
+      store.appendChatMessage({ sender: 'user', text, mode, attachedFiles: attachments.length ? attachments : undefined });
+    }
     for (const action of result.actions) {
       if (action.type === 'mode') store.setOrchestratorMode(action.mode);
       else if (action.type === 'approval') store.setApprovalMode(action.mode);
@@ -630,10 +641,10 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
     }
     const message = result.error ?? result.reply;
     if (message) agentsState().appendChatMessage({ sender: 'system', text: message });
-    if (result.prompt) return sendToOrchestrator(result.prompt, attachments);
+    if (result.prompt) return sendToOrchestrator(result.prompt, attachments, { skipCommands: true, suppressUserEcho: true });
     return;
   }
-  const remember = parseRemember(text, store.agents);
+  const remember = options?.skipCommands ? null : parseRemember(text, store.agents);
   if (remember) {
     store.appendChatMessage({ sender: 'user', text, mode });
     if ('error' in remember) {
@@ -651,7 +662,10 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
     return;
   }
 
-  const history = store.managerChatMessages
+  const sourceMessages = options?.suppressUserEcho && store.managerChatMessages.at(-1)?.sender === 'user'
+    ? store.managerChatMessages.slice(0, -1)
+    : store.managerChatMessages;
+  const history = sourceMessages
     .filter((m) => (m.sender === 'user' || m.sender === 'manager') && !m.error && !m.streaming && m.text && !m.sideQuestion)
     .slice(-16)
     .map((m) => ({
@@ -663,7 +677,7 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
           : m.text,
     }));
 
-  store.appendChatMessage({ sender: 'user', text, mode, attachedFiles: attachments.length ? attachments : undefined });
+  if (!options?.suppressUserEcho) store.appendChatMessage({ sender: 'user', text, mode, attachedFiles: attachments.length ? attachments : undefined });
   const model = resolveAgentModel(sovereign, store.roleDefaults);
   const replyId = store.appendChatMessage({ sender: 'manager', text: '', mode, model, streaming: true });
 

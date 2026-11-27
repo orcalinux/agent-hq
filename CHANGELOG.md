@@ -11,6 +11,15 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.25.1] — 2026-11-27
+
+### Added
+- **User-defined custom slash commands with templates**: Create, edit, and delete reusable `/command` templates in **Settings → Chat commands** with `/` autocomplete, `/help` listing, optional `Ask`/`Plan`/`Build` mode switch, single-pass template expansion (`{{input}}`, `$ARGUMENTS`, positional `$1`–`$9`, `{{file}}`, `{{project}}`), and reserved built-in command protection.
+
+### Fixed
+- Retried temporary directory cleanup after PTY teardown on Windows (`tests/unit/stress.test.ts`) so Windows release builds do not fail with `EBUSY`.
+- Eliminated duplicate user chat bubbles when slash commands forward prompts, and replaced in-page `location.reload()` with awaited Playwright reloads in desktop recovery tests.
+
 ## [0.25.0] — 2026-11-27
 
 ### Added

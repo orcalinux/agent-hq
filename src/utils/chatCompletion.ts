@@ -1,3 +1,5 @@
+import type { CustomChatCommand } from '@/types';
+
 export interface CompletionAgent {
   id: string;
   name: string;
@@ -109,10 +111,19 @@ export function completionToken(text: string, cursor: number, selectionEnd = cur
 export function chatSuggestions(
   token: CompletionToken,
   agents: CompletionAgent[],
-  options?: { tasks?: CompletionTask[]; models?: CompletionModel[] },
+  options?: { tasks?: CompletionTask[]; models?: CompletionModel[]; customCommands?: CustomChatCommand[] },
 ): ChatSuggestion[] {
   const query = token.query.toLocaleLowerCase();
-  if (token.kind === 'command') return CHAT_COMMANDS.filter((item) => item.label.slice(1).startsWith(query));
+  if (token.kind === 'command') {
+    const custom: ChatSuggestion[] = (options?.customCommands ?? []).map((cmd) => ({
+      id: `custom-${cmd.name}`,
+      label: `/${cmd.name}`,
+      detail: `${cmd.description || 'Custom template'}${cmd.mode ? ` · ${cmd.mode} mode` : ''} · custom`,
+      insert: `/${cmd.name}`,
+      hasArgs: false,
+    }));
+    return [...CHAT_COMMANDS, ...custom].filter((item) => item.label.slice(1).startsWith(query));
+  }
   if (token.kind === 'argument') {
     if (token.command === 'model') {
       return (options?.models ?? [])

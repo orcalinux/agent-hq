@@ -145,9 +145,8 @@ test('a provider limit pauses the run and survives reload without retrying the p
         },
       });
       localStorage.setItem('agent-hq.state', JSON.stringify(saved));
-      location.reload();
     });
-    await page.waitForLoadState('domcontentloaded');
+    await page.reload();
     await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Tasks', exact: true }).click();
     await page.getByRole('button', { name: 'Resume', exact: true }).click();
     const notice = page.getByRole('status').filter({ hasText: 'anthropic usage limit reached' });
@@ -191,9 +190,8 @@ test('a blocked verifier fails before any model call and keeps the run resumable
         },
       });
       localStorage.setItem('agent-hq.state', JSON.stringify(saved));
-      location.reload();
     });
-    await page.waitForLoadState('domcontentloaded');
+    await page.reload();
     await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Tasks', exact: true }).click();
     await page.getByRole('button', { name: 'Resume', exact: true }).click();
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('agent-hq.state')!).state.activeMission.error ?? '')).toContain('is unavailable');
