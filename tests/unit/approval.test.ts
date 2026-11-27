@@ -51,6 +51,13 @@ describe('verified candidate review', () => {
     expect(evidencedQaIssues(verdict, [], [{ path: 'money.py', content: 'return safe_divide(amount, rate)\n' }])).toEqual([]);
   });
 
+  it('infers the applied task id or preserves empty taskId on inspected files when evidence matches', () => {
+    const appliedEmptyId = { ...issue, taskId: '' };
+    expect(evidencedQaIssues({ verdict: 'reject', summary: 'bug', issues: [appliedEmptyId] }, files)).toEqual([issue]);
+    expect(evidencedQaIssues({ verdict: 'reject', summary: 'bug', issues: [appliedEmptyId] }, [], [{ path: 'money.py', content: 'return int(amount) / rate\n' }])).toEqual([appliedEmptyId]);
+    expect(evidencedQaIssues({ verdict: 'reject', summary: 'bug', issues: [{ ...issue, taskId: 'invented' }] }, files)).toEqual([]);
+  });
+
   it('restores only the latest passing revision per file without mutating the checkpoint', () => {
     const checkpoint = [
       change('old', 'money.py', 'applied'),

@@ -30,18 +30,30 @@ export function planNextWave<T extends SchedulableTask>(
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const busyAgents = new Set(tasks.filter((t) => running.has(t.id)).map((t) => t.assignedAgentId));
   const busyFiles = new Set(tasks.filter((t) => running.has(t.id)).flatMap((t) => filesOf?.(t) ?? []));
-  const blockedIds = new Set<string>();
+  const blockedBy = new Map<string, T>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const task of tasks) {
+      if (running.has(task.id) || !STARTABLE.has(task.status) || blockedBy.has(task.id)) continue;
+      const deps = (task.dependsOn ?? []).map((d) => byId.get(d)).filter((d): d is T => Boolean(d));
+      const failedDep = deps.find((d) => TERMINAL_FAILURE.has(d.status) || blockedBy.has(d.id));
+      if (failedDep) {
+        blockedBy.set(task.id, failedDep);
+        changed = true;
+      }
+    }
+  }
   const start: T[] = [];
   const blocked: Array<{ task: T; dependency: T }> = [];
   for (const task of tasks) {
     if (running.has(task.id) || !STARTABLE.has(task.status)) continue;
-    const deps = (task.dependsOn ?? []).map((d) => byId.get(d)).filter((d): d is T => Boolean(d));
-    const failedDep = deps.find((d) => TERMINAL_FAILURE.has(d.status) || blockedIds.has(d.id));
+    const failedDep = blockedBy.get(task.id);
     if (failedDep) {
-      blockedIds.add(task.id);
       blocked.push({ task, dependency: failedDep });
       continue;
     }
+    const deps = (task.dependsOn ?? []).map((d) => byId.get(d)).filter((d): d is T => Boolean(d));
     if (!deps.every((d) => d.status === 'completed')) continue;
     if (busyAgents.has(task.assignedAgentId) || running.size + start.length >= limit) continue;
     const files = filesOf?.(task) ?? [];

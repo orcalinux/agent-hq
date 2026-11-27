@@ -33,7 +33,8 @@
   <a href="#how-a-run-works"><b>How a run works</b></a> ·
   <a href="#connecting-models"><b>Connections</b></a> ·
   <a href="#architecture-and-security"><b>Security</b></a> ·
-  <a href="#testing"><b>Testing</b></a>
+  <a href="#testing"><b>Testing</b></a> ·
+  <a href="#benchmarks"><b>Benchmarks</b></a>
 </p>
 
 <p align="center">
@@ -49,7 +50,7 @@ You open a project folder, describe what you need to **Sovereign** (the orchestr
 
 - **Plan first, then build.** Sovereign proposes tasks, agents and models; you edit and approve before anything runs.
 - **Parallel by design.** Independent tasks run in waves, up to 3 at once by default (Settings → Team building: 1 to 8, or no limit) and never two at once for the same agent.
-- **Reviewed work.** Juniors get an N+1 senior review. A configured verification command checks the environment before implementation and tests the combined files afterwards. Failed tests feed into up to three integration repair attempts per review cycle, and Sentinel can send concrete defects back for two rework cycles. Automatic modes merge competing file proposals before review. Missing test tools, unresolved writes and exhausted repairs block completion; the files and diagnostics remain available for Resume. Python tests use the project's `.venv` or `venv` when present.
+- **Reviewed work.** Juniors get an N+1 senior review. A configured verification command runs inside each worker's isolated Git worktree immediately after task completion (triggering 1 bounded self-repair turn if its own changed files fail), checks the environment before implementation, and tests the combined files afterwards. Failed integration tests feed into up to three integration repair attempts per review cycle, and Sentinel targets only flagged tasks on rework while keeping unaffected tasks' verified work intact. Automatic modes merge competing file proposals before review. Missing test tools, unresolved writes and exhausted repairs block completion; the files and diagnostics remain available for Resume. Python tests use the project's `.venv` or `venv` when present.
 - **Sovereign builds the team.** For each plan, Sovereign decides how many agents are needed, their names and exact models, and which are juniors under which senior. There is no cap on agents or tasks, and new agents stay on the team. See [Team building and mentors](#team-building-and-mentors).
 - **Agents that learn.** Each project has a long-term memory in `.agent-hq/memory/lessons.json`. Agents are taught with `/remember`, learn from QA and mentor feedback and from a short reflection after every run, and receive the relevant lessons in their next prompt. **Insights → Growth** shows each agent's level, focus areas and learning over time. See [Agent memory](#agent-memory).
 - **You choose how much to trust the agents.** By default edits arrive as diffs in the **Changes** tab and are only written when you apply them. **Auto-apply** writes QA-approved changes for you, and **Full access** also skips plan approval. Every auto-applied file can be undone.
@@ -117,14 +118,14 @@ Turning on a more permissive mode asks for confirmation first. Auto mode never w
 
 ### Run limits and conflicts
 
-Each run is capped per run and per agent (defaults: $10, 5M tokens, 90 minutes, 60 model calls per agent). An optional **cost per agent** limit, off by default, stops the run when one agent has spent its share, so a single agent cannot use the whole budget. Temporary provider errors (a 5xx or a dropped connection) are retried up to twice with growing delays and jitter before a task fails; quota and rate-limit errors are not retried, they switch to another connected provider. You are warned at 80% and the run stops at 100%, with the reason logged. Change them in **Settings → Run limits**. If two agents propose changes to the same file, both are marked **conflict** in the Changes tab, auto-apply skips them and nothing is overwritten silently. Every proposal shows a line diff before you apply it.
+Each run is capped per run and per agent (defaults: $10, 5M tokens, 90 minutes, 60 model calls per agent). An optional **cost per agent** limit stops the run when one agent spends its share, and optional **monthly spend / token budgets** cap cumulative usage across runs in the same calendar month (Settings → Run limits). Temporary provider errors (a 5xx or a dropped connection) are retried up to twice with growing delays and jitter before a task fails; quota and rate-limit errors switch to another connected provider or pause with an opt-in **auto-resume at reset** schedule (global in Settings or per run from the paused banner). You are warned at 80% of any limit and the run stops at 100%, with the reason logged. If two agents propose changes to the same file, both are marked **conflict** in the Changes tab, auto-apply skips them and nothing is overwritten silently. Every proposal shows a line diff before you apply it.
 
 ## Agent memory
 
 Agents keep what they learn **per project**, in plain JSON you can read, edit and commit: `<project>/.agent-hq/memory/lessons.json`. A `.gitignore` inside `.agent-hq/memory/` keeps the search index out of git.
 
 - **Teach directly.** In chat, `/remember Always run the formatter before QA` saves a lesson for the whole team; `/remember @Pulse Use Tailwind classes, not inline styles` saves it for one agent. Agents → pick an agent → **Memory** has a Teach form, search, pin, edit and delete.
-- **Chat commands.** Type `/` to pick a command, or `@` to search the team by name, title or ID. **↑/↓** choose, **Tab** or **Enter** insert, **Escape** closes. Commands: `/help`, `/status`, `/clear` (or `/new`), `/ask`, `/plan`, `/build` (add text to send it in that mode, such as `/plan add a login page`), `/approval ask|auto|full`, `/team adaptive|fixed`, `/stop`, `/resume`, `/open <view>` and `/remember`. Options complete after `/approval`, `/team` and `/open`. `/approval` can only tighten approvals; loosening them needs the confirmation in the approval picker. Completion keeps your draft and never sends it. Names with spaces or duplicate names insert the agent's unique ID so `/remember` reaches the correct agent. In ordinary messages, mentions remain context for Sovereign rather than sending a separate message to that agent.
+- **Chat commands.** Type `/` to pick a command, `@` to search the team by name, title or ID, and `#` to cite an active task (expanding its status, error and QA feedback into your prompt). **↑/↓** choose, **Tab** or **Enter** insert, **Escape** closes. Commands: `/help`, `/status`, `/model [ref | @agent <ref>]` (show or switch Sovereign's or an agent's model with connected-model autocomplete), `/btw <question>` (quick side question isolated from Sovereign's main conversation history), `/consult @agent <question>` (ask a specialist directly using its own persona and model), `/clear` (or `/new`), `/ask`, `/plan`, `/build` (add text to send it in that mode, such as `/plan add a login page`), `/approval ask|auto|full`, `/team adaptive|fixed`, `/stop`, `/resume`, `/open <view>` and `/remember`. Options complete after `/model`, `/approval`, `/team` and `/open`. `/approval` can only tighten approvals; loosening them needs the confirmation in the approval picker. Completion keeps your draft and never sends it. Names with spaces or duplicate names insert the agent's unique ID so `/remember` and `/consult` reach the correct agent. In ordinary messages, mentions remain context for Sovereign rather than sending a separate message to that agent.
 - **Learn from feedback.** Mentor revisions, QA rejections and failed verification are journaled; after the run Sovereign reflects on them and saves up to 6 short lessons. Repeats reinforce the existing lesson instead of adding a copy.
 - **Use it.** Pinned lessons come first, then the ones that best match the task, within a fixed prompt budget. The activity log shows when an agent learned something.
 - **Learning mode** (Settings → Memory and learning): **Every run** (default), **Only from feedback**, or **Off**.
@@ -278,6 +279,34 @@ Desktop tests also open every view from the built app, check the role cards and 
 
 To regenerate the README screenshots: `AGENT_HQ_SCREENSHOTS=1 npm run test:e2e -- screenshots`. After changing the logo, `npm run icons` renders the app, installer and tray icons. CI (`.github/workflows/ci.yml`) runs typecheck, unit tests, build, the e2e suite and the desktop tests on every push and pull request.
 
+## Benchmarks
+
+### Python (`tabsplit` 3.0 — `241` hidden checks, `gpt-6-luna`, `medium` effort)
+
+| Setup | Hidden total | New (`/100`) | Regr. (`/141`) | Time | Peak PSS | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Agent HQ `0.24.8` (post-fix)** | **241/241 (100.0%)** | **100/100** | **141/141** | 882.6 s | 1815.4 MiB | Full score across `percent` (`26/26`), `settle` (`23/23`), `audit` (`14/14`), `schedule` (`24/24`), `ledger` (`8/8`), and `vague` (`5/5`); `55/55` visible tests untouched; `restorePassingCandidate` verified disk tree (`runHistory.status: "failed"`) |
+| **Agent HQ `0.24.8` (baseline)** | **239/241 (99.2%)** | 98/100 | 141/141 | 707.4 s | 1699.3 MiB | Missed 1 `ledger`, 1 `vague` |
+| **Codex CLI `0.172.0` (bare control)** | **239/241 (99.2%)** | 98/100 | 141/141 | 218.8 s | 772.5 MiB | Missed 2 `vague` |
+| **Agent HQ `0.24.8` (worktree-verify + targeted rework)** | **238/241 (98.8%)** | 97/100 | 140/141 | 1215.9 s | 2503.3 MiB | **`completed`** (`8/8` tasks, `0` failed, `qaVerdict: "approve"`); isolated worktree checks auto-repaired 2 tasks before integration; `77/77` visible tests untouched; missed 2 `vague` & 1 pre-existing route regression |
+| **Paperclip** (`codex_local`, Node `v24.22.3`) | **238/241 (98.8%)** | 97/100 | 141/141 | 299.9 s | 2415.3 MiB | Headless server + embedded Postgres; missed 1 `ledger`, 2 `vague` |
+| **OpenHands** (`agent-server 1.63.1`) | **238/241 (98.8%)** | 97/100 | 141/141 | 161.0 s | 479.4 MiB | `uvx` backend via Magpie `/v1`; missed 1 `ledger`, 2 `vague` |
+| **Maestro `1.0.4`** | **237/241 (98.3%)** | 96/100 | 141/141 | 165.2 s | 2020.1 MiB | Missed 1 `percent`, 1 `ledger`, 2 `vague` |
+| **Agent Orchestrator `0.15.3`** | **237/241 (98.3%)** | 96/100 | 141/141 | 209.8 s | 2148.3 MiB | Executed in isolated worktree; missed 1 `percent`, 1 `ledger`, 2 `vague` |
+| **Agent Teams AI `2.18.7`** | **235/241 (97.5%)** | 94/100 | 141/141 | 361.1 s | 1673.2 MiB | `codex-native` team; missed 3 `settle`, 1 `ledger`, 2 `vague` |
+| **MetaGPT `11cdf46`** | **143/241 (59.3%)** | 2/100 | 141/141 | 1200.0 s (timeout) | 410.6 MiB | Blocked by an upstream Linux non-PTY pipe deadlock in `metagpt/tools/libs/terminal.py` |
+
+### TypeScript/Node (`pulsequeue` 2.0 — `72` held-out points across 6 modules)
+
+| Setup | Model (`medium`) | Score (`/72`) | Time | Peak PSS | Notes |
+| --- | --- | --- | --- | --- | --- |
+| **Agent HQ `0.24.8` Desktop** | `anthropic:cli:claude-haiku-5-5` | **72/72 (100.0%)** | 573.4 s | **637.5 MiB** | **`completed`** (`10/10` tasks, `qaVerdict: "approve"`, `75/75` visible checks); Sentinel caught an idempotency delimiter collision before approval; lower peak PSS than bare Claude CLI |
+| **Claude Code `2.1.332` alone** | `claude-haiku-5-5` | **72/72 (100.0%)** | 194.3 s | 780.5 MiB | `$0.0554` API valuation; `918.6 MiB` peak RSS |
+| **Codex CLI `0.172.0` alone** | `gpt-6-luna` | **72/72 (100.0%)** | 174.8 s | 839.7 MiB | `1092 MiB` peak RSS |
+| **Agent HQ `0.24.8` Desktop** | `openai:cli:gpt-6-luna` | **72/72 (100.0%)** | 1199.5 s | 1870.6 MiB | Isolated worktree check self-repaired `exporter`; bonus rework turn failed (`Codex returned no final message`) so `restorePassingCandidate` restored & re-verified `23/23` visible checks (`runHistory.status: "failed"`) |
+
+Paradev (`2.0.11`) launched to `#/sign-in` on Linux but remained gated behind interactive OAuth login and was not run unauthenticated. On `pulsequeue` (`gpt-6-luna`), two earlier pre-fix 25-minute Agent HQ attempts timed out while solving `60/60` issue points before adding `runModifiedTests` and the QA specification-boundary guard. See [docs/competitive-study.md](docs/competitive-study.md) and [docs/desktop-comparison-protocol.md](docs/desktop-comparison-protocol.md) for methodology, token totals, earlier Tier 2 comparisons, and limits.
+
 ## Architecture and security
 
 - `src/` React 19, Zustand, Tailwind 4. `src/engine/liveOrchestrator.ts` plans and runs missions.
@@ -291,7 +320,7 @@ To regenerate the README screenshots: `AGENT_HQ_SCREENSHOTS=1 npm run test:e2e -
 
 - In the default **Ask every time** mode, agent file changes are not written until you apply them from the **Changes** tab. **Auto-apply** and **Full access** write them automatically (see Agent permissions).
 - Runs are still controlled by the app window. If it closes mid-run, finished work is kept and the run is marked interrupted (resumed automatically only in Full access); server-owned runs are on the [roadmap](ROADMAP.md).
-- Agents propose changes rather than editing files in parallel worktrees, so conflicts are detected and reported instead of merged.
+- In **Ask every time** mode, agents propose changes rather than editing files in parallel worktrees, so overlapping proposals are flagged as conflicts in Changes instead of overwriting each other; **Auto-apply** and **Full access** merge competing proposals through the integrator before QA.
 - A demo run exists for exploring the visualizations and is labelled `demo` everywhere it appears.
 - Cost is only shown for models with verified pricing; otherwise tokens are shown without a price. Claude Code models are priced from the API rate card the CLI caches for your account, including cache reads and writes. On a subscription this values usage at API rates and is not a bill.
 - Gemini CLI integration is untested on this machine (the CLI is not installed).
@@ -302,7 +331,7 @@ To regenerate the README screenshots: `AGENT_HQ_SCREENSHOTS=1 npm run test:e2e -
 - [docs/github-administration.md](docs/github-administration.md): saved GitHub settings, branch protection, security, Pages and release checklist.
 - [docs/security-review.md](docs/security-review.md): dependency and code-scanning alert review, fixes and verification boundaries.
 - [ROADMAP.md](ROADMAP.md): what is planned and the criteria for each item.
-- [docs/competitive-study.md](docs/competitive-study.md): how Agent HQ compares with seven open-source projects, and what that study does and does not show.
+- [docs/competitive-study.md](docs/competitive-study.md): source study and graded live Tier 2 / Tier 3 benchmark comparisons across seven open-source competitors, plus what the results do and do not show.
 - [CONTRIBUTING.md](CONTRIBUTING.md): how to set up, test and send a pull request.
 - [CHANGELOG.md](CHANGELOG.md): every release.
 

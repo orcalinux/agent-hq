@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { helpText, interpretChatCommand, parseChatCommand, type ChatCommandContext } from '@/engine/chatCommands';
+import { expandTaskMentions, helpText, interpretChatCommand, parseChatCommand, type ChatCommandContext } from '@/engine/chatCommands';
 import { CHAT_COMMAND_SPECS, applyCompletion, chatSuggestions, completionToken } from '@/utils/chatCompletion';
 
-const ctx: ChatCommandContext = { mode: 'ask', approval: 'auto', strategy: 'adaptive', running: false, sovereignModel: 'anthropic:claude' };
+const agents = {
+  'agent-manager': { id: 'agent-manager', name: 'Sovereign', model: 'anthropic:claude' },
+  'agent-frontend': { id: 'agent-frontend', name: 'Pulse', model: 'openai:cli:gpt-6-luna' },
+  'agent-qa': { id: 'agent-qa', name: 'Sentinel', model: '' },
+};
+const availableModels = [
+  { ref: 'anthropic:claude', label: 'Claude' },
+  { ref: 'openai:cli:gpt-6-luna', label: 'GPT-6 Luna' },
+  { ref: 'openai:cli:gpt-6-sol', label: 'GPT-6 Sol' },
+];
+const ctx: ChatCommandContext = { mode: 'ask', approval: 'auto', strategy: 'adaptive', running: false, sovereignModel: 'anthropic:claude', agents, availableModels };
 const run = (text: string, over: Partial<ChatCommandContext> = {}) => interpretChatCommand(parseChatCommand(text)!, { ...ctx, ...over });
 
 describe('chat command parsing', () => {
@@ -65,5 +75,39 @@ describe('argument completion', () => {
     expect(all).toHaveLength(CHAT_COMMAND_SPECS.length);
     expect(all.find((item) => item.id === 'team')?.hasArgs).toBe(true);
     expect(all.find((item) => item.id === 'help')?.hasArgs).toBe(false);
+  });
+});
+
+describe('/model, /btw, /consult and #task mentions', () => {
+  it('/model shows current model, sets Sovereign or @Agent model, and catches ambiguous/missing models', () => {
+    expect(run('/model').reply).toContain('anthropic:claude');
+    expect(run('/model @Pulse').reply).toContain('Pulse model: openai:cli:gpt-6-luna');
+    expect(run('/model luna').actions).toEqual([{ type: 'model', agentId: 'agent-manager', model: 'openai:cli:gpt-6-luna' }]);
+    expect(run('/model @Pulse openai:cli:gpt-6-sol').actions).toEqual([{ type: 'model', agentId: 'agent-frontend', model: 'openai:cli:gpt-6-sol' }]);
+    expect(run('/model gpt-6').error).toMatch(/Multiple models match/);
+    expect(run('/model nonexistent-99').error).toMatch(/No connected model/);
+    expect(run('/model @Nobody claude').error).toMatch(/No agent is called/);
+  });
+
+  it('/btw and /consult validate arguments and produce typed actions', () => {
+    expect(run('/btw').error).toMatch(/side question/);
+    expect(run('/btw what test command runs?')).toEqual({ actions: [{ type: 'btw', prompt: 'what test command runs?' }] });
+    expect(run('/consult').error).toMatch(/Name an agent/);
+    expect(run('/consult @Sentinel').error).toMatch(/Write a question/);
+    expect(run('/consult @Ghost hello').error).toMatch(/No agent is called Ghost/);
+    expect(run('/consult @Sentinel check #t1')).toEqual({ actions: [{ type: 'consult', agentId: 'agent-qa', prompt: 'check #t1' }] });
+  });
+
+  it('expandTaskMentions appends structured context for matching #taskIds only', () => {
+    const expanded = expandTaskMentions('Why did #t2 fail after #t1 and #missing?', [
+      { id: 't1', title: 'Parser', status: 'completed', agentName: 'Atlas' },
+      { id: 't2', title: 'CLI', status: 'failed', agentName: 'Pulse', qaFeedback: 'Fix exit code 2', error: 'exit 1' },
+    ]);
+    expect(expanded).toContain('Referenced tasks:');
+    expect(expanded).toContain('#t2 "CLI" [failed · Pulse]');
+    expect(expanded).toContain('QA feedback: Fix exit code 2');
+    expect(expanded).toContain('#t1 "Parser" [completed · Atlas]');
+    expect(expanded).not.toContain('#missing\n');
+    expect(expandTaskMentions('No mentions here', [{ id: 't1', title: 'Parser', status: 'completed' }])).toBe('No mentions here');
   });
 });

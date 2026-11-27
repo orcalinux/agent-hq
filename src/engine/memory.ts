@@ -1,5 +1,6 @@
 import { api } from '@/api/client';
 import { LESSON_KINDS, TEAM_MEMORY, type AgentProfile, type Lesson, type LessonInput, type LessonKind, type LessonSource, type LearningMode, type MissionState } from '@/types';
+import { stripThinking } from './orchestratorParsing';
 
 /** Characters of lessons added to one prompt. */
 export const MEMORY_BUDGET_CHARS = 3500;
@@ -77,10 +78,11 @@ export function reflectionPrompt(args: {
 
 /** Reads lessons from a reflection reply, keeping only valid agents, kinds and lengths. */
 export function parseLessons(text: string, validAgentIds: string[], runId?: string): LessonInput[] {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
+  const clean = stripThinking(text);
+  const start = clean.indexOf('{');
+  const end = clean.lastIndexOf('}');
   if (start < 0 || end <= start) throw new Error('No JSON object in the reply.');
-  const parsed = JSON.parse(text.slice(start, end + 1)) as { lessons?: unknown };
+  const parsed = JSON.parse(clean.slice(start, end + 1)) as { lessons?: unknown };
   if (!Array.isArray(parsed.lessons)) throw new Error('The reply has no "lessons" list.');
   const valid = new Set([...validAgentIds, TEAM_MEMORY]);
   const out: LessonInput[] = [];

@@ -75,15 +75,27 @@ export const ALLOWED_COMMANDS: Array<{ program: string; subcommands?: string[]; 
   { program: 'go', subcommands: ['test', 'vet', 'build'], description: 'Go tests and checks' },
 ];
 
-const SHELL_META = /[;&|`$<>(){}\\\n\r*?!~]/;
+const SHELL_META = /[;&|`$<>(){}\\\n\r*?!~\0]/;
 
 /** Options that make otherwise read-only programs write files or run configured helpers. */
 const BLOCKED_OPTIONS: Record<string, RegExp> = {
-  git: /^(--output|--ext-diff|--textconv|--exec|--upload-pack|--receive-pack|-o$)/,
+  git: /^(--output|--ext-diff|--textconv|--exec|--upload-pack|--receive-pack|-o($|=|\/|\.\.))/,
+  go: /^--?(exec|vettool|o|coverprofile|cpuprofile|memprofile|blockprofile|mutexprofile|trace|outputdir|toolexec)($|=)/,
+  cargo: /^--(target-dir|out-dir)($|=)/,
+  pytest: /^--(basetemp|junitxml|junit-xml|result-log|resultlog|cache-dir)($|=)/,
 };
 
 function escapesWorkspace(value: string): boolean {
-  return value.startsWith('/') || value.split('/').includes('..');
+  if (!value) return false;
+  if (value.startsWith('/') || value.startsWith('\\') || /^[a-zA-Z]:[\\/]/.test(value)) return true;
+  return value.split(/[\\/]/).includes('..');
+}
+
+function argEscapesWorkspace(arg: string): boolean {
+  if (escapesWorkspace(arg)) return true;
+  if (arg.includes('=') && escapesWorkspace(arg.slice(arg.indexOf('=') + 1))) return true;
+  if (/^-[^-]/.test(arg) && escapesWorkspace(arg.slice(2))) return true;
+  return false;
 }
 
 export interface ParsedCommand {
@@ -121,12 +133,12 @@ export function parseAllowedCommand(commandLine: string): ParsedCommand {
   if (rule.modules && !rule.modules.includes(args[1] ?? '')) {
     return { ok: false, error: `Only these "${program} ${args[0]}" modules are allowed: ${rule.modules.join(', ')}.` };
   }
-  const blocked = BLOCKED_OPTIONS[program];
+  const blocked = BLOCKED_OPTIONS[program] ?? (program === 'python' || program === 'python3' ? BLOCKED_OPTIONS[args[1]] : undefined);
   const badOption = blocked && args.find((a) => blocked.test(a));
   if (badOption) {
     return { ok: false, error: `The "${badOption}" option is not allowed in the terminal.` };
   }
-  if (args.some((a) => escapesWorkspace(a) || (a.startsWith('-') && a.includes('=') && escapesWorkspace(a.slice(a.indexOf('=') + 1))))) {
+  if (args.some(argEscapesWorkspace)) {
     return { ok: false, error: 'Arguments must stay inside the workspace (no absolute or parent paths).' };
   }
   if (rule.program === 'npx') return { ok: true, program: rule.program, args: ['--no', '--', ...args] };

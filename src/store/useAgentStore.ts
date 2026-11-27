@@ -54,6 +54,7 @@ import { getSOPStageIndex, simulationController } from '../engine/simulationEngi
 import { safeStorage } from './storage';
 import { reconcileInterrupted } from '../engine/runRecovery';
 import { DEFAULT_RUN_LIMITS, normalizeLimits, type RunLimits } from '../engine/runLimits';
+import { DEFAULT_BUDGET_POLICY, normalizeBudgetPolicy, type BudgetPolicy } from '../engine/budgets';
 
 export function formatClock(ts: number): string {
   const d = new Date(ts);
@@ -98,6 +99,10 @@ export interface AgentStoreState {
   maxParallel: number;
   /** Spending, time and loop limits applied to every run. */
   runLimits: RunLimits;
+  /** Cross-run monthly spending/token budget and automatic quota-reset resume policy. */
+  budgetPolicy: BudgetPolicy;
+  /** Epoch timestamp when a paused quota-limited run is scheduled to auto-resume. */
+  quotaAutoResumeAt: number | null;
   modelScope: ModelScope;
   /** False until the user picks a scope; 0.10.0 saved 'sovereign' as the default for everyone. */
   modelScopeChosen: boolean;
@@ -145,6 +150,8 @@ export interface AgentStoreState {
   setTeamStrategy: (strategy: TeamStrategy) => void;
   setMaxParallel: (limit: number) => void;
   setRunLimits: (patch: Partial<RunLimits>) => void;
+  setBudgetPolicy: (patch: Partial<BudgetPolicy>) => void;
+  setQuotaAutoResumeAt: (at: number | null) => void;
   setModelScope: (scope: ModelScope) => void;
   setComplexityRouting: (on: boolean) => void;
   /** Pin a model for a complexity, or pass '' to go back to the automatic (newest) choice. */
@@ -251,6 +258,8 @@ export const useAgentStore = create<AgentStoreState>()(
         teamStrategy: 'adaptive',
         maxParallel: 3,
         runLimits: DEFAULT_RUN_LIMITS,
+        budgetPolicy: DEFAULT_BUDGET_POLICY,
+        quotaAutoResumeAt: null,
         modelScope: 'any',
         modelScopeChosen: false,
         complexityRouting: true,
@@ -299,6 +308,8 @@ export const useAgentStore = create<AgentStoreState>()(
         setTeamStrategy: (strategy) => set({ teamStrategy: strategy }),
         setMaxParallel: (limit) => set({ maxParallel: Math.max(0, Math.floor(limit)) }),
         setRunLimits: (patch) => set((s) => ({ runLimits: normalizeLimits({ ...s.runLimits, ...patch }) })),
+        setBudgetPolicy: (patch) => set((s) => ({ budgetPolicy: normalizeBudgetPolicy({ ...s.budgetPolicy, ...patch }) })),
+        setQuotaAutoResumeAt: (quotaAutoResumeAt) => set({ quotaAutoResumeAt }),
         setModelScope: (scope) => set({ modelScope: scope, modelScopeChosen: true }),
         setComplexityRouting: (on) => set({ complexityRouting: on }),
         setTierModel: (tier, model) =>
@@ -925,6 +936,7 @@ export const useAgentStore = create<AgentStoreState>()(
         teamStrategy: s.teamStrategy,
         maxParallel: s.maxParallel,
         runLimits: s.runLimits,
+        budgetPolicy: s.budgetPolicy,
         modelScope: s.modelScope,
         modelScopeChosen: s.modelScopeChosen,
         complexityRouting: s.complexityRouting,
@@ -947,6 +959,7 @@ export const useAgentStore = create<AgentStoreState>()(
       onRehydrateStorage: () => (state) => {
         if (!state) return;
         state.runLimits = normalizeLimits(state.runLimits);
+        state.budgetPolicy = normalizeBudgetPolicy(state.budgetPolicy);
         if (!state.modelScopeChosen && state.modelScope !== 'any') setTimeout(() => useAgentStore.setState({ modelScope: 'any' }), 0);
         const preference = state.themePreference ?? 'system';
         state.setThemePreference(preference);

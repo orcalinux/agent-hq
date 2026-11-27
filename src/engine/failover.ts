@@ -26,23 +26,25 @@ export function isQuotaError(message: string): boolean {
 }
 
 export function quotaResetAt(message: string, now = Date.now()): number | null {
-  const relative = message.match(/(?:resets?|retry|try again)\s+(?:after|in)\s+((?:\d+(?:\.\d+)?\s*(?:hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\s*)+)/i);
+  const relative = message.match(/(?:resets?|retry|try again)\s+(?:after|in)\s+((?:\d+(?:\.\d+)?\s*(?:days?|d|hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)(?![a-z])\s*)+)/i);
   if (relative) {
     let duration = 0;
-    for (const part of relative[1].matchAll(/(\d+(?:\.\d+)?)\s*(h(?:ours?|rs?)?|m(?:inutes?|ins?)?|s(?:econds?|ecs?)?)/gi)) {
-      duration += Number(part[1]) * ({ h: 3_600_000, m: 60_000, s: 1000 }[part[2][0].toLowerCase()] ?? 0);
+    for (const part of relative[1].matchAll(/(\d+(?:\.\d+)?)\s*(d(?:ays?)?|h(?:ours?|rs?)?|m(?:inutes?|ins?)?|s(?:econds?|ecs?)?)(?![a-z])/gi)) {
+      duration += Number(part[1]) * ({ d: 86_400_000, h: 3_600_000, m: 60_000, s: 1000 }[part[2][0].toLowerCase()] ?? 0);
     }
     if (duration > 0) return now + duration;
   }
-  const absolute = message.match(/(?:resets?|try again)\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?:\s*\(([^)]+)\))?/i);
+  const absolute = message.match(/(?:resets?|try again)\s+(?:at\s+)?(\d{1,2})(?::(\d{2})\s*(am|pm)?|\s*(am|pm))\b(?:\s*\(([^)]+)\))?/i);
   if (!absolute) return null;
   let hour = Number(absolute[1]);
   const minute = Number(absolute[2] ?? 0);
-  if (minute > 59 || (absolute[3] ? hour < 1 || hour > 12 : hour > 23)) return null;
-  if (absolute[3]) hour = hour % 12 + (absolute[3].toLowerCase() === 'pm' ? 12 : 0);
+  const ampm = absolute[3] ?? absolute[4];
+  const zone = absolute[5];
+  if (minute > 59 || (ampm ? hour < 1 || hour > 12 : hour > 23)) return null;
+  if (ampm) hour = hour % 12 + (ampm.toLowerCase() === 'pm' ? 12 : 0);
   try {
     const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: absolute[4] ?? Intl.DateTimeFormat().resolvedOptions().timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: zone ?? Intl.DateTimeFormat().resolvedOptions().timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
     });
     const localTime = (timestamp: number) => {

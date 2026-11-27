@@ -4,6 +4,18 @@ export interface CompletionAgent {
   title: string;
 }
 
+export interface CompletionTask {
+  id: string;
+  title: string;
+  status?: string;
+}
+
+export interface CompletionModel {
+  ref: string;
+  label: string;
+  providerName?: string;
+}
+
 export interface ChatSuggestion {
   id: string;
   label: string;
@@ -13,7 +25,7 @@ export interface ChatSuggestion {
 }
 
 export interface CompletionToken {
-  kind: 'command' | 'agent' | 'argument';
+  kind: 'command' | 'agent' | 'task' | 'argument';
   start: number;
   end: number;
   query: string;
@@ -33,6 +45,9 @@ export interface ChatCommandSpec {
 export const CHAT_COMMAND_SPECS: ChatCommandSpec[] = [
   { name: 'help', detail: 'List every chat command.' },
   { name: 'status', detail: 'Show mode, approval, team strategy, model and run state.' },
+  { name: 'model', detail: "Show or switch Sovereign's model, or @agent's model.", acceptsText: true },
+  { name: 'btw', detail: 'Ask a quick side question without altering chat history.', acceptsText: true },
+  { name: 'consult', detail: 'Ask a specific team agent (@Agent question) directly.', acceptsText: true },
   { name: 'clear', detail: 'Clear this conversation.' },
   { name: 'new', detail: 'Start a fresh conversation (same as /clear).', aliasOf: 'clear' },
   { name: 'ask', detail: 'Switch to Ask mode, or add text to send it in Ask mode.', acceptsText: true },
@@ -72,27 +87,59 @@ export const CHAT_COMMANDS: ChatSuggestion[] = CHAT_COMMAND_SPECS.map((spec) => 
 export function completionToken(text: string, cursor: number, selectionEnd = cursor): CompletionToken | null {
   if (cursor !== selectionEnd || cursor < 0 || cursor > text.length) return null;
   const prefix = text.slice(0, cursor);
-  const argument = /^\s*\/([a-z]+)[ \t]+([^\s/@]*)$/iu.exec(prefix);
+  const argument = /^\s*\/([a-z]+)[ \t]+([^\s/@#]*)$/iu.exec(prefix);
   if (argument && CHAT_COMMAND_SPECS.some((spec) => spec.name === argument[1].toLowerCase() && spec.args)) {
-    const suffix = /^[^\s/@]*/u.exec(text.slice(cursor))![0];
+    const suffix = /^[^\s/@#]*/u.exec(text.slice(cursor))![0];
     return { kind: 'argument', command: argument[1].toLowerCase(), start: cursor - argument[2].length, end: cursor + suffix.length, query: argument[2] };
   }
-  const match = /(?:^|\s)([/@])([^\s/@]*)$/u.exec(prefix);
+  const modelArg = /^\s*\/model[ \t]+(?:@\S+[ \t]+)?([^\s/@#]*)$/iu.exec(prefix);
+  if (modelArg) {
+    const suffix = /^[^\s/@#]*/u.exec(text.slice(cursor))![0];
+    return { kind: 'argument', command: 'model', start: cursor - modelArg[1].length, end: cursor + suffix.length, query: modelArg[1] };
+  }
+  const match = /(?:^|\s)([/@#])([^\s/@#]*)$/u.exec(prefix);
   if (!match) return null;
   const start = cursor - match[2].length - 1;
   if (match[1] === '/' && text.slice(0, start).trim()) return null;
-  const suffix = /^[^\s/@]*/u.exec(text.slice(cursor))![0];
-  return { kind: match[1] === '/' ? 'command' : 'agent', start, end: cursor + suffix.length, query: match[2] };
+  const suffix = /^[^\s/@#]*/u.exec(text.slice(cursor))![0];
+  const kind = match[1] === '/' ? 'command' : match[1] === '#' ? 'task' : 'agent';
+  return { kind, start, end: cursor + suffix.length, query: match[2] };
 }
 
-export function chatSuggestions(token: CompletionToken, agents: CompletionAgent[]): ChatSuggestion[] {
+export function chatSuggestions(
+  token: CompletionToken,
+  agents: CompletionAgent[],
+  options?: { tasks?: CompletionTask[]; models?: CompletionModel[] },
+): ChatSuggestion[] {
   const query = token.query.toLocaleLowerCase();
   if (token.kind === 'command') return CHAT_COMMANDS.filter((item) => item.label.slice(1).startsWith(query));
   if (token.kind === 'argument') {
+    if (token.command === 'model') {
+      return (options?.models ?? [])
+        .filter((m) => [m.ref, m.label, m.providerName ?? ''].some((v) => v.toLocaleLowerCase().includes(query)))
+        .slice(0, 20)
+        .map((m) => ({
+          id: `model-${m.ref}`,
+          label: m.label,
+          detail: m.providerName ? `${m.providerName} · ${m.ref}` : m.ref,
+          insert: m.ref,
+        }));
+    }
     const spec = CHAT_COMMAND_SPECS.find((item) => item.name === token.command);
     return (spec?.args ?? [])
       .filter((arg) => arg.value.startsWith(query))
       .map((arg) => ({ id: `${token.command}-${arg.value}`, label: arg.value, detail: arg.detail, insert: arg.value }));
+  }
+  if (token.kind === 'task') {
+    return (options?.tasks ?? [])
+      .filter((task) => [task.id, task.title, task.status ?? ''].some((v) => v.toLocaleLowerCase().includes(query)))
+      .sort((a, b) => Number(b.id.toLocaleLowerCase().startsWith(query)) - Number(a.id.toLocaleLowerCase().startsWith(query)) || a.id.localeCompare(b.id))
+      .map((task) => ({
+        id: `task-${task.id}`,
+        label: `#${task.id}`,
+        detail: task.status ? `${task.title} · ${task.status}` : task.title,
+        insert: `#${task.id}`,
+      }));
   }
   return agents
     .filter((agent) => [agent.name, agent.title, agent.id].some((text) => text.toLocaleLowerCase().includes(query)))

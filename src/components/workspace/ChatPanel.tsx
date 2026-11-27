@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowUp, Paperclip, Square, Trash2, X } from 'lucide-rea
 import { useAgentStore, resolveAgentModel } from '@/store/useAgentStore';
 import { useConnectionsStore, isModelAvailable } from '@/store/useConnectionsStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
-import { approveAndRun, resumeRun, routePlanModels, sendToOrchestrator, stopChat, stopRun, updatePlan } from '@/engine/liveOrchestrator';
+import { approveAndRun, cancelQuotaAutoResume, enableQuotaAutoResumeForCurrentMission, resumeRun, routePlanModels, sendToOrchestrator, stopChat, stopRun, updatePlan } from '@/engine/liveOrchestrator';
 import { stripThinking } from '@/engine/orchestratorParsing';
 import type { Complexity, ManagerChatMessage, ModelSource, OrchestratorMode, OrchestratorPlan, PlanTask, TeamStrategy } from '@/types';
 import { Badge, Button, EmptyState, IconButton, Input, ProgressBar, Select, Tabs } from '@/components/ui/primitives';
@@ -15,10 +15,10 @@ import { Markdown } from './Markdown';
 import { ChatInput } from './ChatInput';
 import { parseChatCommand } from '@/engine/chatCommands';
 
-/** Local commands such as /help or /stop work without a model; plain text and commands that carry a prompt do not. */
+/** Local commands such as /help, /stop or /model work without a current model; prompts sent to an agent do need one. */
 function draftNeedsModel(text: string): boolean {
   const command = parseChatCommand(text);
-  return !command || (['ask', 'plan', 'build'].includes(command.name) && Boolean(command.rest));
+  return !command || (['ask', 'plan', 'build', 'btw', 'consult'].includes(command.name) && Boolean(command.rest));
 }
 
 const SOURCE_TONE: Record<ModelSource, 'neutral' | 'accent' | 'success' | 'warning'> = {
@@ -216,9 +216,10 @@ function Message({ message }: { message: ManagerChatMessage }) {
       <div className="flex justify-end">
         <div className="max-w-[88%] rounded-2xl rounded-br-md border border-accent/20 bg-accent-soft px-3.5 py-2 text-[13px] shadow-card">
           <p className="whitespace-pre-wrap break-words">{message.text}</p>
-          {message.attachedFiles?.length ? (
+          {message.sideQuestion || message.attachedFiles?.length ? (
             <div className="mt-1 flex flex-wrap gap-1">
-              {message.attachedFiles.map((f) => <Badge key={f}>{f}</Badge>)}
+              {message.sideQuestion ? <Badge>side question</Badge> : null}
+              {message.attachedFiles?.map((f) => <Badge key={f}>{f}</Badge>)}
             </div>
           ) : null}
         </div>
@@ -230,8 +231,10 @@ function Message({ message }: { message: ManagerChatMessage }) {
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2 text-[11.5px] text-fg-subtle">
-        <span className="font-semibold text-fg-muted">Sovereign</span>
-        {message.mode ? <span>{message.mode}</span> : null}
+        <span className="font-semibold text-fg-muted">{message.speakerName ?? 'Sovereign'}</span>
+        {message.sideQuestion ? <Badge>btw</Badge> : null}
+        {message.speakerId && message.speakerId !== 'agent-manager' && !message.sideQuestion ? <Badge tone="accent">consult</Badge> : null}
+        {message.mode && !message.sideQuestion ? <span>{message.mode}</span> : null}
         {message.model ? <span className="min-w-0 truncate font-mono">{modelLabel(providers, message.model)}</span> : null}
       </div>
       {showText && text ? <Markdown text={text} /> : null}
@@ -317,11 +320,13 @@ export function ChatPanel() {
   const clearChat = useAgentStore((s) => s.clearChat);
   const mission = useAgentStore((s) => s.activeMission);
   const liveRunning = useAgentStore((s) => s.isLiveRunning);
+  const quotaAutoResumeAt = useAgentStore((s) => s.quotaAutoResumeAt);
   const setView = useAgentStore((s) => s.setActiveView);
   const providers = useConnectionsStore((s) => s.providers);
   const loaded = useConnectionsStore((s) => s.loaded);
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const listRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
@@ -331,6 +336,13 @@ export function ChatPanel() {
   const hint = MODES.find((m) => m.id === mode)?.hint;
   const live = mission?.source === 'live' ? mission : null;
   const done = live ? live.tasks.filter((t) => t.status === 'completed').length : 0;
+
+  useEffect(() => {
+    if (!quotaAutoResumeAt || liveRunning || live?.status !== 'paused') return;
+    setNowTick(Date.now());
+    const id = setInterval(() => setNowTick(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, [quotaAutoResumeAt, liveRunning, live?.status]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -380,9 +392,21 @@ export function ChatPanel() {
           </div>
           <ProgressBar value={live.tasks.length ? (done / live.tasks.length) * 100 : 0} />
           {live.providerLimit && live.error ? <p role="status" className="text-[12px] text-warning">{live.error}</p> : null}
-          <div className="flex gap-2">
+          {!liveRunning && live.status === 'paused' && live.providerLimit && quotaAutoResumeAt ? (
+            <p className="text-[11.5px] text-fg-muted">
+              Auto-resuming in {Math.max(0, Math.ceil((quotaAutoResumeAt - nowTick) / 1000))}s ({new Date(quotaAutoResumeAt).toLocaleTimeString()})
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
             {liveRunning ? <Button size="sm" variant="danger" icon={Square} onClick={stopRun}>Stop run</Button> : null}
             {!liveRunning && (live.status === 'cancelled' || live.status === 'failed' || live.status === 'paused') ? <Button size="sm" onClick={() => void resumeRun()}>Resume run</Button> : null}
+            {!liveRunning && live.status === 'paused' && live.providerLimit ? (
+              quotaAutoResumeAt ? (
+                <Button size="sm" variant="ghost" onClick={cancelQuotaAutoResume}>Cancel auto-resume</Button>
+              ) : (
+                <Button size="sm" variant="ghost" onClick={() => enableQuotaAutoResumeForCurrentMission()}>Auto-resume at reset</Button>
+              )
+            ) : null}
             <Button size="sm" variant="ghost" onClick={() => setView('tasks')}>Open tasks</Button>
           </div>
         </div>

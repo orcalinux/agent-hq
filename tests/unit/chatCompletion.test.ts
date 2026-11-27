@@ -58,4 +58,29 @@ describe('chat completion', () => {
       });
     }
   });
+
+  it('completes #task mentions and /model arguments while ignoring URL fragments and mid-word hashes', () => {
+    const tasks = [
+      { id: 't1', title: 'Build CSV parser', status: 'completed' },
+      { id: 't2', title: 'Wire export CLI', status: 'failed' },
+    ];
+    const models = [
+      { ref: 'openai:cli:gpt-6-luna', label: 'GPT-6 Luna', providerName: 'OpenAI CLI' },
+      { ref: 'anthropic:cli:claude-sonnet-5', label: 'Claude Sonnet 5', providerName: 'Claude CLI' },
+    ];
+
+    const taskToken = completionToken('Check why #t', 12)!;
+    expect(taskToken).toMatchObject({ kind: 'task', start: 10, end: 12, query: 't' });
+    expect(chatSuggestions(taskToken, agents, { tasks }).map((s) => s.insert)).toEqual(['#t1', '#t2']);
+    expect(completionToken('https://example.com#section', 27)).toBeNull();
+    expect(completionToken('foo#bar', 7)).toBeNull();
+
+    const modelToken = completionToken('/model gpt', 10)!;
+    expect(modelToken).toMatchObject({ kind: 'argument', command: 'model', query: 'gpt' });
+    expect(chatSuggestions(modelToken, agents, { models }).map((s) => s.insert)).toEqual(['openai:cli:gpt-6-luna']);
+
+    const agentInsideModel = completionToken('/model @Pu', 10)!;
+    expect(agentInsideModel).toMatchObject({ kind: 'agent', query: 'Pu' });
+    expect(completionToken('/model @Pulse sonnet', 20)).toMatchObject({ kind: 'argument', command: 'model', query: 'sonnet' });
+  });
 });

@@ -1,15 +1,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { configDir, loadConfig } from './config';
-import { resolveInside } from './security';
+import { executionTimeoutMs, parseAllowedCommand, resolveInside } from './security';
+import { projectCommand, resolveSpawnTarget } from './execution';
 import { writeFile } from './workspace';
 
 export interface TaskWorkspace {
   kind: 'worktree' | 'proposals';
   path?: string;
   reason?: string;
+}
+
+export interface WorkerVerifyResult {
+  ok: boolean;
+  rejected?: boolean;
+  command: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  durationMs: number;
 }
 
 function git(root: string, args: string[], input?: string): Promise<string> {
@@ -104,4 +115,81 @@ export async function stageTaskWorkspace(
   } finally {
     if (locks.get(top) === operation) locks.delete(top);
   }
+}
+
+export async function verifyTaskWorkspace(
+  workspaceRoot: string,
+  worktreePath: string,
+  command: string,
+  timeoutMs?: unknown,
+  managedRoot = path.join(configDir(), 'workers'),
+): Promise<WorkerVerifyResult> {
+  const parsed = parseAllowedCommand(command);
+  if (!parsed.ok) {
+    return { ok: false, rejected: true, command, stdout: '', stderr: parsed.error ?? 'Command not allowed.', exitCode: null, durationMs: 0 };
+  }
+  if (!worktreePath || !fs.existsSync(managedRoot)) {
+    throw new Error('Worktree path is invalid or workers directory does not exist.');
+  }
+  const realManaged = fs.realpathSync.native(managedRoot);
+  let realWorktree: string;
+  try {
+    realWorktree = fs.realpathSync.native(worktreePath);
+  } catch {
+    throw new Error('Worktree directory does not exist.');
+  }
+  const rel = path.relative(realManaged, realWorktree);
+  if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel) || rel.includes(path.sep)) {
+    throw new Error('Verification is allowed only inside an isolated worker directory.');
+  }
+  if (!fs.statSync(realWorktree).isDirectory()) {
+    throw new Error('Worktree path must be a directory.');
+  }
+  const sidecarPath = `${realWorktree}.json`;
+  if (!fs.existsSync(sidecarPath)) {
+    throw new Error('Worktree metadata file is missing.');
+  }
+  let top: string;
+  try {
+    top = fs.realpathSync.native((await git(workspaceRoot, ['rev-parse', '--show-toplevel'])).trim());
+  } catch {
+    throw new Error('Workspace root is not a Git repository.');
+  }
+  const meta = JSON.parse(fs.readFileSync(sidecarPath, 'utf8')) as { root?: unknown };
+  if (typeof meta.root !== 'string' || fs.realpathSync.native(meta.root) !== top) {
+    throw new Error('Worktree does not belong to the active Git repository.');
+  }
+  const start = Date.now();
+  const execution = projectCommand(parsed.program!, workspaceRoot, { ...process.env, FORCE_COLOR: '0', CI: '1' });
+  const target = resolveSpawnTarget(execution.program, parsed.args!, execution.env);
+  const limit = 512 * 1024;
+  const durationLimit = executionTimeoutMs(timeoutMs);
+  return new Promise<WorkerVerifyResult>((resolve) => {
+    const child = spawn(target.program, target.args, { cwd: realWorktree, env: execution.env, shell: false });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const finish = (res: WorkerVerifyResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(res);
+    };
+    const timer = setTimeout(() => child.kill('SIGTERM'), durationLimit);
+    child.stdout.on('data', (d) => { stdout = (stdout + d).slice(-limit); });
+    child.stderr.on('data', (d) => { stderr = (stderr + d).slice(-limit); });
+    child.on('error', (err) => {
+      finish({ ok: false, command, stdout, stderr: err.message, exitCode: null, durationMs: Date.now() - start });
+    });
+    child.on('close', (code, signal) => {
+      finish({
+        ok: code === 0,
+        command,
+        stdout,
+        stderr: signal ? `${stderr}\n[terminated: ${signal}]` : stderr,
+        exitCode: code,
+        durationMs: Date.now() - start,
+      });
+    });
+  });
 }

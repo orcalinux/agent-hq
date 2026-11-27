@@ -204,7 +204,11 @@ export interface QaVerdict {
   issues: Array<{ taskId: string; problem: string; path?: string; evidence?: string }>;
 }
 
-export function parseQaVerdict(text: string, taskIds: string[]): QaVerdict {
+export function parseQaVerdict(
+  text: string,
+  taskIds: string[],
+  tasks?: Array<{ id: string; title: string; description: string }>,
+): QaVerdict {
   const raw = extractJson(text) as { verdict?: unknown; summary?: unknown; issues?: unknown };
   const verdict = String(raw.verdict ?? '').toLowerCase();
   if (verdict !== 'approve' && verdict !== 'reject') throw new Error('QA verdict must be "approve" or "reject".');
@@ -218,7 +222,17 @@ export function parseQaVerdict(text: string, taskIds: string[]): QaVerdict {
         }))
         .filter((i) => i.problem)
     : [];
-  const validIssues = issues.map((i) => ({ ...i, taskId: taskIds.includes(i.taskId) ? i.taskId : '' }));
+  const validIssues = issues.map((i) => {
+    if (taskIds.includes(i.taskId)) return i;
+    const rawId = i.taskId.trim();
+    if (rawId && tasks?.length) {
+      const escaped = rawId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pattern = new RegExp(`(?:^|[^A-Za-z0-9_])${escaped}(?=$|[^A-Za-z0-9_])`, 'i');
+      const matched = tasks.find((t) => pattern.test(`${t.title}\n${t.description}`));
+      if (matched) return { ...i, taskId: matched.id };
+    }
+    return { ...i, taskId: '' };
+  });
   return { verdict, summary: String(raw.summary ?? ''), issues: validIssues };
 }
 
@@ -237,6 +251,15 @@ export function parseMentorVerdict(text: string): { verdict: 'approve' | 'revise
 
 export function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}\n…[truncated ${text.length - max} chars]`;
+}
+
+/** Replaces fenced path=... file bodies with compact summaries to avoid duplicating file contents in downstream task/QA context. */
+export function compactFileOutputs(text: string, maxChars: number): string {
+  const compacted = stripThinking(text).replace(FILE_BLOCK, (_match, rawPath: string, body: string) => {
+    const lines = body ? body.split('\n').length : 0;
+    return `[wrote path=${rawPath} (${lines} lines) — see current file contents or project-call]`;
+  });
+  return truncate(compacted, maxChars);
 }
 
 /** A mentor's revision replaces the junior's output only if it does not drop the files the junior delivered. */

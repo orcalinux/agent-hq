@@ -5,12 +5,16 @@ export function evidencedQaIssues(verdict: QaVerdict, changes: ProposedFileChang
   const latest = new Map<string, ProposedFileChange>();
   for (const change of changes) if (change.status === 'applied') latest.set(change.path, change);
   const current = new Map(inspected.map((file) => [file.path, file.content]));
-  return verdict.issues.filter((issue) => {
+  return verdict.issues.flatMap((issue) => {
     const change = issue.path ? latest.get(issue.path) : undefined;
     const content = issue.path ? current.get(issue.path) ?? change?.content : undefined;
-    return content !== undefined && !!issue.taskId && (current.has(issue.path!) || change?.taskId === issue.taskId || change?.sourceTaskIds?.includes(issue.taskId))
-      && !!issue.evidence?.trim() && issue.evidence.trim().length >= 12
-      && content.includes(issue.evidence.trim());
+    const evidence = issue.evidence?.trim();
+    if (content === undefined || !evidence || evidence.length < 12 || !content.includes(evidence)) return [];
+    if (issue.taskId) {
+      return current.has(issue.path!) || change?.taskId === issue.taskId || change?.sourceTaskIds?.includes(issue.taskId) ? [issue] : [];
+    }
+    if (change) return [{ ...issue, taskId: change.taskId }];
+    return current.has(issue.path!) ? [issue] : [];
   });
 }
 
@@ -57,6 +61,18 @@ export function runCreatedTests(changes: ProposedFileChange[]): string[] {
   const created = new Set<string>();
   for (const change of changes) if (change.previousContent === null && TEST_PATH.test(change.path)) created.add(change.path);
   return [...created].sort();
+}
+
+/** Pre-existing test files modified during this run (excluding newly created test files). */
+export function runModifiedTests(changes: ProposedFileChange[]): string[] {
+  const created = new Set(runCreatedTests(changes));
+  const modified = new Set<string>();
+  for (const change of changes) {
+    if (!created.has(change.path) && change.previousContent !== null && change.previousContent !== undefined && TEST_PATH.test(change.path)) {
+      modified.add(change.path);
+    }
+  }
+  return [...modified].sort();
 }
 
 export function checkpointProposals(changes: ProposedFileChange[]): ProposedFileChange[] {
@@ -131,20 +147,19 @@ interface TaskLink {
 function ancestorsOf(tasks: TaskLink[]): Map<string, Set<string>> {
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const memo = new Map<string, Set<string>>();
-  const visit = (id: string, seen: Set<string>): Set<string> => {
-    const known = memo.get(id);
-    if (known) return known;
+  for (const t of tasks) {
     const out = new Set<string>();
-    if (seen.has(id)) return out;
-    seen.add(id);
-    for (const dep of byId.get(id)?.dependsOn ?? []) {
+    const queue = [...(t.dependsOn ?? [])];
+    for (let i = 0; i < queue.length; i++) {
+      const dep = queue[i];
+      if (out.has(dep)) continue;
       out.add(dep);
-      for (const a of visit(dep, seen)) out.add(a);
+      for (const next of byId.get(dep)?.dependsOn ?? []) {
+        if (!out.has(next)) queue.push(next);
+      }
     }
-    memo.set(id, out);
-    return out;
-  };
-  for (const t of tasks) visit(t.id, new Set());
+    memo.set(t.id, out);
+  }
   return memo;
 }
 
@@ -199,6 +214,17 @@ export function reworkClosure<T extends TaskLink>(targets: T[], tasks: T[]): T[]
   const chosen = new Map(targets.map((t) => [t.id, t]));
   for (const task of tasks) if (targets.some((target) => ancestors.get(task.id)?.has(target.id))) chosen.set(task.id, task);
   return tasks.filter((t) => chosen.has(t.id));
+}
+
+/**
+ * Selects only the tasks directly flagged by QA when specific taskIds are cited,
+ * falling back to all workTasks only when no flagged id matches any work task.
+ */
+export function selectQaReworkTargets<T extends TaskLink>(flaggedIds: Iterable<string>, workTasks: T[]): T[] {
+  const flagged = new Set([...flaggedIds].filter(Boolean));
+  if (!flagged.size) return workTasks;
+  const selected = workTasks.filter((t) => flagged.has(t.id));
+  return selected.length ? selected : workTasks;
 }
 
 /** A change can be undone when it was applied and its previous state is known. */

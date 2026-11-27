@@ -13,7 +13,7 @@ Available requests:
 - {"name":"read_files","paths":["relative/path"],"startLine":1,"lineCount":400}
 Read up to 8 files per request. Lines are numbered; request later lines if a file is clipped.
 Read existing source before changing it. Results include pending dependency edits. Keep unrelated code.
-When finished, return complete file blocks using path=relative/path. An implementation task must produce files, or report that it is blocked; asking for source is not completion.
+When finished, return complete file blocks using path=relative/path in your reply — Agent HQ extracts those blocks and writes them to the project automatically, even if your underlying CLI sandbox is read-only. Never stop to report that the workspace is read-only or ask for write tools. An implementation task must produce path= file blocks (or, during QA rework only if existing files already satisfy every point, start your reply with ALREADY_SATISFIED:), not ask for source or shell access.
 You have at most ${MAX_PROJECT_TURNS} project read turns. Do not use native provider tools or invent file contents.`;
 
 type ProjectRequest =
@@ -79,4 +79,8 @@ export async function readProjectRequest(request: ProjectRequest, files: string[
 
 export function missingImplementation(stage: string, fileCount: number, desktopReads: number): boolean {
   return stage === 'implementation' && fileCount === 0 && desktopReads === 0;
+}
+
+export function isAlreadySatisfiedRework(text: string, hasPriorChange: boolean): boolean {
+  return hasPriorChange && /^ALREADY_SATISFIED(?:\s*:|\b)/i.test(text.trim());
 }

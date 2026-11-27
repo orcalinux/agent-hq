@@ -177,12 +177,20 @@ export function streamTerminal(req: IncomingMessage, res: ServerResponse, id: un
     'X-Accel-Buffering': 'no',
   });
   const emit: Listener = (event, data) => {
+    if (res.writableEnded || res.destroyed) return;
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
   if (session.backlog) emit('replay', session.backlog);
   if (session.exit) emit('exit', String(session.exit.code ?? ''));
   session.listeners.add(emit);
-  const keepAlive = setInterval(() => res.write(': ping\n\n'), 20000);
+  const keepAlive = setInterval(() => {
+    if (res.writableEnded || res.destroyed) {
+      clearInterval(keepAlive);
+      session.listeners.delete(emit);
+      return;
+    }
+    res.write(': ping\n\n');
+  }, 20000);
   req.on('close', () => {
     clearInterval(keepAlive);
     session.listeners.delete(emit);

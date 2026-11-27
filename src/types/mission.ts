@@ -399,6 +399,9 @@ export interface ManagerChatMessage {
   attachedFiles?: string[];
   plan?: OrchestratorPlan;
   planError?: string;
+  sideQuestion?: boolean;
+  speakerId?: string;
+  speakerName?: string;
 }
 
 export interface WorkspaceTreeEntry {

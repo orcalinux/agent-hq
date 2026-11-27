@@ -11,6 +11,18 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.25.0] — 2026-11-27
+
+### Added
+- **Chat commands and task mentions**: `/model` inspects or switches Sovereign's or any `@agent`'s model with connected-model fuzzy matching and autocomplete; `/btw` asks a quick side question without mutating Sovereign's main conversation history; `/consult @Agent` sends a single-turn specialist question backed by read-only `project-call` inspection; `#task` mentions complete active mission tasks and expand structured task metadata (`title`, `status`, `description`, `qaFeedback`, `error`) into prompts.
+- **Persistent monthly budgets & quota auto-resume**: Calendar-month spend and token caps in **Settings → Run limits** persist across runs with 80% alerts and 100% stops. Quota-paused runs support an opt-in automatic countdown scheduler that resumes once a provider's reset window arrives.
+- **Per-worker Git worktree verification**: `POST /api/workers/verify` runs allow-listed checks inside each task's isolated Git worktree and gives coding tasks one bounded self-repair turn when failures land inside their own changed files before integration.
+- **Targeted QA rework & multi-stack comparison harnesses**: Targeted rework limits QA rejection loops to failing tasks, `runModifiedTests` keeps agent-modified test files verified alongside new tests during integration repair, and multi-competitor harnesses (`compare-agent-teams.mjs`, `compare-metagpt.mjs`, `compare-openhands.mjs`, `compare-paperclip.mjs`) document Tier 3 Python (`tabsplit`) and held-out TypeScript/Node (`pulsequeue`) benchmark results.
+
+### Fixed
+- Tightened `runQa` specification-boundary rules and `project-call` read-only guidance, compacted bulky tool transcripts and repeated file reads, and added cross-platform Windows `npm`/`npx` CLI resolution (`resolveSpawnTarget`) plus `core.autocrlf=false` and `realpathSync.native` handling for worktree verification.
+- Hardened workspace security allow-list flags, atomic lesson persistence, failover reset-time parsing, scheduler transitive dependency blocking, and terminal SSE stream close checks.
+
 ## [0.24.8] — 2026-11-24
 
 ### Fixed

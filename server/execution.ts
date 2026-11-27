@@ -21,3 +21,27 @@ export function projectCommand(program: string, root: string, env: NodeJS.Proces
   }
   return { program, env };
 }
+
+/**
+ * Resolves `npm`/`npx` on Windows to Node executing the bundled CLI script so
+ * `spawn(..., { shell: false })` works without invoking `.cmd` shims.
+ */
+export function resolveSpawnTarget(
+  program: string,
+  args: string[],
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  execPath = process.execPath,
+): { program: string; args: string[] } {
+  if (platform !== 'win32' || (program !== 'npm' && program !== 'npx')) {
+    return { program, args };
+  }
+  const script = `${program}-cli.js`;
+  const pathEntries = (env.PATH ?? env.Path ?? '').split(';').filter(Boolean);
+  const dirs = [path.dirname(execPath), path.resolve(path.dirname(execPath), '..'), ...pathEntries];
+  for (const dir of dirs) {
+    const cliJs = path.join(dir, 'node_modules', 'npm', 'bin', script);
+    if (fs.existsSync(cliJs)) return { program: execPath, args: [cliJs, ...args] };
+  }
+  return { program, args };
+}

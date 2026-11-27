@@ -110,7 +110,7 @@ export function loadLessons(root: string): Lesson[] {
 
 function writeAtomic(file: string, content: string) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
   fs.writeFileSync(tmp, content, 'utf8');
   fs.renameSync(tmp, file);
 }
@@ -408,12 +408,15 @@ export async function memoryContext(
   }
   if (chosen.length) {
     const ids = new Set(chosen.map((l) => l.id));
-    for (const l of all) {
+    const latest = loadLessons(root);
+    let touched = false;
+    for (const l of latest) {
       if (!ids.has(l.id)) continue;
       l.uses += 1;
       l.lastUsedAt = now;
+      touched = true;
     }
-    saveLessons(root, all);
+    if (touched) saveLessons(root, latest);
   }
   return { lessons: chosen, total: candidates.length, mode: result.mode, ...(result.embeddingError ? { embeddingError: result.embeddingError } : {}) };
 }

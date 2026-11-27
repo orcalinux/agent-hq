@@ -17,6 +17,7 @@ import {
 } from '@/types';
 import {
   adoptMentorRevision,
+  compactFileOutputs,
   extractFileBlocks,
   parseMentorVerdict,
   parsePlan,
@@ -28,7 +29,7 @@ import {
 import { EXHAUSTED_COOLDOWN_MS, isProviderExhausted, isQuotaError, pickFallbackModel, quotaResetAt } from './failover';
 import { parallelLimit, planNextWave } from './scheduler';
 import { selectRelevantFiles } from './taskContext';
-import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, evidencedQaIssues, finalFileDigest, markConflicts, qaIssueKey, replaceMergedProposals, reworkClosure, runCreatedTests, selectAutoApply, verificationCouldNotRun } from './approval';
+import { autoAppliesChanges, autoStartsRuns, blameTasks, checkpointProposals, evidencedQaIssues, finalFileDigest, markConflicts, qaIssueKey, replaceMergedProposals, reworkClosure, runCreatedTests, runModifiedTests, selectAutoApply, selectQaReworkTargets, verificationCouldNotRun } from './approval';
 import { providerOfRef } from '@/types';
 import { useMemoryStore } from '@/store/useMemoryStore';
 import { juniorsOf, pickModel, suggestMentor } from './team';
@@ -36,14 +37,15 @@ import { COMPLEXITIES, COMPLEXITY_HINT, assignAgentModels, assignPlanModels, fal
 import { BALANCES, activeMagpieGroups, isLowQuota, useMagpieStore } from '@/store/useMagpieStore';
 import { useModelWatchStore } from '@/store/useModelWatchStore';
 import { DESKTOP_INTERRUPTED, shouldAutoResume } from './runRecovery';
-import { interpretChatCommand, parseChatCommand } from './chatCommands';
+import { interpretChatCommand, expandTaskMentions, parseChatCommand } from './chatCommands';
 import { abortableSleep, isTransientError, MAX_TRANSIENT_RETRIES, retryDelayMs } from './retry';
 import type { ViewMode } from '@/types';
 import { checkLimits, describeLimit, WARN_RATIO, type LimitKind, type LimitReading } from './runLimits';
+import { checkBudgetPolicy, computeMonthlyUsage, DEFAULT_BUDGET_POLICY, describeBudget, type BudgetKind } from './budgets';
 import { feedbackLessons, isMemoryPath, memoryBrief, noteFeedback, parseLessons, parseRemember, REFLECTION_INSTRUCTIONS, reflectionPrompt, shouldReflect, takeJournal } from './memory';
 import { compactToolHistory, computerInstructions, describeComputerAction, formatComputerResult, isComputerAction, MAX_COMPUTER_STEPS, parseComputerRequest } from './computerPolicy';
 import type { ComputerTool } from '@/types/computerUse';
-import { MAX_PROJECT_TURNS, PROJECT_TOOL_INSTRUCTIONS, missingImplementation, parseProjectRequest, readProjectRequest } from './projectTools';
+import { MAX_PROJECT_TURNS, PROJECT_TOOL_INSTRUCTIONS, isAlreadySatisfiedRework, missingImplementation, parseProjectRequest, readProjectRequest } from './projectTools';
 import { usageCounts } from '@/utils/usage';
 
 const MAX_QA_LOOPS = 2;
@@ -54,7 +56,7 @@ const MAX_NEW_DEFECT_ROUNDS = 2;
 /** Rounds in which one integrator fixes the team's combined files against the real verification output. */
 const MAX_REPAIR_ROUNDS = 3;
 const QA_TASK_ID = 'qa-review';
-const TASK_FILE_CONTEXT_CHARS = 60_000;
+const TASK_FILE_CONTEXT_CHARS = 36_000;
 
 /**
  * Agent HQ talks to models as plain text. Gateways and CLIs that wrap an agent (Magpie with a Claude Code or
@@ -73,6 +75,7 @@ interface RunGuard {
   callsByAgent: Record<string, number>;
   costByAgent: Record<string, number>;
   warned: Set<LimitKind>;
+  warnedBudgets: Set<BudgetKind>;
   stopReason: string | null;
   providerLimit?: MissionState['providerLimit'];
   timers: Array<ReturnType<typeof setTimeout>>;
@@ -96,7 +99,7 @@ function limitText(r: LimitReading): string {
   return describeLimit(r, r.agentId ? agentsState().agents[r.agentId]?.name : undefined);
 }
 
-/** Checks the run's limits; warns once per limit at 80% and stops the whole run at 100%. */
+/** Checks the run's per-run limits and cross-run monthly budgets; warns at 80% and stops the whole run at 100%. */
 function enforceLimits(guard: RunGuard) {
   if (guard.stopReason) throw limitStopError(guard.stopReason);
   const { stop, warnings } = checkLimits(agentsState().runLimits, {
@@ -114,6 +117,21 @@ function enforceLimits(guard: RunGuard) {
   }
   if (stop) {
     stopForLimit(guard, limitText(stop));
+    throw limitStopError(guard.stopReason!);
+  }
+  const monthlyUsage = computeMonthlyUsage(agentsState().runHistory ?? [], {
+    id: runId,
+    costUSD: runTotals.costUSD,
+    tokens: runTotals.promptTokens + runTotals.completionTokens + runTotals.otherTokens,
+  });
+  const budgetCheck = checkBudgetPolicy(agentsState().budgetPolicy ?? DEFAULT_BUDGET_POLICY, monthlyUsage);
+  for (const w of budgetCheck.warnings) {
+    if (guard.warnedBudgets.has(w.kind)) continue;
+    guard.warnedBudgets.add(w.kind);
+    agentsState().logActivity({ kind: 'run', level: 'warn', runId, text: `Monthly budget at ${Math.round(w.ratio * 100)}%: ${describeBudget(w)}` });
+  }
+  if (budgetCheck.stop) {
+    stopForLimit(guard, describeBudget(budgetCheck.stop));
     throw limitStopError(guard.stopReason!);
   }
 }
@@ -324,7 +342,7 @@ async function taskFileContext(task: KanbanTaskCard, mission: MissionState): Pro
   for (const change of changes) if (change.status === 'pending' || change.status === 'applied') files.add(change.path);
   const references = await fileContents((mission.contextFiles ?? []).filter((path) => files.has(path)), 30_000);
   const dependencyOutputs = mission.tasks.filter((other) => task.dependsOn?.includes(other.id)).map((other) => stripThinking(other.output ?? '')).join('\n');
-  const mentioned = selectRelevantFiles(`${task.title}\n${task.description}\n${task.qaFeedback ?? ''}\n${mission.prompt}\n${dependencyOutputs}\n${references.join('\n')}`, [...files], 16);
+  const mentioned = selectRelevantFiles(`${task.title}\n${task.description}\n${task.qaFeedback ?? ''}\n${mission.prompt}\n${dependencyOutputs}\n${references.join('\n')}`, [...files], 8);
   const previous = changes.filter((change) => change.taskId === task.id && change.status !== 'discarded').map((change) => change.path);
   const paths = [...new Set([...previous, ...mentioned, ...(mission.contextFiles ?? []).filter((p) => files.has(p))])];
   if (!paths.length) return '';
@@ -337,12 +355,12 @@ async function taskFileContext(task: KanbanTaskCard, mission: MissionState): Pro
   return `\n\nCurrent contents of relevant files (edit these rather than rewriting from scratch; keep everything you do not intend to change):\n${parts.join('\n\n')}${earlier}`;
 }
 
-async function projectToolReply(parsed: NonNullable<ReturnType<typeof parseProjectRequest>>): Promise<string> {
+export async function projectToolReply(parsed: NonNullable<ReturnType<typeof parseProjectRequest>>): Promise<string> {
   if ('error' in parsed) return parsed.error;
-  const current = currentMission()!;
-  const changes = current.proposedChanges ?? [];
+  const current = currentMission();
+  const changes = current?.proposedChanges ?? [];
   const overrides = new Map<string, string>();
-  for (const change of [...changes.filter((change) => change.status === 'applied'), ...selectAutoApply(changes, current.tasks).apply]) overrides.set(change.path, change.content);
+  for (const change of [...changes.filter((change) => change.status === 'applied'), ...selectAutoApply(changes, current?.tasks ?? []).apply]) overrides.set(change.path, change.content);
   const workspace = useWorkspaceStore.getState();
   const files = [...new Set([...workspace.tree.filter((entry) => entry.type === 'file').map((entry) => entry.path), ...overrides.keys()])].filter((path) => !isMemoryPath(path));
   return readProjectRequest(parsed.request, files, async (path) => overrides.get(path) ?? workspace.buffers[path]?.content ?? (await api.readFile(path)).content);
@@ -432,7 +450,7 @@ function planInstructions(strategy: TeamStrategy, byComplexity: boolean): string
   return `Mode: PLAN. Produce an execution plan. Respond with ONLY a JSON object (no prose outside it) of the form:
 {"summary": "one paragraph", "newAgents": [{"key": "mobile", "name": "Orion", "role": "frontend", "title": "Mobile Engineer", "specialty": "<any project domain, such as IoT & Embedded>", "focus": "<domain instructions and verification requirements>", "systemPrompt": "...", "model": "<exact model ref>", "reason": "...", "junior": false, "mentor": "<for juniors: roster agent id or new senior key>"}], "tasks": [{"id": "t1", "title": "...", "description": "concrete instructions", "stage": "briefing|architecture|implementation", "agentId": "<roster agent id or new agent key>", "complexity": "simple|standard|complex", "model": "<optional model ref for this task>", "modelReason": "<one line, only when you set model>", "priority": "critical|high|medium|low", "dependsOn": ["t0"]}]}
 The role field is a workflow routing category only. Specialty is unrestricted: choose the expertise required by the project, including IoT, embedded firmware, electronics, robotics or any other domain.
-Rules: as many tasks as the work needs, each one concrete and independently checkable. Account for every numbered issue, explicit requirement and affected entry point in the request and attached files. Before returning the plan, check that each requirement has an implementing task and a regression check; include the requirement reference and expected behavior in that task's description. Shared library changes alone do not complete requested CLI, API, import or export behavior. Split work so tasks that depend on each other say so in dependsOn (outputs of dependencies are handed to the dependent task). Juniors only get small, well-scoped tasks; their mentor reviews them automatically. Do not add a QA task: QA review by Sentinel runs automatically. Dependencies must reference earlier task ids.
+Rules: as many tasks as the work needs, each one concrete and independently checkable. When planning changes in an existing project, use project-call first to inspect relevant entry points, storage/data modules, and existing tests so task descriptions reflect actual interfaces, error contracts, and invariants rather than assumptions. Account for every numbered issue, explicit requirement and affected entry point in the request and attached files. Before returning the plan, check that each requirement has an implementing task and a regression check; include the requirement reference and expected behavior in that task's description. Shared library changes alone do not complete requested CLI, API, import or export behavior. Split work so tasks that depend on each other say so in dependsOn (outputs of dependencies are handed to the dependent task). Juniors only get small, well-scoped tasks; their mentor reviews them automatically. Do not add a QA task: QA review by Sentinel runs automatically. Dependencies must reference earlier task ids.
 ${
   byComplexity
     ? 'Model choice: rate EVERY task\'s "complexity" honestly (simple, standard or complex). By default leave "model" out: the task then runs on the best model for its complexity across all connected providers, so simple work does not spend the strongest model. Set "model" yourself when another provider\'s model clearly fits a task better (for example a model known to be strong at that language or domain, a long context window for large files, or spreading parallel work over providers to avoid rate limits), and only with a ref from the available models list, and say why in "modelReason".'
@@ -445,6 +463,119 @@ ${teamRule}`;
 
 export function stopChat() {
   chatController?.abort();
+}
+
+function mentionableTasks() {
+  const store = agentsState();
+  return (currentMission()?.tasks ?? []).map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    description: t.description,
+    assignedAgentId: t.assignedAgentId,
+    agentName: store.agents[t.assignedAgentId]?.name,
+    error: t.error,
+    qaFeedback: t.qaFeedback,
+  }));
+}
+
+async function runSideChat(args: {
+  agent: AgentProfile;
+  prompt: string;
+  userText: string;
+  attachments: string[];
+  sideQuestion: boolean;
+  speakerId?: string;
+  speakerName?: string;
+}) {
+  const store = agentsState();
+  const { agent, prompt, userText, attachments, sideQuestion } = args;
+  store.appendChatMessage({
+    sender: 'user',
+    text: userText,
+    mode: 'ask',
+    sideQuestion,
+    attachedFiles: attachments.length ? attachments : undefined,
+  });
+  const model = resolveAgentModel(agent, store.roleDefaults);
+  const replyId = store.appendChatMessage({
+    sender: 'manager',
+    text: '',
+    mode: 'ask',
+    model,
+    streaming: true,
+    sideQuestion,
+    speakerId: args.speakerId ?? agent.id,
+    speakerName: args.speakerName ?? agent.name,
+  });
+
+  chatController?.abort();
+  const controller = new AbortController();
+  chatController = controller;
+
+  const expandedPrompt = expandTaskMentions(prompt, mentionableTasks());
+  const content = `${expandedPrompt}${await attachmentContext(attachments)}`;
+  const lessons = await memoryBrief(agent.id, prompt);
+  const specialtyNote = agent.specialty ? `\nSpecialty: ${agent.specialty}` : '';
+  const focusNote = agent.focus ? `\nDomain focus: ${agent.focus}` : '';
+  const roleLabel = agent.id === 'agent-manager'
+    ? ASK_INSTRUCTIONS
+    : `Mode: ASK (specialist consultation as ${agent.name}, ${agent.title}). Answer directly from your expertise and inspect project files with project-call if needed. Do not claim to have edited files.`;
+  const system = `${agent.systemPrompt}${specialtyNote}${focusNote}${lessons}\n\n${roleLabel}\n\nTeam roster (id | name | title):\n${rosterDescription()}\n\n${projectContext()}`;
+  const update = throttle((full) => {
+    const t = stripThinking(full).trimStart();
+    if (!t.startsWith('```project-call') && !'```project-call'.startsWith(t)) {
+      agentsState().updateChatMessage(replyId, { text: full });
+    }
+  }, 120);
+
+  try {
+    const sideMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [{ role: 'user', content }];
+    const note = sideQuestion ? 'Side question (/btw)' : `Consult @${agent.name}`;
+    let result = await callAgent(agent, {
+      system,
+      messages: sideMessages,
+      signal: controller.signal,
+      onDelta: update,
+      note,
+      toolNotice: PROJECT_TOOL_INSTRUCTIONS,
+    });
+    let totalUsage = result.usage;
+    let totalLatencyMs = result.latencyMs;
+    for (let turn = 0; turn < 4; turn++) {
+      const parsed = parseProjectRequest(result.text);
+      if (!parsed) break;
+      sideMessages.push({ role: 'assistant', content: result.text }, { role: 'user', content: await projectToolReply(parsed) });
+      compactToolHistory(sideMessages, 4);
+      result = await callAgent(agent, {
+        system,
+        messages: sideMessages,
+        signal: controller.signal,
+        onDelta: update,
+        note,
+        toolNotice: PROJECT_TOOL_INSTRUCTIONS,
+      });
+      totalUsage = mergeChatUsage(totalUsage, result.usage);
+      totalLatencyMs += result.latencyMs;
+    }
+    update.flush();
+    agentsState().updateChatMessage(replyId, {
+      text: result.text,
+      streaming: false,
+      usage: totalUsage,
+      latencyMs: totalLatencyMs,
+      model: result.model,
+    });
+  } catch (err) {
+    update.flush();
+    agentsState().updateChatMessage(replyId, (m) => ({
+      streaming: false,
+      error: isAbort(err) ? 'Stopped.' : (err as Error).message,
+      text: m.text,
+    }));
+  } finally {
+    if (chatController === controller) chatController = null;
+  }
 }
 
 export async function sendToOrchestrator(text: string, attachments: string[] = []) {
@@ -460,12 +591,16 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
       strategy: store.teamStrategy,
       running: store.isLiveRunning,
       sovereignModel: resolveAgentModel(sovereign, store.roleDefaults) ?? '',
+      agents: store.agents,
+      availableModels: availableModels().map((m) => ({ ref: m.ref, label: m.name })),
     });
-    if (command.name !== 'clear' && command.name !== 'new') store.appendChatMessage({ sender: 'user', text, mode });
+    const handledBySideChat = result.actions.some((a) => a.type === 'btw' || a.type === 'consult');
+    if (command.name !== 'clear' && command.name !== 'new' && !handledBySideChat) store.appendChatMessage({ sender: 'user', text, mode });
     for (const action of result.actions) {
       if (action.type === 'mode') store.setOrchestratorMode(action.mode);
       else if (action.type === 'approval') store.setApprovalMode(action.mode);
       else if (action.type === 'strategy') store.setTeamStrategy(action.strategy);
+      else if (action.type === 'model') store.reassignModel(action.agentId, action.model);
       else if (action.type === 'clear') {
         chatController?.abort();
         store.clearChat();
@@ -474,6 +609,24 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
         stopRun();
       } else if (action.type === 'resume') void resumeRun();
       else if (action.type === 'open') store.setActiveView(action.view as ViewMode);
+      else if (action.type === 'btw') {
+        await runSideChat({ agent: sovereign, prompt: action.prompt, userText: text, attachments, sideQuestion: true });
+        return;
+      } else if (action.type === 'consult') {
+        const specialist = store.agents[action.agentId];
+        if (specialist) {
+          await runSideChat({
+            agent: specialist,
+            prompt: action.prompt,
+            userText: text,
+            attachments,
+            sideQuestion: false,
+            speakerId: specialist.id,
+            speakerName: specialist.name,
+          });
+          return;
+        }
+      }
     }
     const message = result.error ?? result.reply;
     if (message) agentsState().appendChatMessage({ sender: 'system', text: message });
@@ -499,9 +652,16 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
   }
 
   const history = store.managerChatMessages
-    .filter((m) => (m.sender === 'user' || m.sender === 'manager') && !m.error && !m.streaming && m.text)
+    .filter((m) => (m.sender === 'user' || m.sender === 'manager') && !m.error && !m.streaming && m.text && !m.sideQuestion)
     .slice(-16)
-    .map((m) => ({ role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant', content: m.plan ? `[Proposed plan] ${m.plan.summary}` : m.text }));
+    .map((m) => ({
+      role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.plan
+        ? `[Proposed plan] ${m.plan.summary}`
+        : m.sender === 'manager' && m.speakerName && m.speakerId && m.speakerId !== 'agent-manager'
+          ? `[${m.speakerName}]: ${m.text}`
+          : m.text,
+    }));
 
   store.appendChatMessage({ sender: 'user', text, mode, attachedFiles: attachments.length ? attachments : undefined });
   const model = resolveAgentModel(sovereign, store.roleDefaults);
@@ -512,25 +672,53 @@ export async function sendToOrchestrator(text: string, attachments: string[] = [
   chatController = controller;
 
   if (mode !== 'ask' && useMagpieStore.getState().enabled) await useMagpieStore.getState().loadQuotas(true);
-  const content = `${text}${await attachmentContext(attachments)}`;
+  const content = `${expandTaskMentions(text, mentionableTasks())}${await attachmentContext(attachments)}`;
   const lessons = await memoryBrief(sovereign.id, text);
   const system = `${sovereign.systemPrompt}${lessons}\n\n${mode === 'ask' ? ASK_INSTRUCTIONS : planInstructions(store.teamStrategy, store.complexityRouting)}\n\nTeam roster (id | name | title):\n${rosterDescription()}\n\n${mode === 'ask' ? '' : modelCatalog() + '\n\n'}${projectContext()}`;
-  const update = throttle((full) => agentsState().updateChatMessage(replyId, { text: full }), 120);
+  const update = throttle((full) => {
+    const t = stripThinking(full).trimStart();
+    if (!t.startsWith('```project-call') && !'```project-call'.startsWith(t)) {
+      agentsState().updateChatMessage(replyId, { text: full });
+    }
+  }, 120);
 
   try {
-    const result = await callAgent(sovereign, {
+    const planMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [...history, { role: 'user', content }];
+    const toolNotice = mode === 'ask' ? undefined : PROJECT_TOOL_INSTRUCTIONS;
+    let result = await callAgent(sovereign, {
       system,
-      messages: [...history, { role: 'user', content }],
+      messages: planMessages,
       signal: controller.signal,
       onDelta: update,
       note: `Chat (${mode})`,
+      toolNotice,
     });
+    let totalUsage = result.usage;
+    let totalLatencyMs = result.latencyMs;
+    if (mode !== 'ask') {
+      for (let turn = 0; turn < 6; turn++) {
+        const parsed = parseProjectRequest(result.text);
+        if (!parsed) break;
+        planMessages.push({ role: 'assistant', content: result.text }, { role: 'user', content: await projectToolReply(parsed) });
+        compactToolHistory(planMessages, 4);
+        result = await callAgent(sovereign, {
+          system,
+          messages: planMessages,
+          signal: controller.signal,
+          onDelta: update,
+          note: `Chat (${mode})`,
+          toolNotice,
+        });
+        totalUsage = mergeChatUsage(totalUsage, result.usage);
+        totalLatencyMs += result.latencyMs;
+      }
+    }
     update.flush();
     const patch: Partial<ManagerChatMessage> = {
       text: result.text,
       streaming: false,
-      usage: result.usage,
-      latencyMs: result.latencyMs,
+      usage: totalUsage,
+      latencyMs: totalLatencyMs,
       model: result.model,
     };
     if (mode !== 'ask') {
@@ -755,6 +943,20 @@ async function desktopTools(runId: string): Promise<ComputerTool[]> {
   }
 }
 
+function mergeChatUsage(prev?: ChatUsage, next?: ChatUsage): ChatUsage | undefined {
+  if (!prev) return next;
+  if (!next) return prev;
+  const add = (a?: number, b?: number) => (a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0));
+  return {
+    inputTokens: add(prev.inputTokens, next.inputTokens),
+    outputTokens: add(prev.outputTokens, next.outputTokens),
+    totalTokens: add(prev.totalTokens, next.totalTokens),
+    cacheReadTokens: add(prev.cacheReadTokens, next.cacheReadTokens),
+    cacheWriteTokens: add(prev.cacheWriteTokens, next.cacheWriteTokens),
+    cacheWrite1hTokens: add(prev.cacheWrite1hTokens, next.cacheWrite1hTokens),
+  };
+}
+
 function usageTokens(usage?: ChatUsage): number {
   return usageCounts(usage).total;
 }
@@ -777,7 +979,7 @@ async function runTask(task: KanbanTaskCard, signal: AbortSignal) {
   const depOutputs = (task.dependsOn ?? [])
     .map((d) => taskById(d))
     .filter((d): d is KanbanTaskCard => Boolean(d?.output))
-    .map((d) => `### Output of "${d.title}" (${store.agents[d.assignedAgentId]?.name})\n${truncate(stripThinking(d.output!), 8000)}`)
+    .map((d) => `### Output of "${d.title}" (${store.agents[d.assignedAgentId]?.name})\n${d.stage === 'implementation' ? compactFileOutputs(d.output!, 4_000) : truncate(stripThinking(d.output!), 6_000)}`)
     .join('\n\n');
 
   const system = `${agent.systemPrompt}
@@ -789,12 +991,15 @@ When you create or change files, output each file in full inside a fenced block 
 \`\`\`ts path=src/example.ts
 // full file content
 \`\`\`
-Files are only written to the project after QA approves the run. Keep explanations short.
+Agent HQ extracts your path= file blocks and writes them to the project automatically, even if your underlying CLI sandbox is read-only. Never say you cannot write files or ask for write tools. Files are applied to the project after verification/QA approves the run. Keep explanations short.
+When updating existing entry points (CLI commands, HTTP routes, or handlers), inspect sibling handlers in the same module so input bounds, error reporting, exit/status codes, and output formatting stay consistent. Check data-layer scope invariants (such as per-parent vs global counters or keys) and worst-case runtime complexity against stated input bounds.
+When adding new tests, create a new test file rather than editing pre-existing test files unless the task explicitly requires changing an existing test file.
 When you change an existing file, start from its current contents (provided below when available) and preserve unrelated code.${await memoryBrief(agent.id, `${task.title}\n${task.description}\n${task.qaFeedback ?? ''}`)}`;
 
+  const hasPriorChange = (currentMission()?.proposedChanges ?? []).some((c) => c.taskId === task.id && (c.status === 'pending' || c.status === 'applied'));
   const fileContext = await taskFileContext(task, mission);
   const user = `Overall request:\n${mission.prompt}\n\nYour task: ${task.title}\n${task.description}${
-    task.qaFeedback ? `\n\nQA feedback to address (this task was rejected):\n${task.qaFeedback}` : ''
+    task.qaFeedback ? `\n\nQA feedback to address (this task was rejected):\n${task.qaFeedback}${hasPriorChange ? '\n\nIf you inspect the current files and confirm your previous changes already satisfy every point above with zero code edits needed, start your reply with ALREADY_SATISFIED: followed by a brief proof instead of emitting redundant or empty file blocks.' : ''}` : ''
   }${depOutputs ? `\n\nResults from tasks you depend on:\n${depOutputs}` : ''}${fileContext}\n\n${projectContext()}`;
 
   const update = throttle((full) => agentsState().updateTask(task.id, { output: full, progress: Math.min(90, 10 + Math.floor(full.length / 80)) }), 250);
@@ -818,18 +1023,22 @@ When you change an existing file, start from its current contents (provided belo
           store.logActivity({ kind: 'info', level: 'info', runId: mission.id, taskId: task.id, agentId: agent.id, text: `${agent.name} requested project context: ${project.request.name}${project.request.name === 'read_files' ? ` (${project.request.paths.join(', ')})` : ''}` });
         }
         messages.push({ role: 'assistant', content: result.text }, { role: 'user', content: reply });
-        compactToolHistory(messages, 6);
+        compactToolHistory(messages, 4);
         result = await ask(`Task: ${task.title} (project read ${projectTurns})`);
         tokens += usageTokens(result.usage);
         continue;
       }
       const parsed = parseComputerRequest(result.text);
       if (!parsed) {
+        const cleanText = stripThinking(result.text);
         const fileCount = extractFileBlocks(result.text).filter((file) => !isMemoryPath(file.path)).length;
-        if (!missingImplementation(task.stage, fileCount, desktopReads)) break;
+        if (isAlreadySatisfiedRework(cleanText, hasPriorChange) || !missingImplementation(task.stage, fileCount, desktopReads)) break;
         if (requestedDeliverable) throw new Error('Implementation returned no file changes. The task is blocked, not completed. Read the needed source with project-call and retry.');
         requestedDeliverable = true;
-        messages.push({ role: 'assistant', content: result.text }, { role: 'user', content: 'No implementation was delivered. Read missing source with project-call, then return complete path= file blocks. A description, request for context, or claim of completion does not change the project.' });
+        const reworkHint = hasPriorChange
+          ? ' If your existing changes already satisfy the QA feedback with no edits needed, start your reply with ALREADY_SATISFIED: and explain why.'
+          : '';
+        messages.push({ role: 'assistant', content: result.text }, { role: 'user', content: `No implementation was delivered. Read missing source with project-call, then return complete path= file blocks.${reworkHint} Agent HQ writes your path= blocks itself even if your CLI sandbox is read-only. A description, request for context, or reporting a read-only workspace does not complete the task.` });
         result = await ask(`Task: ${task.title} (missing deliverable)`);
         tokens += usageTokens(result.usage);
         continue;
@@ -911,40 +1120,91 @@ When you change an existing file, start from its current contents (provided belo
       result = { ...result, latencyMs: result.latencyMs + review.latencyMs };
     }
 
-    const durationMs = Date.now() - started;
     const blocks = extractFileBlocks(output);
-    const files = blocks.filter((f) => !isMemoryPath(f.path));
+    let files = blocks.filter((f) => !isMemoryPath(f.path));
     if (files.length < blocks.length) {
       agentsState().logActivity({ kind: 'learning', level: 'warn', runId: mission.id, agentId: agent.id, taskId: task.id, text: `${agent.name} tried to edit the project memory folder; those file changes were dropped` });
     }
-    if (missingImplementation(task.stage, files.length, desktopReads)) throw new Error('The reviewed implementation contains no file deliverable.');
-    const changes: ProposedFileChange[] = files.map((f) => ({
-      id: `${task.id}:${f.path}:${crypto.randomUUID()}`,
-      path: f.path,
-      content: f.content,
-      taskId: task.id,
-      agentId: agent.id,
-      status: 'pending',
-    }));
+    const keptPriorRework = files.length === 0 && isAlreadySatisfiedRework(stripThinking(output), hasPriorChange);
+    if (!keptPriorRework && missingImplementation(task.stage, files.length, desktopReads)) throw new Error('The reviewed implementation contains no file deliverable.');
     if (files.length) {
       const base = new Map<string, { path: string; content: string }>();
       for (const change of currentMission()?.proposedChanges ?? []) {
         if (change.status === 'applied' || change.status === 'pending') base.set(change.path, { path: change.path, content: change.content });
       }
       for (const file of files) base.set(file.path, file);
-      const isolated = await api.stageWorker(mission.id, task.id, attempts, [...base.values()]);
+      let isolated = await api.stageWorker(mission.id, task.id, attempts, [...base.values()]);
       store.updateTask(task.id, { worktreePath: isolated.path });
       store.logActivity({ kind: 'info', level: 'info', runId: mission.id, taskId: task.id, text: isolated.kind === 'worktree' ? `Preserved ${task.title} in an isolated Git worktree: ${isolated.path}` : isolated.reason ?? 'Changes remain proposals.' });
+
+      const verifyCmd = agentsState().verificationCommand.trim();
+      if (isolated.kind === 'worktree' && isolated.path && verifyCmd) {
+        let check: Awaited<ReturnType<typeof api.verifyWorker>> | null = null;
+        try {
+          check = await api.verifyWorker(isolated.path, verifyCmd, 60_000);
+        } catch {
+          check = null;
+        }
+        const checkOut = check ? `${check.stdout ?? ''}\n${check.stderr ?? ''}`.trim() : '';
+        const touchesOwnFiles = files.some((f) => {
+          const baseName = f.path.slice(f.path.lastIndexOf('/') + 1);
+          return checkOut.includes(f.path) || (baseName.length >= 4 && checkOut.includes(baseName));
+        });
+        if (check && !check.rejected && check.exitCode !== 0 && !verificationCouldNotRun(check.exitCode, checkOut) && touchesOwnFiles) {
+          store.logActivity({ kind: 'verification', level: 'warn', runId: mission.id, agentId: agent.id, taskId: task.id, text: `Isolated worktree verification caught a failure in ${agent.name}'s files for "${task.title}" (exit ${check.exitCode}); running 1 self-repair turn.` });
+          messages.push(
+            { role: 'assistant', content: output },
+            { role: 'user', content: `Isolated worktree verification ran "${verifyCmd}" on your proposed files and failed (exit ${check.exitCode}):\n\n${checkOut.slice(-4000)}\n\nFix the defect in your files and return complete path= file blocks (only files you change).` },
+          );
+          compactToolHistory(messages, 4);
+          let repaired = await ask(`Task: ${task.title} (worktree self-repair)`);
+          tokens += usageTokens(repaired.usage);
+          for (let rt = 0; rt < 2; rt++) {
+            const rp = parseProjectRequest(repaired.text);
+            if (!rp) break;
+            messages.push({ role: 'assistant', content: repaired.text }, { role: 'user', content: await projectToolReply(rp) });
+            compactToolHistory(messages, 4);
+            repaired = await ask(`Task: ${task.title} (worktree self-repair read ${rt + 1})`);
+            tokens += usageTokens(repaired.usage);
+          }
+          const repairedFiles = extractFileBlocks(repaired.text).filter((f) => !isMemoryPath(f.path));
+          if (repairedFiles.length) {
+            output = repaired.text;
+            const merged = new Map(files.map((f) => [f.path, f]));
+            for (const rf of repairedFiles) {
+              merged.set(rf.path, rf);
+              base.set(rf.path, rf);
+            }
+            files = [...merged.values()];
+            try {
+              isolated = await api.stageWorker(mission.id, `${task.id}-repair`, attempts, [...base.values()]);
+              store.updateTask(task.id, { worktreePath: isolated.path });
+            } catch {
+              // Keep the initial staged worktree path if re-staging repair fails.
+            }
+          }
+        }
+      }
+
+      const changes: ProposedFileChange[] = files.map((f) => ({
+        id: `${task.id}:${f.path}:${crypto.randomUUID()}`,
+        path: f.path,
+        content: f.content,
+        taskId: task.id,
+        agentId: agent.id,
+        status: 'pending',
+      }));
+      const existing = (currentMission()?.proposedChanges ?? []).filter((c) => c.taskId !== task.id || c.status === 'applied');
+      const marked = markConflicts([...existing, ...changes], currentMission()?.tasks ?? []);
+      agentsState().updateMission({ proposedChanges: marked });
+      for (const c of marked) {
+        if (c.taskId !== task.id || !c.conflictsWith?.length) continue;
+        const names = c.conflictsWith.map((id) => `"${taskById(id)?.title ?? id}"`).join(', ');
+        const next = autoAppliesChanges(store.approvalMode) ? 'The integrator will combine these proposals before QA.' : 'Review both proposals in the Changes tab before applying a version.';
+        agentsState().logActivity({ kind: 'info', level: 'warn', runId: mission.id, agentId: agent.id, taskId: task.id, text: `Conflict: ${agent.name} and ${names} both changed ${c.path} independently. ${next}` });
+      }
     }
-    const existing = (currentMission()?.proposedChanges ?? []).filter((c) => c.taskId !== task.id || c.status === 'applied');
-    const marked = markConflicts([...existing, ...changes], currentMission()?.tasks ?? []);
-    agentsState().updateMission({ proposedChanges: marked });
-    for (const c of marked) {
-      if (c.taskId !== task.id || !c.conflictsWith?.length) continue;
-      const names = c.conflictsWith.map((id) => `"${taskById(id)?.title ?? id}"`).join(', ');
-      const next = autoAppliesChanges(store.approvalMode) ? 'The integrator will combine these proposals before QA.' : 'Review both proposals in the Changes tab before applying a version.';
-      agentsState().logActivity({ kind: 'info', level: 'warn', runId: mission.id, agentId: agent.id, taskId: task.id, text: `Conflict: ${agent.name} and ${names} both changed ${c.path} independently. ${next}` });
-    }
+    const durationMs = Date.now() - started;
     agentsState().updateTask(task.id, {
       status: 'completed',
       progress: 100,
@@ -953,7 +1213,7 @@ When you change an existing file, start from its current contents (provided belo
       durationMs,
       completedAt: Date.now(),
       model: result.model,
-      tags: files.length ? [`${files.length} file${files.length > 1 ? 's' : ''}`] : [],
+      tags: files.length ? [`${files.length} file${files.length > 1 ? 's' : ''}`] : keptPriorRework ? ['kept prior changes'] : [],
     });
     agentsState().setAgentStatus(agent.id, 'idle');
     agentsState().recordAgentTask(agent.id, { runId: mission.id, taskId: task.id, title: task.title, status: 'completed', model: result.model, durationMs, tokens, timestamp: Date.now() });
@@ -966,7 +1226,7 @@ When you change an existing file, start from its current contents (provided belo
       model: result.model,
       tokens,
       durationMs,
-      text: `${agent.name} finished "${task.title}"${files.length ? ` — ${files.length} file change(s) proposed` : ''}`,
+      text: `${agent.name} finished "${task.title}"${files.length ? ` — ${files.length} file change(s) proposed` : keptPriorRework ? ' — verified prior changes need no edits' : ''}`,
     });
   } catch (err) {
     update.flush();
@@ -1125,9 +1385,13 @@ async function repairIntegration(command: string, failure: Verified, signal: Abo
       const related = await filesNamedIn(last.raw, new Set(applied.keys()));
       const written = [...applied.values()].map((c) => `FILE ${c.path} (written by ${c.taskId})\n${c.content}`).join('\n\n');
       const ownTests = runCreatedTests(currentMission()?.proposedChanges ?? []);
-      const testNote = ownTests.length
-        ? `\n\nTests created by the team during this run (not part of the original project): ${ownTests.join(', ')}. These are part of the candidate and may be wrong. If one contradicts the request or the attached requirements, correct that test and state the requirement it contradicted. Tests that existed before this run are the project's contract and stay protected.`
+      const modifiedTests = runModifiedTests(currentMission()?.proposedChanges ?? []);
+      const modTestNote = modifiedTests.length
+        ? `\n\nExisting test files modified by the team during this run (${modifiedTests.join(', ')}): keep every pre-existing test in them intact, while any new test assertions added during this run are held to the requirements and may be corrected (or moved into a new test file) if wrong.`
         : '';
+      const testNote = (ownTests.length
+        ? `\n\nTests created by the team during this run (not part of the original project): ${ownTests.join(', ')}. These are part of the candidate and may be wrong. If one contradicts the request or the attached requirements, correct that test and state the requirement it contradicted. Tests that existed before this run are the project's contract and stay protected.`
+        : '') + modTestNote;
       store.logActivity({ kind: 'verification', level: 'info', runId: mission.id, agentId: integrator.id, text: `${integrator.name} is fixing the combined changes against the verification output (round ${round} of ${MAX_REPAIR_ROUNDS})` });
       const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [{
         role: 'user',
@@ -1149,7 +1413,7 @@ async function repairIntegration(command: string, failure: Verified, signal: Abo
         if (!parsed) break;
         if (turn >= MAX_PROJECT_TURNS) throw new Error('Integration exhausted its project read turns.');
         messages.push({ role: 'assistant', content: result.text }, { role: 'user', content: await projectToolReply(parsed) });
-        compactToolHistory(messages, 6);
+        compactToolHistory(messages, 4);
         result = await ask();
       }
       const blocks = extractFileBlocks(result.text).filter((file) => !isMemoryPath(file.path));
@@ -1287,23 +1551,27 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     }
   }
 
-  const deliverables = workTasks
-    .map((t) => `## [${t.id}] ${t.title} — ${store.agents[t.assignedAgentId]?.name}\n${truncate(stripThinking(t.output ?? ''), 10_000)}`)
-    .join('\n\n');
   const digest = verified ? finalFileDigest(currentMission()?.proposedChanges ?? [], 80_000) : undefined;
-  const ownTests = runCreatedTests(currentMission()?.proposedChanges ?? []);
-  const ownTestsNote = ownTests.length
-    ? `\n\nTests created by the team during this run (not part of the original project, so the user's rule about existing tests does not protect them): ${ownTests.join(', ')}. Hold them to the requirements like any other new code. If one pins behaviour the requirements contradict, report it as a defect in that test file; the team can correct it.`
-    : '';
   const finalFiles = digest
     ? `\n\nFinal file contents (authoritative; this is the code on disk that verification ran against, one version per file, most recently changed first):\n${digest.text}${digest.omitted.length ? `\n\nNot shown above for space, read with project-call before judging them: ${digest.omitted.join(', ')}` : ''}`
     : '';
+  const deliverables = workTasks
+    .map((t) => `## [${t.id}] ${t.title} — ${store.agents[t.assignedAgentId]?.name}\n${digest?.text ? compactFileOutputs(t.output ?? '', 4_000) : truncate(stripThinking(t.output ?? ''), 8_000)}`)
+    .join('\n\n');
+  const ownTests = runCreatedTests(currentMission()?.proposedChanges ?? []);
+  const modifiedTests = runModifiedTests(currentMission()?.proposedChanges ?? []);
+  const modTestNote = modifiedTests.length
+    ? `\n\nExisting test files modified by the team during this run (${modifiedTests.join(', ')}): keep every pre-existing test in them intact, while any new test assertions added during this run are held to the requirements and may be corrected (or moved into a new test file) if wrong.`
+    : '';
+  const ownTestsNote = (ownTests.length
+    ? `\n\nTests created by the team during this run (not part of the original project, so the user's rule about existing tests does not protect them): ${ownTests.join(', ')}. Hold them to the requirements like any other new code. If one pins behaviour the requirements contradict, report it as a defect in that test file; the team can correct it.`
+    : '') + modTestNote;
   const qaMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [{
     role: 'user',
-    content: `Request:\n${mission.prompt}${await attachmentContext(mission.contextFiles)}\n\nDeliverables (task reports; code quoted in them may be superseded by later rework, so judge code only from the final file contents or project-call):\n${deliverables}${verificationNote}${verified ? '\nThe verification above was run by Agent HQ on the final files; you do not need to run it yourself.' : ''}${finalFiles}${ownTestsNote}\n\n${projectContext()}\n\nCompare each requested behavior with the current code, including entry points and shared files. Read the attached requirements and any file clipped or absent above using project-call before deciding. Before reporting a defect, check that the cited code path is the one the failing input actually reaches in the final files. Passing tests cover only their assertions; concrete unmet requirements still need repair.`,
+    content: `Request:\n${mission.prompt}${await attachmentContext(mission.contextFiles)}\n\nDeliverables (task reports; code quoted in them may be superseded by later rework, so judge code only from the final file contents or project-call):\n${deliverables}${verificationNote}${verified ? '\nThe verification above was run by Agent HQ on the final files; you do not need to run it yourself.' : ''}${finalFiles}${ownTestsNote}\n\n${projectContext()}\n\nCompare each requested behavior with the current code, including entry points and shared files. Read the attached requirements and any file clipped or absent above using project-call BEFORE giving your JSON verdict — never reject because source or a file was omitted from the prompt. Audit entry-point boundary/error-handling consistency across sibling handlers, data/storage scope invariants in touched and untouched modules, and worst-case complexity against stated bounds. Before reporting a defect, check that the cited code path is the one the failing input actually reaches in the final files. Passing tests cover only their assertions; concrete unmet requirements still need repair.`,
   }];
   const review = async () => callAgent(qa, {
-    system: `${qa.systemPrompt}${await memoryBrief(qa.id, mission.prompt)}\n\nRespond with ONLY a JSON object: {"verdict": "approve" | "reject", "summary": "...", "issues": [{"taskId": "<task id>", "problem": "<concrete defect and failing input or unmet requirement>", "path": "<exact proposed file path>", "evidence": "<exact code excerpt of at least 12 characters causing the defect>"}]}. Reject only for real defects, security problems or unmet requirements. Passing verification is direct execution evidence. Missing hidden tests, hypothetical failures, lack of visibility and requests for more test coverage are advisory concerns, not grounds for rejection. For a rejection after passing verification, cite the exact offending code from the supplied file contents and explain its incorrect behavior.`,
+    system: `${qa.systemPrompt}${await memoryBrief(qa.id, mission.prompt)}\n\nIf any file you need to inspect is omitted or clipped in the prompt, reply FIRST with a single \`\`\`project-call\`\`\` read_files/list_files block (per the project tools notice) and wait for its result — do NOT reject for missing context or unprovided project-call output. Once you have inspected every needed file, respond with ONLY a single JSON object: {"verdict": "approve" | "reject", "summary": "...", "issues": [{"taskId": "<exact task id such as t1, t2 from Deliverables (never an issue number)>", "problem": "<concrete defect and failing input or unmet requirement>", "path": "<exact proposed file path>", "evidence": "<exact code excerpt of at least 12 characters causing the defect>"}]}. Reject only for real defects, security problems or unmet requirements. Judge only against requirements stated in the request/attached specs and pre-existing baseline behavior — do not invent unrequested edge-case contracts or out-of-spec caller assumptions as grounds to reject. Pre-existing behavior in untouched files (routes, CLI commands, public functions, or storage behavior) is part of the baseline contract unless the request or attached issues explicitly ask to change or remove it — never instruct the team to remove or alter working pre-existing endpoints merely because a summary spec omits them. Passing verification is direct execution evidence. Missing hidden tests, hypothetical failures, lack of visibility and requests for more test coverage are advisory concerns, not grounds for rejection. For a rejection after passing verification, cite the exact offending code from the supplied file contents and explain its incorrect behavior.`,
     messages: qaMessages,
     signal,
     note: 'QA review',
@@ -1316,13 +1584,13 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     if (!parsed) break;
     if (turn >= MAX_PROJECT_TURNS) throw new Error('QA exhausted its project read turns without producing a verdict.');
     qaMessages.push({ role: 'assistant', content: result.text }, { role: 'user', content: await projectToolReply(parsed) });
-    compactToolHistory(qaMessages, 6);
+    compactToolHistory(qaMessages, 4);
     result = await review();
   }
   const tokens = usageTokens(result.usage);
   let verdict;
   try {
-    verdict = parseQaVerdict(result.text, workTasks.map((t) => t.id));
+    verdict = parseQaVerdict(result.text, workTasks.map((t) => t.id), workTasks);
   } catch (err) {
     store.updateTask(QA_TASK_ID, { status: 'failed', error: `Could not parse QA verdict: ${(err as Error).message}`, output: result.text });
     store.setAgentStatus(qa.id, 'error');
@@ -1361,7 +1629,7 @@ async function runQa(signal: AbortSignal): Promise<'approved' | 'rejected' | 're
     const newDefectRound = verified && fresh.length > 0 && reviewRejects <= MAX_QA_LOOPS + MAX_NEW_DEFECT_ROUNDS;
     store.updateMission({ qaRejectCount: rejectCount, qaReviewRejectCount: reviewRejects, status: 'qa_loopback', qaRaisedIssues: [...raised, ...fresh.map(qaIssueKey)] });
     const flagged = new Set(verdict.issues.map((i) => i.taskId).filter(Boolean));
-    const targets = flagged.size ? reworkClosure(workTasks.filter((t) => flagged.has(t.id)), workTasks) : workTasks;
+    const targets = selectQaReworkTargets(flagged, workTasks);
     store.logActivity({ kind: 'qa', level: 'warn', runId: mission.id, agentId: qa.id, text: `Sentinel rejected ${targets.length} task(s): ${verdict.summary}` });
     if (reviewRejects > MAX_QA_LOOPS && !newDefectRound) {
       await restorePassingCandidate(verdict.summary);
@@ -1492,6 +1760,7 @@ export async function executeRun() {
   const store = agentsState();
   const mission = currentMission();
   if (!mission) return;
+  cancelQuotaAutoResume();
   runController?.abort();
   const controller = new AbortController();
   runController = controller;
@@ -1503,7 +1772,7 @@ export async function executeRun() {
   runTotals.unpricedTokens = previous?.unpricedTokens ?? 0;
   store.setLiveRunning(true);
   store.updateMission({ status: 'running', error: undefined, interrupted: undefined, qaCertificate: undefined });
-  const guard: RunGuard = { startedAt: Date.now(), callsByAgent: {}, costByAgent: {}, warned: new Set(), stopReason: null, timers: [] };
+  const guard: RunGuard = { startedAt: Date.now(), callsByAgent: {}, costByAgent: {}, warned: new Set(), warnedBudgets: new Set(), stopReason: null, timers: [] };
   runGuard = guard;
   const minutes = store.runLimits.maxMinutes;
   if (minutes !== null) {
@@ -1600,6 +1869,9 @@ export async function executeRun() {
       });
       const until = new Date(limit.resetAt).toLocaleString();
       finalize('paused', `${limit.provider} usage limit reached. ${limit.resetKnown ? `Resets ${until}` : `Reset time unknown; try again after ${until}`}. Finished work is kept. Resume after reset or connect another provider.`);
+      if ((agentsState().budgetPolicy ?? DEFAULT_BUDGET_POLICY).autoResumeOnQuotaReset) {
+        scheduleQuotaAutoResume(limit.resetAt);
+      }
     } else if (guard.stopReason) finalize('failed', `Stopped by run limit: ${guard.stopReason}. Raise the limit in Settings → Run limits, then Resume.`);
     else if (isAbort(err)) finalize('cancelled', 'Stopped by user.');
     else finalize('failed', (err as Error).message);
@@ -1659,7 +1931,48 @@ export async function learnFromRun(runId: string) {
   }
 }
 
+let quotaResumeTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function cancelQuotaAutoResume() {
+  if (quotaResumeTimer) {
+    clearTimeout(quotaResumeTimer);
+    quotaResumeTimer = null;
+  }
+  agentsState().setQuotaAutoResumeAt?.(null);
+}
+
+export function scheduleQuotaAutoResume(resetAt: number) {
+  cancelQuotaAutoResume();
+  const delay = Math.max(1_000, resetAt - Date.now());
+  const resumeAt = Date.now() + delay;
+  const mission = currentMission();
+  agentsState().setQuotaAutoResumeAt?.(resumeAt);
+  agentsState().logActivity({
+    kind: 'run',
+    level: 'info',
+    runId: mission?.id,
+    text: `Scheduled automatic resume for ${new Date(resumeAt).toLocaleTimeString()} when provider quota resets.`,
+  });
+  quotaResumeTimer = setTimeout(() => {
+    quotaResumeTimer = null;
+    agentsState().setQuotaAutoResumeAt?.(null);
+    const current = currentMission();
+    if (!current || agentsState().isLiveRunning || current.status !== 'paused') return;
+    if (current.providerLimit) useConnectionsStore.getState().clearExhausted(current.providerLimit.provider);
+    agentsState().logActivity({ kind: 'run', level: 'info', runId: current.id, text: 'Provider quota reset window reached — auto-resuming run.' });
+    void resumeRun();
+  }, delay);
+}
+
+export function enableQuotaAutoResumeForCurrentMission(): boolean {
+  const m = currentMission();
+  if (!m?.providerLimit || m.status !== 'paused') return false;
+  scheduleQuotaAutoResume(m.providerLimit.resetAt);
+  return true;
+}
+
 export function stopRun() {
+  cancelQuotaAutoResume();
   runController?.abort();
 }
 
@@ -1709,6 +2022,7 @@ export async function resumeInterruptedRun() {
 }
 
 export async function resumeRun() {
+  cancelQuotaAutoResume();
   const m = currentMission();
   if (!m || agentsState().isLiveRunning) return;
   if (m.providerLimit && isProviderExhausted(useConnectionsStore.getState().exhausted, m.providerLimit.provider)) {

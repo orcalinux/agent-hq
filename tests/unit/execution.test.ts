@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { projectCommand } from '../../server/execution';
+import { projectCommand, resolveSpawnTarget } from '../../server/execution';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -55,5 +55,27 @@ describe('project Python environment', () => {
     const directory = root();
     interpreter(directory, '.venv', false);
     expect(projectCommand('python', directory, {}).program).toBe('python');
+  });
+
+  it('resolves bundled npm and npx CLI scripts for Windows spawn without shell', () => {
+    const directory = root();
+    const fakeNode = path.join(directory, 'node.exe');
+    const cliJs = path.join(directory, 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    fs.writeFileSync(fakeNode, '');
+    fs.mkdirSync(path.dirname(cliJs), { recursive: true });
+    fs.writeFileSync(cliJs, '');
+
+    expect(resolveSpawnTarget('npm', ['test'], {}, 'win32', fakeNode)).toEqual({
+      program: fakeNode,
+      args: [cliJs, 'test'],
+    });
+    expect(resolveSpawnTarget('npm', ['test'], {}, 'linux', fakeNode)).toEqual({
+      program: 'npm',
+      args: ['test'],
+    });
+    expect(resolveSpawnTarget('git', ['status'], {}, 'win32', fakeNode)).toEqual({
+      program: 'git',
+      args: ['status'],
+    });
   });
 });

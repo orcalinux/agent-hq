@@ -131,6 +131,8 @@ export const api = {
   setWorkerIsolation: (isolation: 'worktree' | 'proposals') => call<{ isolation: 'worktree' | 'proposals' }>('PUT', '/api/workers/settings', { isolation }),
   stageWorker: (runId: string, taskId: string, attempt: number, files: Array<{ path: string; content: string }>) =>
     call<{ kind: 'worktree' | 'proposals'; path?: string; reason?: string }>('POST', '/api/workers/stage', { runId, taskId, attempt, files }),
+  verifyWorker: (worktreePath: string, command: string, timeoutMs?: number) =>
+    call<ExecuteResult>('POST', '/api/workers/verify', { worktreePath, command, timeoutMs }),
   computerStatus: () => call<import('@/types/computerUse').ComputerStatus>('GET', '/api/computer/status'),
   setComputerAccess: (access: import('@/types/computerUse').ComputerAccess) => call<import('@/types/computerUse').ComputerStatus>('PUT', '/api/computer/access', { access }),
   computerTools: () => call<{ tools: import('@/types/computerUse').ComputerTool[] }>('GET', '/api/computer/tools'),

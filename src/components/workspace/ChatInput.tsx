@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { AtSign, BookOpen, CornerDownRight } from 'lucide-react';
+import { AtSign, BookOpen, CornerDownRight, Hash } from 'lucide-react';
 import { useAgentStore } from '@/store/useAgentStore';
+import { listAvailableModels, useConnectionsStore } from '@/store/useConnectionsStore';
 import { Kbd } from '@/components/ui/primitives';
 import { applyCompletion, chatSuggestions, completionToken, type ChatSuggestion } from '@/utils/chatCompletion';
 import { cn } from '@/utils/cn';
@@ -15,6 +16,8 @@ interface ChatInputProps {
 
 export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputProps) {
   const agents = useAgentStore((store) => store.agents);
+  const mission = useAgentStore((store) => store.activeMission);
+  const providers = useConnectionsStore((store) => store.providers);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const optionListRef = useRef<HTMLDivElement>(null);
@@ -30,7 +33,11 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
   const listId = useId();
   const hintId = useId();
   const token = useMemo(() => completionToken(value, cursor, selectionEnd), [value, cursor, selectionEnd]);
-  const suggestions = useMemo(() => token ? chatSuggestions(token, Object.values(agents)) : [], [token, agents]);
+  const completionOptions = useMemo(() => ({
+    tasks: (mission?.tasks ?? []).map((t) => ({ id: t.id, title: t.title, status: t.status })),
+    models: listAvailableModels(providers),
+  }), [mission?.tasks, providers]);
+  const suggestions = useMemo(() => token ? chatSuggestions(token, Object.values(agents), completionOptions) : [], [token, agents, completionOptions]);
   const open = focused && !composing && !dismissed && Boolean(token);
   const selected = Math.min(active, Math.max(0, suggestions.length - 1));
   const optionId = (index: number) => `${listId}-${index}`;
@@ -171,9 +178,9 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
         aria-describedby={hintId}
         className="block w-full resize-none bg-transparent px-2.5 pt-2 text-[13px] placeholder:text-fg-subtle focus:outline-none"
       />
-      <div id={hintId} className="px-2.5 py-1 text-[10.5px] text-fg-subtle">Type / for commands · @ for agents</div>
+      <div id={hintId} className="px-2.5 py-1 text-[10.5px] text-fg-subtle">Type / for commands · @ for agents · # for tasks</div>
       <span role="status" className="sr-only">
-        {open ? `${suggestions.length} ${token?.kind === 'agent' ? 'agents' : token?.kind === 'argument' ? 'options' : 'commands'} found. Use up and down arrows to choose, Tab or Enter to insert, Escape to dismiss.` : ''}
+        {open ? `${suggestions.length} ${token?.kind === 'agent' ? 'agents' : token?.kind === 'task' ? 'tasks' : token?.kind === 'argument' ? 'options' : 'commands'} found. Use up and down arrows to choose, Tab or Enter to insert, Escape to dismiss.` : ''}
       </span>
       {open && position ? createPortal(
         <div
@@ -187,11 +194,11 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
           onPointerDown={(event) => event.preventDefault()}
         >
           <div className="shrink-0 border-b border-line px-3 py-2 text-[11px] font-medium text-fg-subtle">
-            {token?.kind === 'agent' ? 'Agents' : token?.kind === 'argument' ? `/${token.command} options` : 'Commands'}
+            {token?.kind === 'agent' ? 'Agents' : token?.kind === 'task' ? 'Tasks' : token?.kind === 'argument' ? `/${token.command} options` : 'Commands'}
           </div>
-          <div ref={optionListRef} id={listId} role="listbox" aria-label={token?.kind === 'agent' ? 'Mention an agent' : token?.kind === 'argument' ? 'Command options' : 'Chat commands'} className="min-h-0 overflow-y-auto p-1">
+          <div ref={optionListRef} id={listId} role="listbox" aria-label={token?.kind === 'agent' ? 'Mention an agent' : token?.kind === 'task' ? 'Cite a task' : token?.kind === 'argument' ? 'Command options' : 'Chat commands'} className="min-h-0 overflow-y-auto p-1">
             {suggestions.length ? suggestions.map((suggestion, index) => {
-              const Icon = token?.kind === 'agent' ? AtSign : token?.kind === 'argument' ? CornerDownRight : BookOpen;
+              const Icon = token?.kind === 'agent' ? AtSign : token?.kind === 'task' ? Hash : token?.kind === 'argument' ? CornerDownRight : BookOpen;
               return (
                 <div
                   key={suggestion.id}
@@ -209,7 +216,7 @@ export function ChatInput({ value, onChange, onSend, placeholder }: ChatInputPro
                   </div>
                 </div>
               );
-            }) : <p className="px-2 py-3 text-[12px] text-fg-muted">No matching {token?.kind === 'agent' ? 'agents' : token?.kind === 'argument' ? 'options' : 'commands'}.</p>}
+            }) : <p className="px-2 py-3 text-[12px] text-fg-muted">No matching {token?.kind === 'agent' ? 'agents' : token?.kind === 'task' ? 'tasks' : token?.kind === 'argument' ? 'options' : 'commands'}.</p>}
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line px-3 py-1.5 text-[10.5px] text-fg-subtle">
             <span><Kbd>↑↓</Kbd> choose</span><span><Kbd>Tab</Kbd> / <Kbd>↵</Kbd> insert</span><span><Kbd>Esc</Kbd> close</span>

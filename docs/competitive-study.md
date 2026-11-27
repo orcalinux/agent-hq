@@ -4,13 +4,14 @@ A study of seven open-source projects in the same space as Agent HQ, begun on 20
 
 ## How strong the evidence is
 
-Three kinds of evidence are used, and each finding says which one it rests on:
+Four kinds of evidence are used, and each finding says which one it rests on:
 
 | Kind | Meaning |
 | --- | --- |
 | **Source** | Read in the repository at the pinned commit. Says what the code and docs describe, not that it works well. |
 | **Startup** | The packaged Linux desktop app was launched on an isolated virtual display with an isolated profile. Only the first screens were observed. No model prompt was sent and no paid task was run. |
 | **Static** | Selected files of the packaged app were analysed with REA (reverse-engineering tooling). Partial coverage; it shows what is shipped, not how it behaves. |
+| **Measured run** | Controlled task execution against an isolated starter clone under the benchmark runner, graded afterward against held-out acceptance tests outside every workspace. |
 
 Competitors' own comparison tables and self-reported scores were not used.
 
@@ -20,15 +21,15 @@ Star counts are a 2026-11-22 snapshot from the GitHub API. Licenses were checked
 
 | Project | Version / commit | License | Stars | Studied by |
 | --- | --- | --- | --- | --- |
-| Paperclip (`paperclipai/paperclip`) | `be08705` | MIT | ~116k | Source |
-| OpenHands (`OpenHands/OpenHands`) | `3e9cf43` | MIT | ~94k | Source |
-| MetaGPT (`FoundationAgents/MetaGPT`) | `11cdf46` | MIT | ~71k | Source |
+| Paperclip (`paperclipai/paperclip`) | `be08705` | MIT | ~116k | Source, measured Tier 3 run |
+| OpenHands (`OpenHands/OpenHands`) | `3e9cf43` | MIT | ~94k | Source, measured Tier 3 run |
+| MetaGPT (`FoundationAgents/MetaGPT`) | `11cdf46` | MIT | ~71k | Source, measured Tier 3 run |
 | Paradev, formerly Superset (`ParadevAI/Paradev`) | 2.0.11 / `b79b4ba` | MIT | ~16k | Source, startup log |
-| Agent Orchestrator (`OrchestratorInc/agent-orchestrator`) | 0.15.3 / `1f13629` | Apache-2.0 | ~15k | Source, startup, static |
-| Maestro (`RunMaestro/Maestro`) | 1.0.4 / `a386772` | **AGPL-3.0** | ~3.6k | Source, startup, static |
-| Agent Teams AI (`777genius/agent-teams-ai`) | 2.18.7 / `45315e8` | **AGPL-3.0** | ~2.5k | Source, startup |
+| Agent Orchestrator (`OrchestratorInc/agent-orchestrator`) | 0.15.3 / `1f13629` | Apache-2.0 | ~15k | Source, startup, static, measured Tier 2 & 3 runs |
+| Maestro (`RunMaestro/Maestro`) | 1.0.4 / `a386772` | **AGPL-3.0** | ~3.6k | Source, startup, static, measured Tier 2 & 3 runs |
+| Agent Teams AI (`777genius/agent-teams-ai`) | 2.18.7 / `45315e8` | **AGPL-3.0** | ~2.5k | Source, startup, measured Tier 3 run |
 
-Four desktop apps were installed (extracted from their `.deb` packages, no system install, SHA-256 checked against the release metadata). Paperclip, OpenHands and MetaGPT were **source only**: they need Node 24 or a server stack, and installing them was out of scope.
+Four desktop apps were installed (extracted from their `.deb` packages, no system install, SHA-256 checked against the release metadata). Paperclip, OpenHands and MetaGPT were initially source-only on Node `v22.20.0`, and were later executed and graded in the 2026-11-26 Tier 3 sweep below using isolated Node `v24.22.3` (`nvm`) and Python `uvx`/virtualenv environments while preserving the host's default Node `v22.20.0`.
 
 **License rule.** No code from any of these projects is in Agent HQ. The two AGPL projects are design references only; their code must not be copied into an MIT codebase.
 
@@ -71,9 +72,9 @@ Evidence kind for every row is **Source** (README or code in the research bundle
 | MetaGPT | Framework without a chat composer; nothing to compare | repository search |
 | Paperclip | Not in the local bundle; not re-checked | none |
 
-What Agent HQ took: commands that run real actions (new conversation, mode switch with an optional prompt, run control, navigation), argument completion, and the start-of-message rule for `/`. Safety rule of its own: chat cannot loosen approvals.
+What Agent HQ took: commands that run real actions (new conversation, mode switch with an optional prompt, run control, navigation, `/model`, `/btw` side questions, `/consult @Agent`), argument/model/task completion (`/` at start, `@` for agents, `#task` mentions with context expansion), and chat safety (chat cannot loosen approvals; `/btw` stays out of Sovereign's main conversation history).
 
-Not built yet, and seen in peers: `/model` to switch a model from chat, user-defined commands, `#task` mentions, `@agent` as a one-off consult, and a `/btw` side question.
+Remaining in peers: user-defined custom slash command templates.
 
 ## What Agent HQ has taken so far (verified 2026-11-23)
 
@@ -83,14 +84,14 @@ Checked against this repository's code and tests, not only the changelog.
 | --- | --- | --- | --- |
 | Run limits with 80% warning and hard stop | Paperclip, MetaGPT | Built (0.15.0) | `src/engine/runLimits.ts`, called from `enforceLimits` in `liveOrchestrator.ts`; `tests/unit/runLimits.test.ts` runs a real run to the limit |
 | Cost cap per agent | Paperclip | Built (0.19.0), per run, off by default | same files; a real-run test stops the run on one agent's spend |
-| Monthly per-agent budgets that persist across runs | Paperclip | **Not built** | none |
+| Monthly budgets that persist across runs | Paperclip | Built (0.25.0, project/app-wide spend & token caps; per-agent monthly caps still open) | `src/engine/budgets.ts`, `src/store/useAgentStore.ts`, `tests/unit/budgetsAndAutoResume.test.ts` |
 | Retry with backoff for temporary errors | Maestro, Agent Teams AI | Built (0.19.0) | `src/engine/retry.ts`; `tests/e2e/retry.spec.ts` drives the real call path |
-| Quota-reset scheduled retry | Agent Teams AI | **Not built**; quota errors reroute to another provider instead | `src/engine/failover.ts` |
+| Quota-reset scheduled retry | Agent Teams AI | Built (0.25.0, opt-in per-policy or per-run countdown auto-resume) | `scheduleQuotaAutoResume` in `liveOrchestrator.ts`, `tests/unit/budgetsAndAutoResume.test.ts` |
 | Diff preview and conflict flags | Agent Teams AI, Agent Orchestrator | Built (0.15.0) | `BottomPanel.tsx`; `tests/unit/conflicts.test.ts`, `tests/e2e/safety.spec.ts` |
 | Pending approval and finished work survive a crash | Agent Orchestrator | Built (0.15.0) | desktop test that SIGKILLs the app mid-run |
 | Terminal that survives the UI | Paradev | **Not built** | none |
-| One worktree per task | Agent Orchestrator, Maestro | Not built; agents propose changes instead of writing files | none |
-| Chat commands, argument completion, `/` only at message start | OpenHands, Maestro, Agent Orchestrator | Built (0.17.0, 0.18.0) | `src/engine/chatCommands.ts` and its tests |
+| One worktree per task + per-worker verify | Agent Orchestrator, Maestro | Built (0.23.0–0.25.0, isolated staging + `POST /api/workers/verify` + 1-turn self-repair) | `server/taskWorkspaces.ts`, `tests/unit/workerVerify.test.ts` |
+| Chat commands, mentions, `/` at message start | OpenHands, Maestro, Agent Orchestrator | Built (0.17.0–0.25.0, incl. `/model`, `/btw`, `/consult`, `#task`) | `src/engine/chatCommands.ts`, `src/utils/chatCompletion.ts` and tests |
 
 No code from any studied project is in Agent HQ.
 
@@ -98,9 +99,9 @@ No code from any studied project is in Agent HQ.
 
 Gaps confirmed in this repository, listed so the roadmap is honest:
 
-- **Run ownership.** `src/engine/liveOrchestrator.ts` keeps run controllers in the renderer process. In `src/store/useAgentStore.ts` a running mission that is serialized becomes "cancelled: interrupted by page reload". A `resumeRun` path exists, so resume is partial, not absent.
-- **No worktree isolation.** CLI subprocesses run in the project folder (`server/providers.ts`). The scheduler (`src/engine/scheduler.ts`) orders work by agent and dependency, not by which files conflict.
-- **Spending caps are per run only.** `src/engine/runLimits.ts` stops a run at configurable cost, token, time and per-agent call limits (defaults: 10 USD, 5M tokens, 90 min, 60 calls). There is no monthly budget that persists across runs, which Paperclip has. Unknown pricing is shown as unpriced, never as free.
+- **Run ownership.** `src/engine/liveOrchestrator.ts` keeps run controllers in the renderer process, though active state is journaled to the server and `resumeRun` / `resumeInterruptedRun` recover finished work.
+- **Sandbox boundary.** Worker edits are staged into isolated Git worktrees (`server/taskWorkspaces.ts`) and verified there via allow-listed commands (`POST /api/workers/verify`), while CLI models themselves still run in text/read-only mode without raw shell access.
+- **Per-agent monthly split.** `src/engine/runLimits.ts` (per run and per agent) and `src/engine/budgets.ts` (cross-run monthly spend/token caps) enforce limits at 80%/100%; unknown pricing is shown as unpriced, never as free. Breakdown caps per individual agent across months remain open.
 - **Credentials at rest.** API keys are stored in a JSON file with mode 0600 in a 0700 directory, written atomically. Secrets are sealed with AES-256-GCM (`encryptSecret` in `server/config.ts`), with the key protected by the OS credential store through Electron safeStorage.
 - **Unsigned installers.** Releases are built with signing discovery turned off; the README says so.
 
@@ -123,8 +124,8 @@ Both analyses covered only selected files (`package.json`, main and preload bund
 
 ## Limits of this study
 
-- The original study ran no real tasks. The follow-ups below include a Maestro smoke test and graded Tier 2 runs in Maestro and Orchestrator. These are single observations, not enough for a general ranking.
-- Paradev's UI past sign-in, and all of Paperclip, OpenHands and MetaGPT at runtime, were not observed.
+- The original study ran no real tasks. Follow-ups added a Maestro smoke test, graded Tier 2 runs, and the 2026-11-26 Tier 3 sweep across six competitors (`Paperclip`, `OpenHands`, `Maestro`, `Agent Orchestrator`, `Agent Teams AI`, `MetaGPT`) plus bare CLI controls. These remain single-run samples per setup on one codebase, not a general product ranking.
+- Only Paradev past `#/sign-in` remained unmeasured at runtime due to interactive OAuth gating.
 - Stars measure attention, not fitness for your work.
 
 
@@ -132,7 +133,7 @@ Both analyses covered only selected files (`package.json`, main and preload bund
 
 Added 2026-11-23. Measurements below are observations from this machine, with accounting limitations stated explicitly.
 
-**Setup.** The four desktop competitors stay installed under `~/.local/share/agent-hq-research` with their own profiles. Launch them from the application menu ("... (comparison)") or `launchers/<name>`. Remove them only on request. Paperclip, OpenHands and MetaGPT remain source-only (they need a Node 24 or server stack).
+**Setup.** The four desktop competitors stay installed under `~/.local/share/agent-hq-research` with their own profiles. Launch them from the application menu ("... (comparison)") or `launchers/<name>`. Remove them only on request. Paperclip, OpenHands and MetaGPT were initially source-only during the November 23 desktop pass; see the [Tier 3 sweep below](#tier-3-tabsplit-issues-21-to-26-across-local-competitors-on-gpt-6-luna) for their November 26 graded runs.
 
 **Task.** `bench/task-template`: fix `slugify()` so five tests pass (punctuation, whitespace collapse, accents, empty result). Same starting commit, same prompt, standard library only.
 
@@ -207,7 +208,7 @@ These are historical approximate samples, **not equivalent process-tree measurem
 
 - **The recorded CLI, Maestro and Orchestrator runs saturate Tier 2.** This leaves no room to demonstrate a quality improvement in those samples. It does not prove that every app will pass, that orchestration is useless, or that larger tasks behave the same way.
 - The differences still worth measuring include **workflow overhead**, **parallel speed**, **recovery** when a provider runs out of quota mid-run, **isolation** of parallel edits, and **human steps** needed. Independent grading of Agent HQ is essential before claiming parity.
-- Maestro and Orchestrator were run through their real CLIs; sign-in was not needed for each task. Agent Teams AI, Paradev and the server-oriented competitors still have no graded result here. Subscription quota exhaustion is recorded rather than silently changing providers.
+- Maestro and Orchestrator were run through their real CLIs; sign-in was not needed for each task. During the November 23 Tier 2 pass, Agent Teams AI, Paradev and the server-oriented competitors had no graded result here; Agent Teams AI, Paperclip, OpenHands and MetaGPT were later graded in the [November 26 Tier 3 sweep](#tier-3-tabsplit-issues-21-to-26-across-local-competitors-on-gpt-6-luna). Subscription quota exhaustion is recorded rather than silently changing providers.
 - A grader bug was found and fixed during this work: it dropped the `*.db` migration fixtures from its scratch copy, which made one run look like it failed 2 of its own tests. Earlier "existing tests" counts for Tier 2 should be disregarded; the hidden-test scores were not affected.
 
 The current method, including the actual Electron/UI driver and safeguards against treating model QA as test execution, is documented in [the desktop comparison protocol](desktop-comparison-protocol.md).
@@ -505,4 +506,48 @@ in its own summary. Agent HQ's review loop caught that case.
 Limits: one sample per setup, one project, one model. This shows the
 workflow can pass where a single bare call did not; it does not show
 Agent HQ is faster or cheaper (it was slower here), and it is not a
-ranking. Maestro has not yet been run on Tier 3.
+ranking.
+
+### Tier 3 (`tabsplit` issues #21 to #26) across local competitors on `gpt-6-luna`
+
+Because the Claude Pro 5-hour quota window hit `90%`–`100%` used during earlier setup checks, the expanded multi-competitor Tier 3 comparison was run sequentially on Codex Plus pinned to `gpt-6-luna` at `medium` effort (`codex-cli 0.172.0` natively on the desktop/CLI tools, and `codex/gpt-6-luna` via Magpie's local `/v1` OpenAI-compatible proxy on MetaGPT). All runs started from the same clean `tabsplit` 3.0 starter commit (`96d0764`), with `241` hidden checks (`100` across `#21`–`#26` plus `141` 1.0/2.0 regression checks) kept outside every workspace and run only after completion.
+
+#### Runtime and auth prerequisites on the remaining local repos/installs
+
+- **Paperclip** (`engines.node >= 24.11.0`) & **OpenHands** (`@openhands/agent-canvas`, `engines.node >= 24`): unblocked by installing Node `v24.22.3` via `nvm` (while preserving `v22.20.0` as `default`). Paperclip ran via its local Node 24 server + embedded Postgres (`codex_local` adapter with `runner: "legacy"`); OpenHands ran via `scripts/dev-safe.mjs` + `uvx` `openhands-agent-server==1.63.1` routed to `openai/codex/gpt-6-luna` on Magpie `/v1`.
+- **Paradev / Superset `2.0.11`**: launches Electron to `#/sign-in`, gated behind interactive OAuth login (no unauthenticated/pre-authenticated local workspace control).
+
+#### Graded Tier 3 results (`gpt-6-luna`, `medium` effort)
+
+| Setup & Run ID | Hidden total | New (`/100`) | Regr. (`/141`) | Time | Peak PSS | Notes |
+|---|---|---|---|---|---|---|
+| Agent HQ `0.24.8` post-fix (`agent-hq-0248-v2-tier3-luna-1126-174224`) | **241/241 (100.0%)** | 100/100 | 141/141 | 882.6 s | 1815.4 MiB | `26/26` `percent`, `23/23` `settle`, `14/14` `audit`, `24/24` `schedule`, `8/8` `ledger`, `5/5` `vague`; 36 calls (`3,637,074` prompt / `40,429` completion tokens); 1 rework task failed after QA rejected 5 tasks, so Agent HQ restored & verified its passing `55/55` candidate (`runHistory.status: "failed"`); existing tests untouched |
+| Agent HQ `0.24.8` baseline (`agent-hq-0248-tier3-luna-1126-093649`) | **239/241 (99.2%)** | 98/100 | 141/141 | 707.4 s | 1699.3 MiB | Missed 1 `ledger`, 1 `vague`; 26 calls (`2,072,398` prompt / `28,080` completion tokens in `runHistory`); repaired failing round-2 verification in round 3 (`tabsplit/storage.py`); `37/37` visible tests untouched |
+| Codex CLI alone (`codex-cli-tier3-luna-1126-093233`) | **239/241 (99.2%)** | 98/100 | 141/141 | 218.8 s | 772.5 MiB | Missed 2 `vague`; `837,583` input (`779,392` cached) / `9,941` output (`1,756` reasoning) tokens; `4/4` existing tests untouched |
+| Agent HQ `0.24.8` full-rework + worktree-verify (`agent-hq-0248-v4-tier3-luna-1126-194255`) | **238/241 (98.8%)** | 97/100 | 140/141 | 1215.9 s | 2503.3 MiB | **`completed`** (`8/8` tasks, `0` failed, `qaVerdict: "approve"`, `qaRejectCount: 2`); 49 calls (`2,605,312` prompt / `46,258` completion tokens); isolated worktree verification caught & auto-repaired `t4` & `t6`; targeted rework touched only `t4`; `77/77` visible tests untouched; missed `2 vague` + `1 regression` after QA asked `t4` to alter a baseline `tabsplit/api.py` group route |
+| Paperclip (`paperclip-t3-luna-1126-153539-r2`) | **238/241 (98.8%)** | 97/100 | 141/141 | 299.9 s | 2415.3 MiB | Node `v24.22.3` server + embedded Postgres; `codex_local` CEO agent (`runner: "legacy"`, 3 runs, `200,140` input incl. `196,096` cached / `315` output tokens); missed 1 `ledger`, 2 `vague`; `4/4` existing tests untouched |
+| OpenHands `agent-server 1.63.1` (`openhands-t3-luna-1126-172430`) | **238/241 (98.8%)** | 97/100 | 141/141 | 161.0 s | 479.4 MiB | Magpie `/v1` (`openai/codex/gpt-6-luna`, `worktree=false`); 59 events (`453,704` prompt incl. `416,000` cached / `6,267` completion incl. `809` reasoning tokens); missed 1 `ledger`, 2 `vague`; `4/4` existing tests untouched |
+| Maestro `1.0.4` (`maestro-t3-luna-1126-095300`) | **237/241 (98.3%)** | 96/100 | 141/141 | 165.2 s | 2020.1 MiB | Missed 1 `percent`, 1 `ledger`, 2 `vague`; `738,180` input (`688,768` cached) / `8,387` output (`1,542` reasoning) tokens; `4/4` existing tests untouched |
+| Agent Orchestrator `0.15.3` (`orchestrator-t3-luna-1126-095757`) | **237/241 (98.3%)** | 96/100 | 141/141 | 209.8 s | 2148.3 MiB | Missed 1 `percent`, 1 `ledger`, 2 `vague`; required an `origin` remote + `remote set-head` before spawn; executed in an isolated Git worktree; `4/4` existing tests untouched |
+| Agent Teams AI `2.18.7` (`agent-teams-t3-luna-1126-135947`) | **235/241 (97.5%)** | 94/100 | 141/141 | 361.1 s | 1673.2 MiB | `codex-native` team (`team-lead` + `builder`); missed 3 `settle`, 1 `ledger`, 2 `vague`; `4/4` existing tests untouched |
+| MetaGPT `11cdf46` (`metagpt-t3-luna-1126-143537`) | **143/241 (59.3%)** | 2/100 | 141/141 | 1200.0 s (timeout) | 410.6 MiB | `software_company --inc` via Magpie `/v1`; 0 repo edits before 20 min timeout; blocked by an upstream Linux pipe deadlock in `metagpt/tools/libs/terminal.py:157-160` |
+
+#### Observations and limits
+
+- **General-purpose Agent HQ fixes (`239/241` → `241/241`, plus `v4` `completed`)**: Inspecting the `239/241` baseline (`state.json`/`calls.json` and public `SPEC.md`/`ISSUES.md` only) showed Sovereign had no `project-call` loop before planning and `evidencedQaIssues` dropped valid code-evidenced Sentinel rejections when Sentinel put issue tags like `"#22"` in `taskId`. Adding a bounded `project-call` pre-planning loop in `sendToOrchestrator`, normalizing requirement-tag citations in `parseQaVerdict` plus empty-`taskId` inference in `evidencedQaIssues`, and reminding workers/QA to check sibling handler consistency and data/complexity invariants raised Agent HQ to `241/241` (`100.0%`), solving `ledger` (`8/8`) and `vague` (`5/5`) where every competitor missed `1` `ledger` and `2` `vague` checks (`235`–`239/241`). Follow-up fixes (explicit read-only CLI sandbox messaging, targeted QA rework via `selectQaReworkTargets`, `ALREADY_SATISFIED:` no-op rework preservation, per-worker Git worktree verification + 1-turn self-repair, and baseline route preservation rules) eliminated the rework task failure in `v4` (`agent-hq-0248-v4-tier3-luna-1126-194255`, `completed`, `8/8` tasks, `238/241`).
+- **Node 24 setups (Paperclip & OpenHands)**: Both Paperclip and OpenHands scored `238/241` (`98.8%`) with `141/141` regression, missing only `1` `ledger` and `2` `vague` checks. Paperclip's Node + embedded Postgres stack had the highest memory footprint (`2415.3 MiB` peak PSS), while headless `openhands-agent-server` (`1.63.1`, without `tmux` or the Vite frontend) was the fastest (`161.0 s`) and lightest live run (`479.4 MiB` peak PSS).
+- **Upstream MetaGPT Linux terminal bug**: On upstream MetaGPT commit `11cdf46` (right after PR `#1897` `windows_terminal_adaptation`), `Mike` (`TeamLeader`) dispatched task #1 to `Alex` (`Engineer2`), which hung permanently inside `Engineer2._format_instruction()` waiting on `Terminal.run_command("pwd")`. Reproducing `Terminal().run_command("pwd")` directly under Python showed `bash` actually printed the working directory and `END_MARKER_VALUE`, but `metagpt/tools/libs/terminal.py:160` (`*lines, tmp = output.splitlines(True)`) leaves the final `\n`-terminated marker line in `tmp` until another byte arrives—something `cmd.exe` emits with a new prompt on Windows, whereas non-PTY Linux `bash` never emits after `\n`.
+- **Limits**: Single run per setup on one Python standard-library codebase (`tabsplit` 3.0) with one medium-effort model (`gpt-6-luna`). OpenHands and MetaGPT used Magpie's `/v1` OpenAI-compatible HTTP endpoint rather than the native `codex` CLI harness used by the other setups, and `scripts/compare-{maestro,orchestrator,agent-teams,metagpt,paperclip,openhands}.mjs` measure distinct tool startup/readiness/idle boundaries as recorded in each evidence `metadata.json`.
+
+### TypeScript/Node multi-module benchmark (`pulsequeue` 2.0, `72` held-out points)
+
+To validate beyond Python on TypeScript/Node 24 native type-stripping (`node --test`), a second held-out benchmark (`pulsequeue` 2.0) was built across 6 modules (`src/{types,store,limiter,scheduler,exporter,cli}.ts`, zero external dependencies) covering 6 coupled issues (`#1`–`#6`: per-tenant idempotency + starvation aging + concurrency caps, amortized-O(1) sliding-window rate limiting + priority bypass + atomic dispatch, exponential retry backoff + DLQ replay, atomic NDJSON ledger persistence + crash-line recovery, numeric quantiles + RFC-4180/CSV formula sanitization, and strict CLI exit-code/JSON contracts). The unedited starter scores `16/72` (`22.2%`, `4/17` checks).
+
+| Setup & Run ID | Model (`medium`) | Grade (`/72`) | Status / Visible tests | Time | Peak PSS | Notes |
+|---|---|---|---|---|---|---|
+| **Agent HQ `0.24.8` Desktop** (`agent-hq-0248-pulsequeue-haiku-1126-232442`) | `anthropic:cli:claude-haiku-5-5` | **72/72 (100.0%)** | **`completed`** · `75/75` visible | 573.4 s | **637.5 MiB** | `10/10` tasks, `qaVerdict: "approve"`, `qaRejectCount: 1`; Sentinel caught an idempotency delimiter collision & drove a targeted regression fix; `18` calls (`410,656` prompt / `133,990` completion tokens, `$0.1401` API valuation); lighter peak PSS than bare Claude CLI |
+| **Claude Code `2.1.332` alone** (`claude-cli-pulsequeue-haiku-1126-232113`) | `claude-haiku-5-5` | **72/72 (100.0%)** | `completed` | 194.3 s | 780.5 MiB | `$0.0554` API valuation; `918.6 MiB` peak RSS |
+| **Codex CLI `0.172.0` alone** (`codex-cli-pulsequeue-luna-1126-200837`) | `gpt-6-luna` | **72/72 (100.0%)** | `completed` | 174.8 s | 839.7 MiB | `1092 MiB` peak RSS |
+| **Agent HQ `0.24.8` Desktop** (`agent-hq-0248-v3-pulsequeue-luna-1126-225752`) | `openai:cli:gpt-6-luna` | **72/72 (100.0%)** | `failed` (candidate restored: `23/23` visible) | 1199.5 s | 1870.6 MiB | `1,742,000` prompt / `40,533` completion tokens; isolated worktree check self-repaired `exporter`; bonus rework turn hit `"Codex returned no final message"` so `restorePassingCandidate` restored & re-verified the `72/72` passing tree |
+
+Pre-fix Codex `pulsequeue` diagnostics preserved alongside `v3`: `v1` (`agent-hq-pulsequeue-luna-1126-201146`, 25m timeout/`runner-error`, `1823.8 MiB` peak PSS) solved `60/60` issue points in isolated integration worktrees (`66/72`) but failed `npm test` because an agent appended a bad assertion into pre-existing `tests/public.test.ts` (addressed afterward by `runModifiedTests`); `v2` (`agent-hq-0248-v2-pulsequeue-luna-1126-223026`, 25m timeout/`runner-error`, `1838.0 MiB` peak PSS, `66/72` on disk) bounced twice on unrequested out-of-spec clock reversal assertions before Aegis was mid-repair at timeout (addressed afterward by adding a general specification-boundary rule to `runQa`).

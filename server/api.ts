@@ -13,7 +13,7 @@ import {
   updateConfig,
 } from './config';
 import { ALLOWED_COMMANDS, executionTimeoutMs, isLoopbackRequest, parseAllowedCommand, resolveInside } from './security';
-import { projectCommand } from './execution';
+import { projectCommand, resolveSpawnTarget } from './execution';
 import { endpointFromHost, providerFetch, validateEndpoint } from './network';
 import { TerminalError, closeTerminal, createTerminal, listTerminals, resizeTerminal, streamTerminal, writeTerminal } from './pty';
 import {
@@ -40,7 +40,7 @@ import { addLessons, deleteLesson, indexLessons, LESSONS_FILE, lessonsFor, loadL
 import { currentEmbedder, embeddingStatus, forgetEmbedder, pullModel } from './embeddings';
 import { clearJournal, loadJournal, saveJournal } from './runJournal';
 import { checkAgentUpdates } from './agentUpdates';
-import { stageTaskWorkspace } from './taskWorkspaces';
+import { stageTaskWorkspace, verifyTaskWorkspace } from './taskWorkspaces';
 import { callComputer, computerStatus, computerTools, setComputerAccess } from './computerUse';
 
 const MAX_BODY = 8 * 1024 * 1024;
@@ -69,10 +69,13 @@ function rememberWorkspace(target: string) {
 function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let size = 0;
+    let aborted = false;
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => {
+      if (aborted) return;
       size += c.length;
       if (size > MAX_BODY) {
+        aborted = true;
         reject(new HttpError(413, 'Request body too large.'));
         req.destroy();
         return;
@@ -80,15 +83,23 @@ function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
       chunks.push(c);
     });
     req.on('end', () => {
+      if (aborted) return;
       const raw = Buffer.concat(chunks).toString('utf8');
       if (!raw) return resolve({});
       try {
-        resolve(JSON.parse(raw));
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          reject(new HttpError(400, 'JSON body must be an object.'));
+          return;
+        }
+        resolve(parsed as Record<string, unknown>);
       } catch {
         reject(new HttpError(400, 'Invalid JSON body.'));
       }
     });
-    req.on('error', reject);
+    req.on('error', (err) => {
+      if (!aborted) reject(err);
+    });
   });
 }
 
@@ -307,6 +318,14 @@ const routes: Record<string, Handler> = {
       throw new HttpError(400, 'A run, task, attempt and file contents are required.');
     }
     send(res, 200, await stageTaskWorkspace(getWorkspaceRoot(), body.runId, body.taskId, body.attempt, body.files));
+  },
+
+  'POST /api/workers/verify': async (req, res) => {
+    const body = await readJson(req);
+    if (typeof body.worktreePath !== 'string' || typeof body.command !== 'string') {
+      throw new HttpError(400, 'A worktree path and verification command are required.');
+    }
+    send(res, 200, await verifyTaskWorkspace(getWorkspaceRoot(), body.worktreePath, body.command, body.timeoutMs));
   },
 
   'GET /api/magpie/quotas': async (_req, res) => {
@@ -833,7 +852,8 @@ const routes: Record<string, Handler> = {
     const start = Date.now();
     const root = getWorkspaceRoot();
     const execution = projectCommand(parsed.program!, root, { ...process.env, FORCE_COLOR: '0', CI: '1' });
-    const child = spawn(execution.program, parsed.args!, { cwd: root, env: execution.env, shell: false });
+    const target = resolveSpawnTarget(execution.program, parsed.args!, execution.env);
+    const child = spawn(target.program, target.args, { cwd: root, env: execution.env, shell: false });
     let stdout = '';
     let stderr = '';
     const limit = 512 * 1024;

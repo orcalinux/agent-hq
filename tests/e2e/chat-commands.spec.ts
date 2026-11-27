@@ -45,6 +45,22 @@ test('/plan switches mode from the keyboard, with option menus and no model need
   await input.press('Escape');
   await input.press('Enter');
   await expect(notes).toHaveCount(0);
+
+  await input.fill('/model');
+  await input.press('Escape');
+  await input.press('Enter');
+  await expect(notes.last()).toContainText('Sovereign model:');
+
+  await input.fill('/btw');
+  await input.press('Escape');
+  await input.press('Enter');
+  await expect(notes.last()).toContainText('Write a side question after /btw');
+
+  await input.fill('/consult');
+  await input.press('Escape');
+  await input.press('Enter');
+  await expect(notes.last()).toContainText('Name an agent to consult');
+
   expect(modelRequests).toEqual([]);
 });
 

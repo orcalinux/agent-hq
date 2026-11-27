@@ -155,3 +155,16 @@ export function isModelAvailable(providers: ProviderState[], ref: AIModelId | un
   if (!ref) return false;
   return providers.some((p) => p.connection && p.models.some((m) => m.ref === ref && (m.selectable !== false || Boolean(m.canonicalRef))));
 }
+
+/** Lists all connected, selectable models across providers for completion and /model selection. */
+export function listAvailableModels(providers: ProviderState[]): Array<{ ref: string; label: string; providerName: string }> {
+  const out: Array<{ ref: string; label: string; providerName: string }> = [];
+  for (const p of providers) {
+    if (!p.connection) continue;
+    for (const m of p.models) {
+      if (m.selectable === false && !m.canonicalRef) continue;
+      out.push({ ref: m.ref, label: m.name || m.id, providerName: p.name });
+    }
+  }
+  return out;
+}

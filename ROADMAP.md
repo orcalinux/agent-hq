@@ -22,7 +22,7 @@ Runs are owned by the server, not the window.
 
 ## 3. Isolated workers
 
-Status: **proposal conflict protection plus real recovery worktrees (0.23.0).** Every coding task attempt keeps a detached Git worktree containing dirty project files and the combined proposals. The original project is still changed through the proposal/apply/verify flow; workers do not execute commands inside these copies. Real temporary-repository tests verify that parallel same-file edits have separate retained copies and leave the original unchanged. Non-Git or unborn repositories use proposals. Recovery copies are not a security sandbox. Version 0.24.0 also preserves integration-repair rounds.
+Status: **proposal conflict protection, recovery worktrees, plus per-worker worktree verification (0.25.0).** Every coding task attempt keeps a detached Git worktree containing dirty project files and the combined proposals, and when a verification command is configured, `POST /api/workers/verify` runs allow-listed checks directly inside that worker's isolated copy so failures caught in a worker's own changed files trigger one bounded self-repair turn before integration. The main project tree is still updated only through the proposal/apply/verify flow. Real temporary-repository tests verify parallel copies, worktree verification (pass/fail/allowlist/root guards), and conflict reporting. Non-Git or unborn repositories fall back to proposals. Recovery copies are not a security sandbox.
 
 Parallel agents must not overwrite each other.
 
@@ -32,9 +32,9 @@ Parallel agents must not overwrite each other.
 
 ## 4. Spending and loop limits
 
-Status: **done (0.15.0).** Per-run and per-agent caps with 80% warnings, in Settings → Run limits.
+Status: **done with cross-run monthly budgets and opt-in quota-reset auto-resume (0.25.0).** Per-run and per-agent caps (with 80% warnings and 100% stops) plus persistent calendar-month spend/token caps and an opt-in automatic resume scheduler when provider quotas reset, in Settings → Run limits and the paused run banner.
 
-- Hard caps per run and per agent for tokens, cost and wall time, plus a loop guard.
+- Hard caps per run, per agent, and across runs per calendar month for tokens, cost and wall time, plus a loop guard.
 - Models with unknown pricing count against a token cap and are never treated as free.
 - Alert at 80%, stop at 100%, and say why.
 - Done when: a test run with a tiny cap stops on the cap and reports it.
@@ -48,9 +48,9 @@ Status: **done (0.15.0).** Diff preview in the Changes tab and an explicit Full 
 
 ## 6. Evidence, not claims
 
-Status: **real comparisons available; broader repeated validation remains open.** `scripts/benchmark.mjs` and [docs/benchmark.md](docs/benchmark.md) run ten real coding tasks (four of them harder) across Claude and Codex models. All 80 attempts passed, so that suite cannot rank models.
+Status: **real multi-stack comparisons available (Python & TypeScript/Node); broader repeated validation and multi-OS coverage remain open.** `scripts/benchmark.mjs` and [docs/benchmark.md](docs/benchmark.md) run ten real coding tasks across Claude and Codex models.
 
-The harder Tier 2 study now includes real CLI, Maestro, Orchestrator and Agent HQ runs. Earlier Agent HQ versions left the starter unchanged and scored 86/141; passing unit tests did not establish coding reliability. After the integration, project-reading and mentor-output fixes, Agent HQ scored 141/141 in two fresh Haiku runs and a fresh Codex run on 0.24.2, preserving the original tests. A fresh Haiku run on 0.24.7 also passed 141/141 hidden and 228/228 visible checks. The same Codex task scored 141/141 through the CLI, Maestro and Orchestrator. Agent HQ's measured Codex workflow overhead remains higher than the CLI and Maestro, so quality parity on one task is not a best-product claim. Claude and Codex groups remain separate, and a second operating system and broader repeated tasks are still missing. Real quota-reset recovery, memory learning across repeated tasks, and equivalent completed runs for the other studied projects remain unverified. See [the method](docs/desktop-comparison-protocol.md), [retained results](docs/competitive-study.md) and [sanitized run summaries](docs/desktop-tier2-results.json).
+The harder Tier 3 Python study (`tabsplit` 3.0, 241 hidden checks) compares Agent HQ against bare Codex/Claude CLIs, Paperclip, OpenHands, Maestro, Agent Orchestrator, Agent Teams AI, and MetaGPT on pinned `gpt-6-luna` (`medium`). A second held-out TypeScript/Node multi-module benchmark (`pulsequeue` 2.0, 72 weighted checks across 6 modules) pairs bare Codex CLI vs Agent HQ Desktop (`gpt-6-luna`) and bare Claude Code CLI vs Agent HQ Desktop (`claude-haiku-5-5`, both scoring `72/72` `100.0%`). On Codex `pulsequeue` (`gpt-6-luna`), Agent HQ scored `72/72` on disk via `restorePassingCandidate` (`runHistory.status: "failed"` during a rework round), whereas on Haiku 5.5 Agent HQ finished `completed` in `573.4 s` with `637.5 MiB` peak PSS (`75/75` visible checks). A second operating system, repeated statistical runs per configuration, and live unattended multi-hour quota-reset end-to-end validation remain open. See [the method](docs/desktop-comparison-protocol.md), [retained results](docs/competitive-study.md) and [sanitized run summaries](docs/desktop-tier2-results.json).
 
 - A small public benchmark of real tasks across at least two providers and two operating systems, with the method and raw results published.
 - Until it exists, the README makes no "best" or "fastest" claims.
