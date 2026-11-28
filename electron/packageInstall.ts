@@ -17,6 +17,51 @@ export type InstallResult = { ok: true } | ({ ok: false } & InstallFailure);
 
 const TEN_MINUTES = 10 * 60 * 1000;
 
+const SESSION_ENV_KEYS = [
+  'DISPLAY',
+  'WAYLAND_DISPLAY',
+  'XAUTHORITY',
+  'XDG_RUNTIME_DIR',
+  'DBUS_SESSION_BUS_ADDRESS',
+  'XDG_SESSION_ID',
+  'XDG_CURRENT_DESKTOP',
+  'XDG_SESSION_TYPE',
+  'DESKTOP_SESSION',
+  'COLORTERM',
+  'LANG',
+] as const;
+
+export function hasNoNewPrivs(statusPath = '/proc/self/status'): boolean {
+  try {
+    return /^NoNewPrivs:\s*1$/m.test(fs.readFileSync(statusPath, 'utf8'));
+  } catch {
+    return false;
+  }
+}
+
+export function sessionEnvArgs(env: NodeJS.ProcessEnv = process.env): string[] {
+  const out: string[] = [];
+  for (const key of SESSION_ENV_KEYS) {
+    const val = env[key];
+    if (val && !/[\0\r\n]/.test(val)) out.push(`--setenv=${key}=${val}`);
+  }
+  return out;
+}
+
+export function canUseSystemdUser(
+  searchPath = process.env.PATH ?? '',
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  if (process.platform !== 'linux') return null;
+  const bin = findOnPath('systemd-run', searchPath);
+  const rt = env.XDG_RUNTIME_DIR;
+  if (!bin || !rt) return null;
+  if (!fs.existsSync(path.join(rt, 'systemd', 'private')) && !fs.existsSync(path.join(rt, 'bus'))) {
+    return null;
+  }
+  return bin;
+}
+
 export function packageKind(file: string): PackageKind | null {
   if (/\.deb$/i.test(file)) return 'deb';
   if (/\.rpm$/i.test(file)) return 'rpm';
@@ -60,8 +105,10 @@ export function failureMessage(input: { code: number | null; timedOut?: boolean;
   if (input.timedOut) return 'The administrator prompt was not answered in time, so nothing was installed.';
   if (input.error) return `The installer could not start: ${input.error}`;
   if (input.code === 126) return 'The administrator prompt was cancelled, so nothing was installed.';
-  if (input.code === 127) return 'Administrator authentication could not start, or the installer command was unavailable. Try installing in a terminal.';
   const detail = input.stderr?.trim().split('\n').filter(Boolean).slice(-2).join(' ');
+  if (input.code === 127) {
+    return `Administrator authentication could not start, or the installer command was unavailable${detail ? ` (${detail})` : ''}. Try installing in a terminal.`;
+  }
   return `The installer stopped with exit code ${input.code ?? 'unknown'}${detail ? `: ${detail}` : ''}.`;
 }
 
@@ -71,7 +118,7 @@ export function terminalInstallCommand(kind: PackageKind, file: string, resultFi
 
 export function runTerminalPackageInstall(
   file: string,
-  options: { timeoutMs?: number; searchPath?: string } = {},
+  options: { timeoutMs?: number; searchPath?: string; env?: NodeJS.ProcessEnv } = {},
 ): Promise<InstallResult> {
   const kind = packageKind(file);
   const fail = (message: string): InstallResult => ({ ok: false, message, command: manualCommand(kind ?? 'deb', file), file });
@@ -109,7 +156,13 @@ export function runTerminalPackageInstall(
     }, 250);
     const timeout = setTimeout(() => finish(fail('The terminal did not report a completed installation. Check its output before trying again.')), options.timeoutMs ?? TEN_MINUTES);
     try {
-      const child = spawn(findOnPath(launch.command, options.searchPath)!, launch.args, { cwd: launch.cwd, stdio: 'ignore', detached: true });
+      const terminalBin = findOnPath(launch.command, options.searchPath)!;
+      const systemdRun = canUseSystemdUser(options.searchPath, options.env);
+      const command = systemdRun ?? terminalBin;
+      const args = systemdRun
+        ? ['--user', '--collect', '--quiet', `--working-directory=${launch.cwd}`, ...sessionEnvArgs(options.env), '--', terminalBin, ...launch.args]
+        : launch.args;
+      const child = spawn(command, args, { cwd: launch.cwd, stdio: 'ignore', detached: true });
       child.once('error', (error) => finish(fail(`The terminal could not open: ${error.message}`)));
       child.unref();
     } catch (error) {
@@ -118,48 +171,86 @@ export function runTerminalPackageInstall(
   });
 }
 
+export function relaunchLinuxApp(
+  options: { oldPid?: number; execPath?: string; args?: string[]; searchPath?: string; env?: NodeJS.ProcessEnv } = {},
+): boolean {
+  const systemdRun = canUseSystemdUser(options.searchPath, options.env);
+  if (!systemdRun) return false;
+  const target = options.execPath ?? (fs.existsSync('/usr/bin/agent-hq') ? '/usr/bin/agent-hq' : process.execPath);
+  const appArgs = options.args ?? process.argv.slice(1);
+  const waitAndExec = 'i=0; while [ "$i" -lt 50 ] && kill -0 "$1" 2>/dev/null; do sleep 0.1; i=$((i+1)); done; shift; exec "$@"';
+  try {
+    const child = spawn(
+      systemdRun,
+      ['--user', '--collect', '--quiet', ...sessionEnvArgs(options.env), '--', '/bin/sh', '-c', waitAndExec, 'sh', String(options.oldPid ?? process.pid), target, ...appArgs],
+      { detached: true, stdio: 'ignore' },
+    );
+    child.on('error', () => undefined);
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Installs a downloaded .deb or .rpm without blocking the app. electron-updater runs this step
- * with spawnSync, which froze the whole app behind an invisible polkit prompt.
+ * with spawnSync, which froze the whole app behind an invisible polkit prompt. On Linux systems
+ * with NoNewPrivs: 1 (e.g. AppArmor/Chromium confinement), running pkexec through `systemd-run --user`
+ * executes authentication in the clean user session so setuid root works reliably.
  */
-export function runPackageInstall(
+export async function runPackageInstall(
   file: string,
-  options: { timeoutMs?: number; isRoot?: boolean; searchPath?: string } = {},
+  options: { timeoutMs?: number; isRoot?: boolean; searchPath?: string; env?: NodeJS.ProcessEnv } = {},
 ): Promise<InstallResult> {
   const kind = packageKind(file);
   const fail = (message: string): InstallResult => ({ ok: false, message, command: manualCommand(kind ?? 'deb', file), file });
-  if (!kind) return Promise.resolve(fail('This package type cannot be installed from the app.'));
-  if (!fs.existsSync(file)) return Promise.resolve(fail('The downloaded update file is missing. Download it again from Settings → Updates.'));
+  if (!kind) return fail('This package type cannot be installed from the app.');
+  if (!fs.existsSync(file)) return fail('The downloaded update file is missing. Download it again from Settings → Updates.');
 
   const script = installScript(kind, file);
   const isRoot = options.isRoot ?? process.getuid?.() === 0;
   const pkexec = isRoot ? null : findOnPath('pkexec', options.searchPath);
-  if (!isRoot && !pkexec) return Promise.resolve(fail(failureMessage({ code: null, missing: true })));
+  if (!isRoot && !pkexec) return fail(failureMessage({ code: null, missing: true }));
 
-  return new Promise<InstallResult>((resolve) => {
-    let stderr = '';
-    let timedOut = false;
-    let settled = false;
-    const done = (result: InstallResult) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(result);
-    };
-    const child = isRoot
-      ? spawn('/bin/sh', ['-c', script], { stdio: ['ignore', 'ignore', 'pipe'] })
-      : spawn(pkexec!, ['/bin/sh', '-c', script], { stdio: ['ignore', 'ignore', 'pipe'] });
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill('SIGTERM');
-    }, options.timeoutMs ?? TEN_MINUTES);
-    child.stderr?.on('data', (chunk: Buffer) => {
-      stderr = (stderr + chunk.toString()).slice(-2000);
+  const systemdRun = isRoot ? null : canUseSystemdUser(options.searchPath, options.env);
+  const runOnce = (viaSystemd: boolean) =>
+    new Promise<{ code: number | null; timedOut: boolean; stderr: string; error?: string }>((resolve) => {
+      let stderr = '';
+      let timedOut = false;
+      let settled = false;
+      const done = (result: { code: number | null; timedOut: boolean; stderr: string; error?: string }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      };
+      const command = isRoot
+        ? '/bin/sh'
+        : viaSystemd && systemdRun
+          ? systemdRun
+          : pkexec!;
+      const args = isRoot
+        ? ['-c', script]
+        : viaSystemd && systemdRun
+          ? ['--user', '--pipe', '--wait', '--collect', '--quiet', ...sessionEnvArgs(options.env), '--', pkexec!, '/bin/sh', '-c', script]
+          : ['/bin/sh', '-c', script];
+      const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill('SIGTERM');
+      }, options.timeoutMs ?? TEN_MINUTES);
+      child.stderr?.on('data', (chunk: Buffer) => {
+        stderr = (stderr + chunk.toString()).slice(-2000);
+      });
+      child.on('error', (error) => done({ code: null, timedOut, stderr, error: error.message }));
+      child.on('close', (code) => done({ code, timedOut, stderr }));
     });
-    child.on('error', (error) => done(fail(failureMessage({ code: null, error: error.message }))));
-    child.on('close', (code) => {
-      if (code === 0 && !timedOut) done({ ok: true });
-      else done(fail(failureMessage({ code, timedOut, stderr })));
-    });
-  });
+
+  let res = await runOnce(Boolean(systemdRun));
+  if (systemdRun && !res.timedOut && res.code !== 0 && /Failed to connect|System has not been booted with systemd|Transport endpoint/i.test(res.stderr)) {
+    res = await runOnce(false);
+  }
+  if (res.code === 0 && !res.timedOut) return { ok: true };
+  return fail(failureMessage(res));
 }

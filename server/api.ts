@@ -434,7 +434,24 @@ const routes: Record<string, Handler> = {
       isAvailable: (bin) => Boolean(findOnPath(bin)),
     });
     if (!launch) throw new HttpError(501, 'No terminal emulator was found. Set the TERMINAL environment variable to yours.');
-    const child = spawn(launch.command, launch.args, { cwd: launch.cwd, detached: true, stdio: 'ignore', shell: false });
+    let spawnCommand = launch.command;
+    let spawnArgs = launch.args;
+    if (process.platform === 'linux') {
+      const noNewPrivs = (() => {
+        try { return /^NoNewPrivs:\s*1$/m.test(fs.readFileSync('/proc/self/status', 'utf8')); } catch { return false; }
+      })();
+      const rt = process.env.XDG_RUNTIME_DIR;
+      const systemdRun = noNewPrivs && rt && (fs.existsSync(path.join(rt, 'systemd', 'private')) || fs.existsSync(path.join(rt, 'bus')))
+        ? findOnPath('systemd-run')
+        : null;
+      if (systemdRun) {
+        const envArgs = ['DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'XDG_SESSION_ID', 'XDG_CURRENT_DESKTOP', 'XDG_SESSION_TYPE', 'DESKTOP_SESSION', 'COLORTERM', 'LANG']
+          .flatMap((key) => (process.env[key] && !/[\0\r\n]/.test(process.env[key]!) ? [`--setenv=${key}=${process.env[key]}`] : []));
+        spawnCommand = systemdRun;
+        spawnArgs = ['--user', '--collect', '--quiet', `--working-directory=${launch.cwd}`, ...envArgs, '--', findOnPath(launch.command) ?? launch.command, ...launch.args];
+      }
+    }
+    const child = spawn(spawnCommand, spawnArgs, { cwd: launch.cwd, detached: true, stdio: 'ignore', shell: false });
     child.on('error', () => undefined);
     child.unref();
     send(res, 200, { ok: true, terminal: launch.command, cwd: root, command: command ?? null });

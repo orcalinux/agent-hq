@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { failureMessage, findOnPath, installScript, manualCommand, packageKind, runPackageInstall, runTerminalPackageInstall, shellQuote, terminalInstallCommand } from '../../electron/packageInstall';
+import { buildSync } from 'esbuild';
+import {
+  canUseSystemdUser,
+  failureMessage,
+  findOnPath,
+  hasNoNewPrivs,
+  installScript,
+  manualCommand,
+  packageKind,
+  runPackageInstall,
+  runTerminalPackageInstall,
+  sessionEnvArgs,
+  shellQuote,
+  terminalInstallCommand,
+} from '../../electron/packageInstall';
 
 describe('package install', () => {
   it('tells .deb and .rpm apart', () => {
@@ -21,6 +36,7 @@ describe('package install', () => {
   it('explains how the installer ended', () => {
     expect(failureMessage({ code: 126 })).toMatch(/cancelled/);
     expect(failureMessage({ code: 127 })).toMatch(/authentication could not start/);
+    expect(failureMessage({ code: 127, stderr: 'pkexec must be setuid root\n' })).toContain('pkexec must be setuid root');
     expect(failureMessage({ code: null, timedOut: true })).toMatch(/not answered/);
     expect(failureMessage({ code: null, missing: true })).toMatch(/pkexec/);
     expect(failureMessage({ code: 100, stderr: 'a\nb\nc' })).toBe('The installer stopped with exit code 100: b c.');
@@ -89,4 +105,65 @@ describe('package install', () => {
     expect(result.ok).toBe(false);
     expect(ticks).toBeGreaterThan(0);
   });
+
+  it('detects NoNewPrivs status flags and filters session environment variables', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-nnp-'));
+    try {
+      const locked = path.join(dir, 'locked');
+      const open = path.join(dir, 'open');
+      fs.writeFileSync(locked, 'Name:\tagent-hq\nNoNewPrivs:\t1\n');
+      fs.writeFileSync(open, 'Name:\tbash\nNoNewPrivs:\t0\n');
+      expect(hasNoNewPrivs(locked)).toBe(true);
+      expect(hasNoNewPrivs(open)).toBe(false);
+      expect(sessionEnvArgs({ DISPLAY: ':0', EVIL: 'x\ny', XDG_RUNTIME_DIR: '/run/user/1000' })).toEqual([
+        '--setenv=DISPLAY=:0',
+        '--setenv=XDG_RUNTIME_DIR=/run/user/1000',
+      ]);
+      expect(canUseSystemdUser('/usr/bin', { XDG_RUNTIME_DIR: dir })).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.runIf(process.platform === 'linux' && Boolean(canUseSystemdUser()) && Boolean(findOnPath('setpriv')))(
+    'escapes kernel NoNewPrivs: 1 via systemd-run --user so pkexec sees NoNewPrivs: 0',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-systemd-'));
+      const binDir = path.join(dir, 'bin');
+      const bundle = path.join(dir, 'pkg.cjs');
+      const deb = path.join(dir, 'update.deb');
+      const pkexecLog = path.join(dir, 'pkexec-nnp');
+      fs.mkdirSync(binDir);
+      fs.writeFileSync(deb, 'x');
+      fs.symlinkSync(canUseSystemdUser()!, path.join(binDir, 'systemd-run'));
+      fs.writeFileSync(
+        path.join(binDir, 'pkexec'),
+        `#!/bin/sh
+nnp=$(awk '/^NoNewPrivs:/{print $2}' /proc/self/status)
+printf '%s' "$nnp" > '${pkexecLog}'
+if [ "$nnp" != "0" ]; then
+  echo "pkexec must be setuid root" >&2
+  exit 127
+fi
+exit 0
+`,
+        { mode: 0o700 },
+      );
+      buildSync({
+        entryPoints: [path.resolve('electron/packageInstall.ts')],
+        bundle: true,
+        platform: 'node',
+        format: 'cjs',
+        outfile: bundle,
+      });
+      try {
+        const script = `const mod = require(${JSON.stringify(bundle)}); mod.runPackageInstall(${JSON.stringify(deb)}, { isRoot: false, searchPath: ${JSON.stringify(`${binDir}:/usr/bin:/bin`)} }).then((r) => { console.log(JSON.stringify(r)); process.exit(r.ok ? 0 : 1); });`;
+        const stdout = execFileSync('setpriv', ['--no-new-privs', process.execPath, '-e', script], { encoding: 'utf8' });
+        expect(JSON.parse(stdout.trim())).toEqual({ ok: true });
+        expect(fs.readFileSync(pkexecLog, 'utf8')).toBe('0');
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 });

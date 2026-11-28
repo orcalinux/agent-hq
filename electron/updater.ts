@@ -3,7 +3,7 @@ import path from 'path';
 import { app, net } from 'electron';
 import { DEFAULT_UPDATE_PREFS, type UpdatePrefs, type UpdateState } from '../src/desktop/types';
 import { compareVersions } from '../src/desktop/changelog';
-import { manualCommand, packageKind, runPackageInstall, runTerminalPackageInstall } from './packageInstall';
+import { manualCommand, packageKind, relaunchLinuxApp, runPackageInstall, runTerminalPackageInstall } from './packageInstall';
 
 const REPO_RAW = 'https://raw.githubusercontent.com/orcalinux/agent-hq';
 const FIRST_CHECK_MS = 10_000;
@@ -192,7 +192,7 @@ export function createUpdater({ onState, onReady, busy, beforeInstall }: Updater
     installing = false;
     if (result.ok) {
       beforeInstall();
-      app.relaunch();
+      if (!ownsInstall() || !relaunchLinuxApp()) app.relaunch();
       app.quit();
       return;
     }

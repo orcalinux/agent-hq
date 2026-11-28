@@ -11,6 +11,12 @@ git push --follow-tags
 
 …plus a new section in this file describing what changed.
 
+## [0.25.2] — 2026-11-28
+
+### Fixed
+- Linux `.deb` and `.rpm` in-app updates, **Install in terminal**, external workspace terminals, and post-update app relaunches now run through `systemd-run --user` when available so `pkexec` and `sudo` are not blocked by Chromium/AppArmor `NoNewPrivs: 1` (`pkexec must be setuid root`, exit code 127).
+- Linux installer error messages now include stderr details on exit code 127, and single-instance locks release cleanly before post-update relaunch.
+
 ## [0.25.1] — 2026-11-27
 
 ### Added

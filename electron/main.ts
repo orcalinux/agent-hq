@@ -80,6 +80,7 @@ const updater = createUpdater({
   busy: () => status.running,
   beforeInstall: () => {
     quitting = true;
+    app.releaseSingleInstanceLock();
   },
 });
 
